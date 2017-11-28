@@ -95,9 +95,15 @@ case class SimpleBlockchain(blockIds: Map[Height, ModifierId] = Map(), blocks: M
 
   override def reportSemanticValidity(modifier: SimpleBlock,
                                       valid: Boolean,
-                                      lastApplied: ModifierId): (SimpleBlockchain, ProgressInfo[SimpleBlock]) = ???
+                                      lastApplied: ModifierId): (SimpleBlockchain, ProgressInfo[SimpleBlock]) = {
+    this -> ProgressInfo(None, Seq(), None, Seq())
+  }
 
-  override def isSemanticallyValid(modifierId: ModifierId): ModifierSemanticValidity.Value = ???
+  override def isSemanticallyValid(modifierId: ModifierId): ModifierSemanticValidity.Value = {
+    modifierById(modifierId).map { _ =>
+      ModifierSemanticValidity.Valid
+    }.getOrElse(ModifierSemanticValidity.Absent)
+  }
 }
 
 object SimpleBlockchain {
