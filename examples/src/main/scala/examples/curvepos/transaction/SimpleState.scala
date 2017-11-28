@@ -55,10 +55,11 @@ case class SimpleState(override val version: VersionTag = EmptyVersion,
   override type NVCT = SimpleState
 
   override def validate(transaction: SimpleTransaction): Try[Unit] = transaction match {
-    case sp: SimplePayment => Try {
+    case sp: SimplePayment if !isEmpty => Try {
       val b = boxesOf(sp.sender).head
-      (b.value >= Math.addExact(sp.amount, sp.fee)) && (b.nonce + 1 == sp.nonce)
+      require((b.value >= Math.addExact(sp.amount, sp.fee)) && (b.nonce + 1 == sp.nonce))
     }
+    case genesis: SimplePayment if isEmpty => Try(require(genesis.nonce == 1L))
   }
 
   /**
