@@ -35,7 +35,7 @@ class Forger(viewHolderRef: ActorRef, forgerSettings: MinerSettings) extends Act
                              currentTime: Long): Long = {
     val eta = currentTime - lastBlock.timestamp
     val prevBt = BigInt(lastBlock.baseTarget)
-    val t0 = bounded(prevBt * eta / forgerSettings.blockGenerationDelay.toSeconds, prevBt / 2, prevBt * 2)
+    val t0 = bounded(prevBt * eta / forgerSettings.targetBlockDelay.toSeconds, prevBt / 2, prevBt * 2)
     bounded(t0, 1, Long.MaxValue).toLong
   }
 
