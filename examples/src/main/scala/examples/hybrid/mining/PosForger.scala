@@ -41,7 +41,7 @@ class PosForger(settings: HybridSettings, viewHolderRef: ActorRef) extends Actor
         log.debug(s"Trying to generate PoS block on top of ${powBlock.encodedId} with balance " +
           s"${boxKeys.map(_._1.value.toLong).sum}")
         val attachment = Random.randomBytes(settings.mining.posAttachmentSize)
-        posIteration(powBlock, boxKeys, pfi.txsToInclude, attachment, target.longValue()) match {
+        posIteration(powBlock, boxKeys, pfi.txsToInclude, attachment, target) match {
           case Some(posBlock) =>
             log.debug(s"Locally generated PoS block: $posBlock")
             forging = false
@@ -58,22 +58,22 @@ class PosForger(settings: HybridSettings, viewHolderRef: ActorRef) extends Actor
 }
 
 object PosForger extends ScorexLogging {
-  val InitialDifficuly = 15000000000L
+  val InitialDifficuly = 150000000L
 
   case object StartForging
 
   case object StopForging
 
-  def hit(pwb: PowBlock)(box: PublicKey25519NoncedBox): Long = {
+  def hit(pwb: PowBlock)(box: PublicKey25519NoncedBox): BigInt = {
     val h = Blake2b256(pwb.bytes ++ box.bytes)
-    Longs.fromByteArray((0: Byte) +: h.take(7))
+    BigInt(1, h)
   }
 
   def posIteration(powBlock: PowBlock,
                    boxKeys: Seq[(PublicKey25519NoncedBox, PrivateKey25519)],
                    txsToInclude: Seq[SimpleBoxTransaction],
                    attachment: Array[Byte],
-                   target: Long
+                   target: BigInt
                   ): Option[PosBlock] = {
     val successfulHits = boxKeys.map { boxKey =>
       val h = hit(powBlock)(boxKey._1)
@@ -130,6 +130,6 @@ object PosForger extends ScorexLogging {
 
 case class PosForgingInfo(pairCompleted: Boolean,
                           bestPowBlock: PowBlock,
-                          diff: Long,
+                          diff: BigInt,
                           boxKeys: Seq[(PublicKey25519NoncedBox, PrivateKey25519)],
                           txsToInclude: Seq[SimpleBoxTransaction])

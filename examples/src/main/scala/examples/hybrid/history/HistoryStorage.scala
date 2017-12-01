@@ -58,7 +58,7 @@ class HistoryStorage(storage: LSMStore,
     }
   }
 
-  def update(b: HybridBlock, diff: Option[(BigInt, Long)], isBest: Boolean) {
+  def update(b: HybridBlock, diff: Option[(BigInt, BigInt)], isBest: Boolean) {
     log.debug(s"Write new best=$isBest block ${b.encodedId}")
     val typeByte = b match {
       case _: PowBlock =>
@@ -72,7 +72,7 @@ class HistoryStorage(storage: LSMStore,
 
     val blockDiff: Iterable[(ByteArrayWrapper, ByteArrayWrapper)] = diff.map { d =>
       Seq(blockDiffKey(b.id, isPos = false) -> ByteArrayWrapper(d._1.toByteArray),
-        blockDiffKey(b.id, isPos = true) -> ByteArrayWrapper(Longs.toByteArray(d._2)))
+        blockDiffKey(b.id, isPos = true) -> ByteArrayWrapper(d._2.toByteArray))
     }.getOrElse(Seq())
 
     val bestBlockSeq: Iterable[(ByteArrayWrapper, ByteArrayWrapper)] = b match {
@@ -102,10 +102,10 @@ class HistoryStorage(storage: LSMStore,
     }
   }
 
-  def getPoSDifficulty(id: ModifierId): Long = if (id sameElements settings.GenesisParentId) {
+  def getPoSDifficulty(id: ModifierId): BigInt = if (id sameElements settings.GenesisParentId) {
     PosForger.InitialDifficuly
   } else {
-    Longs.fromByteArray(storage.get(blockDiffKey(id, isPos = true)).get.data)
+    BigInt(1, storage.get(blockDiffKey(id, isPos = true)).get.data)
   }
 
   def parentHeight(b: HybridBlock): Long = heightOf(parentId(b)).getOrElse(0L)
