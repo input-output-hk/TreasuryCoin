@@ -101,6 +101,10 @@ pomIncludeRepository := { _ => false }
 
 credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
 
+lazy val treasury = Project(id = "treasury", base = file(s"treasury"))
+  .dependsOn(basics, examples)
+  .settings(commonSettings: _*)
+
 lazy val testkit = Project(id = "testkit", base = file(s"testkit"))
   .dependsOn(basics)
   .settings(commonSettings: _*)
