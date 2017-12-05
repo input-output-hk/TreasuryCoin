@@ -101,8 +101,10 @@ pomIncludeRepository := { _ => false }
 
 credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
 
+lazy val treasurycrypto = RootProject(uri("ssh://git@github.com/input-output-hk/treasury-crypto.git"))
+
 lazy val treasury = Project(id = "treasury", base = file(s"treasury"))
-  .dependsOn(basics, examples)
+  .dependsOn(basics, examples, treasurycrypto)
   .settings(commonSettings: _*)
 
 lazy val testkit = Project(id = "testkit", base = file(s"testkit"))
