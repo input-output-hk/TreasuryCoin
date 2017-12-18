@@ -1,4 +1,4 @@
-package treasury.transaction
+package examples.hybrid.transaction
 
 import scorex.core.ModifierTypeId
 import scorex.core.transaction.Transaction

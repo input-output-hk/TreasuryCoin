@@ -103,16 +103,12 @@ credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
 
 lazy val treasurycrypto = RootProject(uri("ssh://git@github.com/input-output-hk/treasury-crypto.git"))
 
-lazy val treasury = Project(id = "treasury", base = file(s"treasury"))
-  .dependsOn(basics, examples, treasurycrypto)
-  .settings(commonSettings: _*)
-
 lazy val testkit = Project(id = "testkit", base = file(s"testkit"))
   .dependsOn(basics)
   .settings(commonSettings: _*)
 
 lazy val examples = Project(id = "examples", base = file(s"examples"))
-  .dependsOn(basics, testkit)
+  .dependsOn(basics, testkit, treasurycrypto)
   .settings(commonSettings: _*)
 
 lazy val basics = Project(id = "scorex", base = file("."))

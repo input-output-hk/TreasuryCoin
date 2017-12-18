@@ -1,7 +1,6 @@
-package treasury.transaction
+package examples.hybrid.transaction
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
-import examples.commons.SimpleBoxTransaction
 import examples.hybrid.wallet.HWallet
 import scorex.core.serialization.Serializer
 import scorex.core.transaction.proof.Signature25519
