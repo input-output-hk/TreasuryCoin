@@ -2,6 +2,7 @@ package examples.hybrid.transaction
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.hybrid.wallet.HWallet
+import scorex.core.ModifierTypeId
 import scorex.core.serialization.Serializer
 import scorex.core.transaction.proof.Signature25519
 import scorex.core.transaction.state.{PrivateKey25519, PrivateKey25519Companion}
@@ -10,15 +11,17 @@ import treasury.crypto.core.{Cryptosystem, KeyPair, PubKey}
 
 import scala.util.Try
 
-case class CommitteeRegisterTTransaction(committeePubKey: PubKey,
-                                         override val signature: Signature25519,
-                                         override val epochID: Long,
-                                         override val blocksRangeToInclude: (Long, Long))
+case class CommitteeRegisterTx(committeePubKey: PubKey,
+                               override val signature: Signature25519,
+                               override val epochID: Long,
+                               override val blocksRangeToInclude: (Long, Long))
   extends RegisterTTransaction {
 
-  override type M = CommitteeRegisterTTransaction
+  override type M = CommitteeRegisterTx
 
-  override lazy val serializer = CommitteeRegisterCompanion
+  override val modifierTypeId: ModifierTypeId = CommitteeRegisterTx.ModifierTypeId
+
+  override lazy val serializer = CommitteeRegisterTxCompanion
 
   override val messageToSign = {
     val keyBytes = committeePubKey.getEncoded(true)
@@ -32,32 +35,34 @@ case class CommitteeRegisterTTransaction(committeePubKey: PubKey,
   override def json = ???
 }
 
-object CommitteeRegisterTTransaction {
+object CommitteeRegisterTx {
+  val ModifierTypeId: scorex.core.ModifierTypeId = CommitteeRegisterTxTypeId
+
   def apply(account: PrivateKey25519,
             committeePubKey: PubKey,
             epochID: Long,
-            blocksRangeToInclude: (Long, Long)): CommitteeRegisterTTransaction = {
+            blocksRangeToInclude: (Long, Long)): CommitteeRegisterTx = {
 
     val fakeSig = Signature25519(Signature @@ Array[Byte]())
-    val fakeSigned = CommitteeRegisterTTransaction(committeePubKey, fakeSig, epochID, blocksRangeToInclude)
+    val fakeSigned = CommitteeRegisterTx(committeePubKey, fakeSig, epochID, blocksRangeToInclude)
 
     val msg = fakeSigned.messageToSign
     val sig = PrivateKey25519Companion.sign(account, msg)
 
-    new CommitteeRegisterTTransaction(committeePubKey, sig, epochID, blocksRangeToInclude)
+    new CommitteeRegisterTx(committeePubKey, sig, epochID, blocksRangeToInclude)
   }
 
   def create(w: HWallet,
              epochID: Long,
-             blocksRangeToInclude: (Long,Long)): Try[(CommitteeRegisterTTransaction, KeyPair)] = Try {
+             blocksRangeToInclude: (Long,Long)): Try[(CommitteeRegisterTx, KeyPair)] = Try {
     val keyPair = new Cryptosystem().createKeyPair
     val acc = w.secretByPublicImage(w.boxes().head.box.proposition).get
-    (CommitteeRegisterTTransaction(acc, keyPair._2, epochID, blocksRangeToInclude), keyPair)
+    (CommitteeRegisterTx(acc, keyPair._2, epochID, blocksRangeToInclude), keyPair)
   }
 }
 
-object CommitteeRegisterCompanion extends Serializer[CommitteeRegisterTTransaction] {
-  def toBytes(t: CommitteeRegisterTTransaction): Array[Byte] = {
+object CommitteeRegisterTxCompanion extends Serializer[CommitteeRegisterTx] {
+  def toBytes(t: CommitteeRegisterTx): Array[Byte] = {
     val keyBytes = t.committeePubKey.getEncoded(true)
     Bytes.concat(
       Ints.toByteArray(keyBytes.length),
@@ -69,7 +74,7 @@ object CommitteeRegisterCompanion extends Serializer[CommitteeRegisterTTransacti
     )
   }
 
-  def parseBytes(bytes: Array[Byte]): Try[CommitteeRegisterTTransaction] = Try {
+  def parseBytes(bytes: Array[Byte]): Try[CommitteeRegisterTx] = Try {
     val keySize = Ints.fromByteArray(bytes.slice(0,4))
     val committeePubKey = new Cryptosystem().decodePoint(bytes.slice(4,keySize))
     val signature = Signature25519(Signature @@ bytes.slice(4+keySize, 4+keySize+Curve25519.SignatureLength))
@@ -77,6 +82,6 @@ object CommitteeRegisterCompanion extends Serializer[CommitteeRegisterTTransacti
     val epochID = Longs.fromByteArray(bytes.slice(s,s+8))
     val blocksRangeToInclude = (Longs.fromByteArray(bytes.slice(s+8,s+16)), Longs.fromByteArray(bytes.slice(s+16,s+24)))
 
-    CommitteeRegisterTTransaction(committeePubKey, signature, epochID, blocksRangeToInclude)
+    CommitteeRegisterTx(committeePubKey, signature, epochID, blocksRangeToInclude)
   }
 }

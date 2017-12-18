@@ -68,7 +68,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
 
     val genesisBox = PublicKey25519NoncedBox(genesisAccountPriv.publicImage, Nonce @@ 0L, GenesisBalance)
     val attachment = "genesis attachment".getBytes
-    val posGenesis = PosBlock.create(powGenesis.id, 0, genesisTxs, genesisBox, attachment, genesisAccountPriv)
+    val posGenesis = PosBlock.create(powGenesis.id, 0, genesisTxs, Seq(), genesisBox, attachment, genesisAccountPriv)
 
     var history = HybridHistory.readOrGenerate(settings, minerSettings)
     history = history.append(powGenesis).get._1

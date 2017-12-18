@@ -3,6 +3,7 @@ package examples.hybrid.blocks
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
 import examples.curvepos.transaction.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer}
+import examples.hybrid.transaction.{CommitteeRegisterTx, CommitteeRegisterTxCompanion, TreasuryTransaction}
 import io.circe.Json
 import io.circe.syntax._
 import scorex.core.{ModifierId, ModifierTypeId, TransactionsCarryingPersistentNodeViewModifier}
@@ -21,6 +22,7 @@ import scala.util.Try
 case class PosBlock(override val parentId: BlockId, //PoW block
                     override val timestamp: Block.Timestamp,
                     override val transactions: Seq[SimpleBoxTransaction],
+                    treasuryTransactions: Seq[TreasuryTransaction],
                     generatorBox: PublicKey25519NoncedBox,
                     attachment: Array[Byte],
                     signature: Signature25519
@@ -55,8 +57,13 @@ object PosBlockCompanion extends Serializer[PosBlock] {
     val txsBytes = b.transactions.sortBy(t => Base58.encode(t.id)).foldLeft(Array[Byte]()) { (a, b) =>
       Bytes.concat(Ints.toByteArray(b.bytes.length), b.bytes, a)
     }
+    val treasuryTxsBytes = b.treasuryTransactions.sortBy(t => Base58.encode(t.id)).foldLeft(Array[Byte]()) { (a, b) =>
+      Bytes.concat(Array(b.modifierTypeId), Ints.toByteArray(b.bytes.length), b.bytes, a)
+    }
     Bytes.concat(b.parentId, Longs.toByteArray(b.timestamp), b.generatorBox.bytes, b.signature.bytes,
-      Ints.toByteArray(b.transactions.length), txsBytes, Ints.toByteArray(b.attachment.length), b.attachment)
+      Ints.toByteArray(b.transactions.length), txsBytes,
+      Ints.toByteArray(b.treasuryTransactions.length), treasuryTxsBytes,
+      Ints.toByteArray(b.attachment.length), b.attachment)
   }
 
   override def parseBytes(bytes: Array[Byte]): Try[PosBlock] = Try {
@@ -83,9 +90,27 @@ object PosBlockCompanion extends Serializer[PosBlock] {
       tx
     }
 
+    val trTxsLength = Ints.fromByteArray(bytes.slice(position, position + 4))
+    position = position + 4
+    val trTxs: Seq[TreasuryTransaction] = (0 until trTxsLength) map { _ =>
+      val typeId: ModifierTypeId = ModifierTypeId @@ bytes(position)
+      position = position + 1
+      val l = Ints.fromByteArray(bytes.slice(position, position + 4))
+      val tx: TreasuryTransaction = typeId match {
+        case CommitteeRegisterTx.ModifierTypeId => CommitteeRegisterTxCompanion.parseBytes(bytes.slice(position + 4, position + 4 + l)).get
+//        TODO:
+//        case VoterRegisterTx.ModifierTypeId => ???
+//        case ExpertRegisterTx.ModifierTypeId => ???
+//        case VoterBallotTx.ModifierTypeId => ???
+      }
+
+      position = position + 4 + l
+      tx
+    }
+
     val attachmentLength = Ints.fromByteArray(bytes.slice(position, position + 4))
     val attachment = bytes.slice(position + 4, position + 4 + attachmentLength)
-    PosBlock(parentId, timestamp, txs, box, attachment, signature)
+    PosBlock(parentId, timestamp, txs, trTxs, box, attachment, signature)
   }
 }
 
@@ -96,11 +121,12 @@ object PosBlock {
   def create(parentId: BlockId,
              timestamp: Block.Timestamp,
              txs: Seq[SimpleBoxTransaction],
+             trTxs: Seq[TreasuryTransaction],
              box: PublicKey25519NoncedBox,
              attachment: Array[Byte],
              privateKey: PrivateKey25519): PosBlock = {
     require(box.proposition.pubKeyBytes sameElements privateKey.publicKeyBytes)
-    val unsigned = PosBlock(parentId, timestamp, txs, box, attachment, Signature25519(Signature @@ Array[Byte]()))
+    val unsigned = PosBlock(parentId, timestamp, txs, trTxs, box, attachment, Signature25519(Signature @@ Array[Byte]()))
     val signature = Curve25519.sign(privateKey.privKeyBytes, unsigned.bytes)
     unsigned.copy(signature = Signature25519(signature))
   }

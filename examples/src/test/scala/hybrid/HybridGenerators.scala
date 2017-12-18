@@ -8,6 +8,7 @@ import examples.hybrid.blocks._
 import examples.hybrid.history.HybridSyncInfo
 import examples.hybrid.mining.HybridSettings
 import examples.hybrid.state.HBoxStoredState
+import examples.hybrid.transaction.TreasuryTransaction
 import org.scalacheck.rng.Seed
 import org.scalacheck.{Arbitrary, Gen}
 import scorex.core.block.Block._
@@ -58,11 +59,12 @@ trait HybridGenerators extends ExamplesCommonGenerators
   lazy val posBlockGen: Gen[PosBlock] = for {
     timestamp: Long <- positiveLongGen
     txs: Seq[SimpleBoxTransaction] <- smallInt.flatMap(txNum => Gen.listOfN(txNum, simpleBoxTransactionGen))
+    trTxs: Seq[TreasuryTransaction] <- Gen.const(Seq()) // TODO: add real trTxs generator
     box: PublicKey25519NoncedBox <- noncedBoxGen
     attach: Array[Byte] <- genBoundedBytes(0, 4096)
     generator: PrivateKey25519 <- key25519Gen.map(_._1)
     posParentId: ModifierId <- modifierIdGen
-  } yield PosBlock.create(posParentId, timestamp, txs, box.copy(proposition = generator.publicImage), attach, generator)
+  } yield PosBlock.create(posParentId, timestamp, txs, trTxs, box.copy(proposition = generator.publicImage), attach, generator)
 
   lazy val powHeaderGen: Gen[PowBlockHeader] = for {
     parentId: BlockId <- modifierIdGen
@@ -155,10 +157,11 @@ trait HybridGenerators extends ExamplesCommonGenerators
       id <- modifierIdGen
       timestamp: Long <- positiveLongGen
       txs: Seq[SimpleBoxTransaction] = transactions
+      trTxs: Seq[TreasuryTransaction] = Seq() // TODO: pass real transactions here
       box: PublicKey25519NoncedBox <- noncedBoxGen
       attach: Array[Byte] <- genBoundedBytes(0, 4096)
       generator: PrivateKey25519 <- key25519Gen.map(_._1)
-    } yield PosBlock.create(id, timestamp, txs, box.copy(proposition = generator.publicImage), attach, generator)
+    } yield PosBlock.create(id, timestamp, txs, trTxs, box.copy(proposition = generator.publicImage), attach, generator)
   }.apply(Gen.Parameters.default, Seed.random()).get
 
 
@@ -181,7 +184,9 @@ trait HybridGenerators extends ExamplesCommonGenerators
       case s => s
     }
 
-    PosBlock.create(id, timestamp, txs, box, attach, generator)
+    val trTxs = Seq() // TODO: add support for real treasury txs
+
+    PosBlock.create(id, timestamp, txs, trTxs, box, attach, generator)
   }
 
   def privKey(value: Long): (PrivateKey25519, PublicKey25519Proposition) =

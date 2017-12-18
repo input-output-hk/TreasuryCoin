@@ -6,6 +6,7 @@ import examples.curvepos.transaction.{PublicKey25519NoncedBox, PublicKey25519Non
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock, PowBlockCompanion}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.HBoxStoredState
+import examples.hybrid.transaction.TreasuryTransaction
 import io.iohk.iodb.ByteArrayWrapper
 import org.scalacheck.Gen
 import scorex.core.ModifierId
@@ -67,13 +68,15 @@ trait ModifierGenerators {
       if(txsPerBlock == 0) Seq.fill(count)(Seq[SimpleBoxTransaction]())
       else txs.grouped(txsPerBlock).toSeq
 
+    val trTxs = Seq() // TODO: add treasury transactions
+
     assert(txsGrouped.size == count)
 
     val genBox: PublicKey25519NoncedBox = stateBoxes.head
     val generator = privKey(genBox.value)._1
 
     txsGrouped.zip(parentIds).map{case (blockTxs, parentId) =>
-      PosBlock.create(parentId, System.currentTimeMillis(), blockTxs, genBox, attach, generator)
+      PosBlock.create(parentId, System.currentTimeMillis(), blockTxs, trTxs, genBox, attach, generator)
     }
   }
 
@@ -111,11 +114,12 @@ trait ModifierGenerators {
       for {
         timestamp: Long <- positiveLongGen
         txs: Seq[SimpleBoxTransaction] <- smallInt.flatMap(txNum => Gen.listOfN(txNum, simpleBoxTransactionGen))
+        trTxs: Seq[TreasuryTransaction] <- Gen.const(Seq()) // TODO: add real treasury txs generator
         box: PublicKey25519NoncedBox <- noncedBoxGen
         attach: Array[Byte] <- attachGen
         generator: PrivateKey25519 <- key25519Gen.map(_._1)
         bestPowId = blocks.lastOption.map(_.id).getOrElse(curHistory.bestPowId)
-      } yield PosBlock.create(bestPowId, timestamp, txs, box.copy(proposition = generator.publicImage), attach, generator)
+      } yield PosBlock.create(bestPowId, timestamp, txs, trTxs, box.copy(proposition = generator.publicImage), attach, generator)
     }
   }.sample.get
 

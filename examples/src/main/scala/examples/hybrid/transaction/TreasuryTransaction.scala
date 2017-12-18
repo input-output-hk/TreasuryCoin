@@ -10,8 +10,7 @@ import scorex.core.transaction.proof.Signature25519
   * A base class for all treasury transactions
   * @tparam P
   */
-abstract class TreasuryTransaction[P <: Proposition] extends Transaction[P] {
-  override val modifierTypeId: ModifierTypeId = TreasuryTransaction.ModifierTypeId
+abstract class TreasuryTransaction extends Transaction[PublicKey25519Proposition] {
 
   val epochID: Long
 
@@ -22,11 +21,7 @@ abstract class TreasuryTransaction[P <: Proposition] extends Transaction[P] {
   val signature: Signature25519
 }
 
-object TreasuryTransaction {
-  val ModifierTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 21.toByte
-}
-
 /**
   * A base class for all registration transaction types in the Treasury system
   */
-abstract class RegisterTTransaction extends TreasuryTransaction[PublicKey25519Proposition]
+abstract class RegisterTTransaction extends TreasuryTransaction

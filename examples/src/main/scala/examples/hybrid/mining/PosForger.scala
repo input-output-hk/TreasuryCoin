@@ -87,6 +87,7 @@ object PosForger extends ScorexLogging {
         powBlock.id,
         System.currentTimeMillis(),
         txsToInclude,
+        Seq(),
         boxKey._1,
         attachment,
         boxKey._2)
