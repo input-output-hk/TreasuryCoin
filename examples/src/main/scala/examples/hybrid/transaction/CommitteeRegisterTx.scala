@@ -1,6 +1,7 @@
 package examples.hybrid.transaction
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
+import examples.hybrid.TreasuryManager
 import examples.hybrid.wallet.HWallet
 import scorex.core.ModifierTypeId
 import scorex.core.serialization.Serializer
@@ -76,7 +77,7 @@ object CommitteeRegisterTxCompanion extends Serializer[CommitteeRegisterTx] {
 
   def parseBytes(bytes: Array[Byte]): Try[CommitteeRegisterTx] = Try {
     val keySize = Ints.fromByteArray(bytes.slice(0,4))
-    val committeePubKey = new Cryptosystem().decodePoint(bytes.slice(4,keySize))
+    val committeePubKey = TreasuryManager.cs.decodePoint(bytes.slice(4,keySize+4))
     val signature = Signature25519(Signature @@ bytes.slice(4+keySize, 4+keySize+Curve25519.SignatureLength))
     val s = 4+keySize+Curve25519.SignatureLength
     val epochID = Longs.fromByteArray(bytes.slice(s,s+8))

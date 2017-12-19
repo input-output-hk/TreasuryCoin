@@ -4,16 +4,20 @@ import akka.actor.{Actor, ActorRef}
 import com.google.common.primitives.Longs
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionMemPool}
 import examples.curvepos.transaction.PublicKey25519NoncedBox
+import examples.hybrid.TreasuryManager
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.HBoxStoredState
+import examples.hybrid.transaction.{CommitteeRegisterTx, TreasuryTransaction}
 import examples.hybrid.wallet.HWallet
 import scorex.core.LocalInterface.LocallyGeneratedModifier
 import scorex.core.NodeViewHolder.{CurrentView, GetDataFromCurrentView}
 import scorex.core.settings.ScorexSettings
+import scorex.core.transaction.proof.Signature25519
 import scorex.core.transaction.state.PrivateKey25519
 import scorex.core.utils.ScorexLogging
 import scorex.crypto.hash.Blake2b256
+import scorex.crypto.signatures.{Curve25519, Signature}
 import scorex.utils.Random
 
 
@@ -41,7 +45,7 @@ class PosForger(settings: HybridSettings, viewHolderRef: ActorRef) extends Actor
         log.debug(s"Trying to generate PoS block on top of ${powBlock.encodedId} with balance " +
           s"${boxKeys.map(_._1.value.toLong).sum}")
         val attachment = Random.randomBytes(settings.mining.posAttachmentSize)
-        posIteration(powBlock, boxKeys, pfi.txsToInclude, attachment, target) match {
+        posIteration(powBlock, boxKeys, pfi.txsToInclude, pfi.trTxsToInclude, attachment, target) match {
           case Some(posBlock) =>
             log.debug(s"Locally generated PoS block: $posBlock")
             forging = false
@@ -72,6 +76,7 @@ object PosForger extends ScorexLogging {
   def posIteration(powBlock: PowBlock,
                    boxKeys: Seq[(PublicKey25519NoncedBox, PrivateKey25519)],
                    txsToInclude: Seq[SimpleBoxTransaction],
+                   trTxsToInclude: Seq[TreasuryTransaction],
                    attachment: Array[Byte],
                    target: BigInt
                   ): Option[PosBlock] = {
@@ -87,7 +92,7 @@ object PosForger extends ScorexLogging {
         powBlock.id,
         System.currentTimeMillis(),
         txsToInclude,
-        Seq(),
+        trTxsToInclude,
         boxKey._1,
         attachment,
         boxKey._2)
@@ -115,7 +120,14 @@ object PosForger extends ScorexLogging {
           else collected
         }
 
-        PosForgingInfo(pairCompleted, bestPowBlock, diff, boxKeys, txs)
+        // TODO: extract treasury transactions from pool. Currently there is a dummy TrTx for testing purposes
+        val dummyTrTxUnsigned = CommitteeRegisterTx(TreasuryManager.cs.createKeyPair._2,
+                                                    Signature25519(Signature @@ Array[Byte]()), 1.toLong, (1.toLong,100.toLong))
+        val signature = Curve25519.sign(view.vault.secrets.head.privKeyBytes, dummyTrTxUnsigned.bytes)
+        val dummyTrTx = dummyTrTxUnsigned.copy(signature = Signature25519(signature))
+        val trTxs = Seq(dummyTrTx)
+
+        PosForgingInfo(pairCompleted, bestPowBlock, diff, boxKeys, txs, trTxs)
     }
     GetDataFromCurrentView[HybridHistory,
       HBoxStoredState,
@@ -133,4 +145,5 @@ case class PosForgingInfo(pairCompleted: Boolean,
                           bestPowBlock: PowBlock,
                           diff: BigInt,
                           boxKeys: Seq[(PublicKey25519NoncedBox, PrivateKey25519)],
-                          txsToInclude: Seq[SimpleBoxTransaction])
+                          txsToInclude: Seq[SimpleBoxTransaction],
+                          trTxsToInclude: Seq[TreasuryTransaction])
