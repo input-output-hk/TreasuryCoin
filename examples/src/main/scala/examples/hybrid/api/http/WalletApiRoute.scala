@@ -4,7 +4,7 @@ import javax.ws.rs.Path
 
 import akka.actor.{ActorRef, ActorRefFactory}
 import akka.http.scaladsl.server.Route
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionMemPool}
+import examples.commons.{SimpleBoxTransaction, TreasuryMemPool}
 import examples.curvepos.Value
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.HBoxStoredState
@@ -28,7 +28,7 @@ import scala.util.{Failure, Success, Try}
 @Api(value = "/wallet", produces = "application/json")
 case class WalletApiRoute(override val settings: RESTApiSettings, nodeViewHolderRef: ActorRef)
                          (implicit val context: ActorRefFactory)
-  extends ApiRouteWithFullView[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool] {
+  extends ApiRouteWithFullView[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] {
 
   //TODO move to settings?
   val DefaultFee = 100

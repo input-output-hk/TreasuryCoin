@@ -1,6 +1,6 @@
 package examples.hybrid
 
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion, SimpleBoxTransactionMemPool}
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion, TreasuryMemPool}
 import examples.curvepos.{Nonce, Value}
 import examples.curvepos.transaction.PublicKey25519NoncedBox
 import examples.hybrid.blocks._
@@ -28,7 +28,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
   override type HIS = HybridHistory
   override type MS = HBoxStoredState
   override type VL = HWallet
-  override type MP = SimpleBoxTransactionMemPool
+  override type MP = TreasuryMemPool
 
   override val modifierSerializers: Map[ModifierTypeId, Serializer[_ <: NodeViewModifier]] =
     Map(PosBlock.ModifierTypeId -> PosBlockCompanion,
@@ -80,7 +80,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
 
     assert(gw.boxes().forall(b => gs.closedBox(b.box.id).isDefined))
 
-    (history, gs, gw, SimpleBoxTransactionMemPool.emptyPool)
+    (history, gs, gw, TreasuryMemPool.emptyPool)
   }
 
   /**
@@ -93,7 +93,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
         HybridHistory.readOrGenerate(settings, minerSettings),
         HBoxStoredState.readOrGenerate(settings),
         HWallet.readOrGenerate(settings, 1),
-        SimpleBoxTransactionMemPool.emptyPool))
+        TreasuryMemPool.emptyPool))
     } else None
   }
 }

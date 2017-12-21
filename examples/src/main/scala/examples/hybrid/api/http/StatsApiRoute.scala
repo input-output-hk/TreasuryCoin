@@ -4,7 +4,7 @@ import javax.ws.rs.Path
 
 import akka.actor.{ActorRef, ActorRefFactory}
 import akka.http.scaladsl.server.Route
-import examples.commons.SimpleBoxTransactionMemPool
+import examples.commons.TreasuryMemPool
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.HBoxStoredState
 import examples.hybrid.wallet.HWallet
@@ -24,7 +24,7 @@ import scala.util.Try
 @Api(value = "/stats", produces = "application/json")
 case class StatsApiRoute(override val settings: RESTApiSettings, nodeViewHolderRef: ActorRef)
                         (implicit val context: ActorRefFactory)
-  extends ApiRouteWithFullView[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool] {
+  extends ApiRouteWithFullView[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] {
 
   override val route = pathPrefix("stats") {
     tail ~ meanDifficulty

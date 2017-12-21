@@ -9,9 +9,9 @@ import scala.collection.concurrent.TrieMap
 import scala.util.{Success, Try}
 
 
-case class SimpleBoxTransactionMemPool(unconfirmed: TrieMap[ByteArrayWrapper, SimpleBoxTransaction])
-  extends MemoryPool[SimpleBoxTransaction, SimpleBoxTransactionMemPool] with ScorexLogging {
-  override type NVCT = SimpleBoxTransactionMemPool
+case class TreasuryMemPool(unconfirmed: TrieMap[ByteArrayWrapper, SimpleBoxTransaction])
+  extends MemoryPool[SimpleBoxTransaction, TreasuryMemPool] with ScorexLogging {
+  override type NVCT = TreasuryMemPool
 
   private def key(id: Array[Byte]): ByteArrayWrapper = ByteArrayWrapper(id)
 
@@ -24,20 +24,20 @@ case class SimpleBoxTransactionMemPool(unconfirmed: TrieMap[ByteArrayWrapper, Si
   override def getAll(ids: Seq[ModifierId]): Seq[SimpleBoxTransaction] = ids.flatMap(getById)
 
   //modifiers
-  override def put(tx: SimpleBoxTransaction): Try[SimpleBoxTransactionMemPool] = Success {
+  override def put(tx: SimpleBoxTransaction): Try[TreasuryMemPool] = Success {
     unconfirmed.put(key(tx.id), tx)
     this
   }
 
   //todo
-  override def put(txs: Iterable[SimpleBoxTransaction]): Try[SimpleBoxTransactionMemPool] = Success(putWithoutCheck(txs))
+  override def put(txs: Iterable[SimpleBoxTransaction]): Try[TreasuryMemPool] = Success(putWithoutCheck(txs))
 
-  override def putWithoutCheck(txs: Iterable[SimpleBoxTransaction]): SimpleBoxTransactionMemPool = {
+  override def putWithoutCheck(txs: Iterable[SimpleBoxTransaction]): TreasuryMemPool = {
     txs.foreach(tx => unconfirmed.put(key(tx.id), tx))
     this
   }
 
-  override def remove(tx: SimpleBoxTransaction): SimpleBoxTransactionMemPool = {
+  override def remove(tx: SimpleBoxTransaction): TreasuryMemPool = {
     unconfirmed.remove(key(tx.id))
     this
   }
@@ -45,7 +45,7 @@ case class SimpleBoxTransactionMemPool(unconfirmed: TrieMap[ByteArrayWrapper, Si
   override def take(limit: Int): Iterable[SimpleBoxTransaction] =
     unconfirmed.values.toSeq.sortBy(-_.fee).take(limit)
 
-  override def filter(condition: (SimpleBoxTransaction) => Boolean): SimpleBoxTransactionMemPool = {
+  override def filter(condition: (SimpleBoxTransaction) => Boolean): TreasuryMemPool = {
     unconfirmed.retain { (k, v) =>
       condition(v)
     }
@@ -56,6 +56,6 @@ case class SimpleBoxTransactionMemPool(unconfirmed: TrieMap[ByteArrayWrapper, Si
 }
 
 
-object SimpleBoxTransactionMemPool {
-  lazy val emptyPool: SimpleBoxTransactionMemPool = SimpleBoxTransactionMemPool(TrieMap())
+object TreasuryMemPool {
+  lazy val emptyPool: TreasuryMemPool = TreasuryMemPool(TrieMap())
 }
