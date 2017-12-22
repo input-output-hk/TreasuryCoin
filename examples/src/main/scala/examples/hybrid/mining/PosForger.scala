@@ -118,14 +118,6 @@ object PosForger extends ScorexLogging {
           else collected
         }
 
-        // TODO: extract treasury transactions from pool. Currently there is a dummy TrTx for testing purposes
-        val dummyTrTxUnsigned: CommitteeRegisterTx = CommitteeRegisterTx(TreasuryManager.cs.createKeyPair._2,
-                                                    Signature25519(Signature @@ Array[Byte]()), 1.toLong, (1.toLong,100.toLong), 1L)
-        val signature = Curve25519.sign(view.vault.secrets.head.privKeyBytes, dummyTrTxUnsigned.bytes)
-        val dummyTrTx = CommitteeRegisterTx(TreasuryManager.cs.createKeyPair._2,
-          Signature25519(signature), 1.toLong, (1.toLong,100.toLong), 1L)
-        val trTxs = Seq(dummyTrTx)
-
         PosForgingInfo(pairCompleted, bestPowBlock, diff, boxKeys, txs)
     }
     GetDataFromCurrentView[HybridHistory,

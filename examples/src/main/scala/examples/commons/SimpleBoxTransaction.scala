@@ -54,8 +54,6 @@ abstract class SimpleBoxTransaction(val from: IndexedSeq[(PublicKey25519Proposit
     PublicKey25519NoncedBox(prop, nonce, value)
   }
 
-  override def toString: String = s"SimpleBoxTransaction(${json.noSpaces})"
-
   val semanticValidity: Try[Unit]
 }
 

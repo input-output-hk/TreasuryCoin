@@ -48,7 +48,7 @@ case class SimpleBoxTx(override val from: IndexedSeq[(PublicKey25519Proposition,
     "timestamp" -> timestamp.asJson
   ).asJson
 
-  override def toString: String = s"SimpleBoxTransaction(${json.noSpaces})"
+  override def toString: String = s"SimpleBoxTx(${json.noSpaces})"
 
   override lazy val semanticValidity: Try[Unit] = Try {
     require(from.size == signatures.size)

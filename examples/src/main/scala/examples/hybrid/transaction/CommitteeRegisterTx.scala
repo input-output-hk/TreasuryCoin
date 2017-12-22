@@ -41,6 +41,8 @@ case class CommitteeRegisterTx(committeePubKey: PubKey,
   override lazy val json: Json = Map("id" -> Base58.encode(id).asJson).asJson //TODO
 
   override lazy val semanticValidity: Try[Unit] = Try(Unit)
+
+  override def toString: String = s"CommitteeRegisterTx(${json.noSpaces})"
 }
 
 object CommitteeRegisterTx {

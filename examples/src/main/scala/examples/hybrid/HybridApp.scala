@@ -6,8 +6,7 @@ import examples.hybrid.api.http.{DebugApiRoute, StatsApiRoute, WalletApiRoute}
 import examples.hybrid.blocks.HybridBlock
 import examples.hybrid.history.{HybridSyncInfo, HybridSyncInfoMessageSpec}
 import examples.hybrid.mining.{HybridSettings, PosForger, PowMiner}
-import examples.hybrid.wallet.SimpleBoxTransactionGenerator
-import examples.hybrid.wallet.SimpleBoxTransactionGenerator.StartGeneration
+import examples.hybrid.wallet.{SimpleBoxTransactionGenerator, TreasuryTransactionGenerator}
 import scorex.core.api.http.{ApiRoute, NodeViewApiRoute, PeersApiRoute, UtilsApiRoute}
 import scorex.core.app.Application
 import scorex.core.network.NodeViewSynchronizer
@@ -60,10 +59,16 @@ class HybridApp(val settingsFilename: String) extends Application {
   localInterface
   nodeViewSynchronizer
 
-  if (settings.network.nodeName.startsWith("generatorNode")) {
-    log.info("Starting transactions generation")
+  if (settings.network.nodeName.startsWith("node1")) {
+    log.info("Starting simple transactions generation")
     val generator: ActorRef = actorSystem.actorOf(Props(new SimpleBoxTransactionGenerator(nodeViewHolderRef)))
-    generator ! StartGeneration(10 seconds)
+    generator ! SimpleBoxTransactionGenerator.StartGeneration(10 seconds)
+  }
+
+  if (settings.network.nodeName.startsWith("node1")) {
+    log.info("Starting treasury transactions generation")
+    val generator: ActorRef = actorSystem.actorOf(Props(new TreasuryTransactionGenerator(nodeViewHolderRef)))
+    generator ! TreasuryTransactionGenerator.StartGeneration(15 seconds)
   }
 }
 
