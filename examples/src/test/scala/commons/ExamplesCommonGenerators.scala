@@ -1,6 +1,6 @@
 package commons
 
-import examples.commons.SimpleBoxTransaction
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
 import examples.curvepos.{Nonce, Value}
 import org.scalacheck.Gen
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
@@ -22,28 +22,28 @@ trait ExamplesCommonGenerators extends CoreGenerators {
     long <- nonceGen
   } yield (prop, long)
 
-  lazy val simpleBoxTransactionGen: Gen[SimpleBoxTransaction] = for {
+  lazy val simpleBoxTransactionGen: Gen[SimpleBoxTx] = for {
     fee <- positiveLongGen
     timestamp <- positiveLongGen
     from: IndexedSeq[(PrivateKey25519, Nonce)] <- smallInt.flatMap(i => Gen.listOfN(i + 1, privGen).map(_.toIndexedSeq))
     to: IndexedSeq[(PublicKey25519Proposition, Value)] <- smallInt.flatMap(i => Gen.listOfN(i, pGen).map(_.toIndexedSeq))
-  } yield SimpleBoxTransaction(from, to, fee, timestamp)
+  } yield SimpleBoxTx(from, to, fee, timestamp)
 
   lazy val simpleBoxTransactionsGen: Gen[List[SimpleBoxTransaction]] = for {
     txs <- smallInt.flatMap(i => Gen.listOfN(i, simpleBoxTransactionGen))
   } yield txs
 
-  def simpleBoxTransactionGenCustomMakeBoxes (toBoxes: IndexedSeq[(PublicKey25519Proposition, Value)]): Gen[SimpleBoxTransaction] = for {
+  def simpleBoxTransactionGenCustomMakeBoxes (toBoxes: IndexedSeq[(PublicKey25519Proposition, Value)]): Gen[SimpleBoxTx] = for {
     fee <- positiveLongGen
     timestamp <- positiveLongGen
     from: IndexedSeq[(PrivateKey25519, Nonce)] <- Gen.choose(1,1).flatMap(i => Gen.listOfN(i + 1, privGen).map(_.toIndexedSeq))
     to = toBoxes
-  } yield SimpleBoxTransaction(from, to, fee, timestamp)
+  } yield SimpleBoxTx(from, to, fee, timestamp)
 
-  def simpleBoxTransactionGenCustomUseBoxes (fromBoxes: IndexedSeq[(PrivateKey25519, Nonce)]): Gen[SimpleBoxTransaction] = for {
+  def simpleBoxTransactionGenCustomUseBoxes (fromBoxes: IndexedSeq[(PrivateKey25519, Nonce)]): Gen[SimpleBoxTx] = for {
     fee <- positiveLongGen
     timestamp <- positiveLongGen
     from = fromBoxes
     to: IndexedSeq[(PublicKey25519Proposition, Value)] <- Gen.choose(1,1).flatMap(i => Gen.listOfN(i, pGen).map(_.toIndexedSeq))
-  } yield SimpleBoxTransaction(from, to, fee, timestamp)
+  } yield SimpleBoxTx(from, to, fee, timestamp)
 }

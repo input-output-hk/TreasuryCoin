@@ -4,7 +4,7 @@ import javax.ws.rs.Path
 
 import akka.actor.{ActorRef, ActorRefFactory}
 import akka.http.scaladsl.server.Route
-import examples.commons.{SimpleBoxTransaction, TreasuryMemPool}
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTx, TreasuryMemPool}
 import examples.curvepos.Value
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.HBoxStoredState
@@ -64,7 +64,7 @@ case class WalletApiRoute(override val settings: RESTApiSettings, nodeViewHolder
                 val amount: Long = (json \\ "amount").head.asNumber.get.toLong.get
                 val recipient: PublicKey25519Proposition = PublicKey25519Proposition(PublicKey @@ Base58.decode((json \\ "recipient").head.asString.get).get)
                 val fee: Long = (json \\ "fee").head.asNumber.flatMap(_.toLong).getOrElse(DefaultFee)
-                val tx = SimpleBoxTransaction.create(wallet, Seq((recipient, Value @@ amount)), fee).get
+                val tx = SimpleBoxTx.create(wallet, Seq((recipient, Value @@ amount)), fee).get
                 nodeViewHolderRef ! LocallyGeneratedTransaction[PublicKey25519Proposition, SimpleBoxTransaction](tx)
                 tx.json
               } match {

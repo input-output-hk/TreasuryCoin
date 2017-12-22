@@ -1,6 +1,6 @@
 package hybrid
 
-import examples.commons.SimpleBoxTransaction
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
 import examples.curvepos.Nonce
 import examples.curvepos.transaction.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer}
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock, PowBlockCompanion}
@@ -56,7 +56,7 @@ trait ModifierGenerators {
       val fee = 0
       val from = inputs.map(i => privKey(i.value)._1 -> i.nonce).toIndexedSeq
       val to = inputs.map(i => privKey(i.value)._2 -> i.value).toIndexedSeq
-      SimpleBoxTransaction(from, to, fee = fee, System.currentTimeMillis())
+      SimpleBoxTx(from, to, fee = fee, System.currentTimeMillis())
     }.toSeq
 
     txs.foreach {
@@ -68,15 +68,13 @@ trait ModifierGenerators {
       if(txsPerBlock == 0) Seq.fill(count)(Seq[SimpleBoxTransaction]())
       else txs.grouped(txsPerBlock).toSeq
 
-    val trTxs = Seq() // TODO: add treasury transactions
-
     assert(txsGrouped.size == count)
 
     val genBox: PublicKey25519NoncedBox = stateBoxes.head
     val generator = privKey(genBox.value)._1
 
     txsGrouped.zip(parentIds).map{case (blockTxs, parentId) =>
-      PosBlock.create(parentId, System.currentTimeMillis(), blockTxs, trTxs, genBox, attach, generator)
+      PosBlock.create(parentId, System.currentTimeMillis(), blockTxs, genBox, attach, generator)
     }
   }
 
@@ -114,12 +112,11 @@ trait ModifierGenerators {
       for {
         timestamp: Long <- positiveLongGen
         txs: Seq[SimpleBoxTransaction] <- smallInt.flatMap(txNum => Gen.listOfN(txNum, simpleBoxTransactionGen))
-        trTxs: Seq[TreasuryTransaction] <- Gen.const(Seq()) // TODO: add real treasury txs generator
         box: PublicKey25519NoncedBox <- noncedBoxGen
         attach: Array[Byte] <- attachGen
         generator: PrivateKey25519 <- key25519Gen.map(_._1)
         bestPowId = blocks.lastOption.map(_.id).getOrElse(curHistory.bestPowId)
-      } yield PosBlock.create(bestPowId, timestamp, txs, trTxs, box.copy(proposition = generator.publicImage), attach, generator)
+      } yield PosBlock.create(bestPowId, timestamp, txs, box.copy(proposition = generator.publicImage), attach, generator)
     }
   }.sample.get
 
@@ -137,7 +134,7 @@ trait ModifierGenerators {
 
   def semanticallyInvalidModifier(state: HBoxStoredState): PosBlock = {
     val posBlock: PosBlock = semanticallyValidModifier(state)
-    posBlock.transactions.lastOption.map { lastTx =>
+    posBlock.transactions.collect{case t:SimpleBoxTx=>t}.lastOption.map { lastTx =>
       val modifiedFrom = (lastTx.from.head._1, Nonce @@ (lastTx.from.head._2 + 1)) +: lastTx.from.tail
       val modifiedLast = lastTx.copy(from = modifiedFrom)
       posBlock.copy(transactions = posBlock.transactions.dropRight(1) :+ modifiedLast)

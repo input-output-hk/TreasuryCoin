@@ -1,7 +1,7 @@
 package examples.trimchain.modifiers
 
 import com.google.common.primitives.{Longs, Shorts}
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTxCompanion}
 import io.circe.Json
 import io.circe.syntax._
 import scorex.core.{ModifierId, ModifierTypeId}
@@ -43,7 +43,7 @@ object TBlockSerializer extends Serializer[TBlock] {
       Array()
     } else {
       scorex.core.utils.concatBytes(obj.body.map { tx =>
-        val transactionBytes = SimpleBoxTransactionCompanion.toBytes(tx)
+        val transactionBytes = SimpleBoxTxCompanion.toBytes(tx)
         Shorts.toByteArray(transactionBytes.length.toShort) ++ transactionBytes
       })
     }
@@ -56,7 +56,7 @@ object TBlockSerializer extends Serializer[TBlock] {
     def parseTxs(index: Int, acc: Seq[SimpleBoxTransaction] = Seq()): Seq[SimpleBoxTransaction] = {
       if (bytes.length > index) {
         val txLength = Shorts.fromByteArray(bytes.slice(index, index + 2))
-        val tx = SimpleBoxTransactionCompanion.parseBytes(bytes.slice(index + 2, index + 2 + txLength)).get
+        val tx = SimpleBoxTxCompanion.parseBytes(bytes.slice(index + 2, index + 2 + txLength)).get
         parseTxs(index + 2 + txLength, tx +: acc)
       } else {
         acc

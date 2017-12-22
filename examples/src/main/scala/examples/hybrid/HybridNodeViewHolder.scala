@@ -1,6 +1,6 @@
 package examples.hybrid
 
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion, TreasuryMemPool}
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTxCompanion, SimpleBoxTx, TreasuryMemPool}
 import examples.curvepos.{Nonce, Value}
 import examples.curvepos.transaction.PublicKey25519NoncedBox
 import examples.hybrid.blocks._
@@ -33,7 +33,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
   override val modifierSerializers: Map[ModifierTypeId, Serializer[_ <: NodeViewModifier]] =
     Map(PosBlock.ModifierTypeId -> PosBlockCompanion,
       PowBlock.ModifierTypeId -> PowBlockCompanion,
-      Transaction.ModifierTypeId -> SimpleBoxTransactionCompanion)
+      Transaction.ModifierTypeId -> SimpleBoxTxCompanion)
 
   override def preRestart(reason: Throwable, message: Option[Any]): Unit = {
     super.preRestart(reason, message)
@@ -57,7 +57,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
       0, Array.fill(32)(0: Byte), genesisAccount._2, Seq())
 
 
-    val genesisTxs = Seq(SimpleBoxTransaction(
+    val genesisTxs = Seq(SimpleBoxTx(
       IndexedSeq(genesisAccountPriv -> Nonce @@ 0L),
       icoMembers.map(_ -> GenesisBalance),
       0L,
@@ -68,7 +68,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
 
     val genesisBox = PublicKey25519NoncedBox(genesisAccountPriv.publicImage, Nonce @@ 0L, GenesisBalance)
     val attachment = "genesis attachment".getBytes
-    val posGenesis = PosBlock.create(powGenesis.id, 0, genesisTxs, Seq(), genesisBox, attachment, genesisAccountPriv)
+    val posGenesis = PosBlock.create(powGenesis.id, 0, genesisTxs, genesisBox, attachment, genesisAccountPriv)
 
     var history = HybridHistory.readOrGenerate(settings, minerSettings)
     history = history.append(powGenesis).get._1

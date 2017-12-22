@@ -1,9 +1,9 @@
 package examples.hybrid.blocks
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTxCompanion, SimpleBoxTx}
 import examples.curvepos.transaction.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer}
-import examples.hybrid.transaction.{CommitteeRegisterTx, CommitteeRegisterTxCompanion, TreasuryTransaction}
+import examples.hybrid.transaction.{CommitteeRegisterTx, CommitteeRegisterTxCompanion}
 import io.circe.Json
 import io.circe.syntax._
 import scorex.core.{ModifierId, ModifierTypeId, TransactionsCarryingPersistentNodeViewModifier}
@@ -22,7 +22,6 @@ import scala.util.Try
 case class PosBlock(override val parentId: BlockId, //PoW block
                     override val timestamp: Block.Timestamp,
                     override val transactions: Seq[SimpleBoxTransaction],
-                    treasuryTransactions: Seq[TreasuryTransaction],
                     generatorBox: PublicKey25519NoncedBox,
                     attachment: Array[Byte],
                     signature: Signature25519
@@ -55,14 +54,10 @@ case class PosBlock(override val parentId: BlockId, //PoW block
 object PosBlockCompanion extends Serializer[PosBlock] {
   override def toBytes(b: PosBlock): Array[Byte] = {
     val txsBytes = b.transactions.sortBy(t => Base58.encode(t.id)).foldLeft(Array[Byte]()) { (a, b) =>
-      Bytes.concat(Ints.toByteArray(b.bytes.length), b.bytes, a)
-    }
-    val treasuryTxsBytes = b.treasuryTransactions.sortBy(t => Base58.encode(t.id)).foldLeft(Array[Byte]()) { (a, b) =>
       Bytes.concat(Array(b.modifierTypeId), Ints.toByteArray(b.bytes.length), b.bytes, a)
     }
     Bytes.concat(b.parentId, Longs.toByteArray(b.timestamp), b.generatorBox.bytes, b.signature.bytes,
       Ints.toByteArray(b.transactions.length), txsBytes,
-      Ints.toByteArray(b.treasuryTransactions.length), treasuryTxsBytes,
       Ints.toByteArray(b.attachment.length), b.attachment)
   }
 
@@ -84,33 +79,25 @@ object PosBlockCompanion extends Serializer[PosBlock] {
     val txsLength = Ints.fromByteArray(bytes.slice(position, position + 4))
     position = position + 4
     val txs: Seq[SimpleBoxTransaction] = (0 until txsLength) map { _ =>
-      val l = Ints.fromByteArray(bytes.slice(position, position + 4))
-      val tx = SimpleBoxTransactionCompanion.parseBytes(bytes.slice(position + 4, position + 4 + l)).get
-      position = position + 4 + l
-      tx
-    }
-
-    val trTxsLength = Ints.fromByteArray(bytes.slice(position, position + 4))
-    position = position + 4
-    val trTxs: Seq[TreasuryTransaction] = (0 until trTxsLength) map { _ =>
       val typeId: ModifierTypeId = ModifierTypeId @@ bytes(position)
       position = position + 1
       val l = Ints.fromByteArray(bytes.slice(position, position + 4))
-      val tx: TreasuryTransaction = typeId match {
+      val tx: SimpleBoxTransaction = typeId match {
         case CommitteeRegisterTx.ModifierTypeId => CommitteeRegisterTxCompanion.parseBytes(bytes.slice(position + 4, position + 4 + l)).get
-//        TODO:
-//        case VoterRegisterTx.ModifierTypeId => ???
-//        case ExpertRegisterTx.ModifierTypeId => ???
-//        case VoterBallotTx.ModifierTypeId => ???
-      }
+        //        TODO:
+        //        case VoterRegisterTx.ModifierTypeId => ???
+        //        case ExpertRegisterTx.ModifierTypeId => ???
+        //        case VoterBallotTx.ModifierTypeId => ???
 
+        case SimpleBoxTx.ModifierTypeId => SimpleBoxTxCompanion.parseBytes(bytes.slice(position + 4, position + 4 + l)).get
+      }
       position = position + 4 + l
       tx
     }
 
     val attachmentLength = Ints.fromByteArray(bytes.slice(position, position + 4))
     val attachment = bytes.slice(position + 4, position + 4 + attachmentLength)
-    PosBlock(parentId, timestamp, txs, trTxs, box, attachment, signature)
+    PosBlock(parentId, timestamp, txs, box, attachment, signature)
   }
 }
 
@@ -121,12 +108,11 @@ object PosBlock {
   def create(parentId: BlockId,
              timestamp: Block.Timestamp,
              txs: Seq[SimpleBoxTransaction],
-             trTxs: Seq[TreasuryTransaction],
              box: PublicKey25519NoncedBox,
              attachment: Array[Byte],
              privateKey: PrivateKey25519): PosBlock = {
     require(box.proposition.pubKeyBytes sameElements privateKey.publicKeyBytes)
-    val unsigned = PosBlock(parentId, timestamp, txs, trTxs, box, attachment, Signature25519(Signature @@ Array[Byte]()))
+    val unsigned = PosBlock(parentId, timestamp, txs, box, attachment, Signature25519(Signature @@ Array[Byte]()))
     val signature = Curve25519.sign(privateKey.privKeyBytes, unsigned.bytes)
     unsigned.copy(signature = Signature25519(signature))
   }

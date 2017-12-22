@@ -84,7 +84,7 @@ object PrivateChain extends App with ScorexLogging {
         @tailrec
         def posStep(): PosBlock = {
           val pb = history.bestPowBlock
-          PosForger.posIteration(pb, boxKeys, Seq(), Seq(), Array(), target.longValue()) match {
+          PosForger.posIteration(pb, boxKeys, Seq(), Array(), target.longValue()) match {
             case Some(pos) => pos
             case None =>
               val npb = generatePow(history, brother = true, hashesPerSecond)

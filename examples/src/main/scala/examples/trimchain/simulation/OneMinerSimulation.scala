@@ -4,7 +4,7 @@ import java.io.{File, FileOutputStream, FileWriter}
 import java.nio.file.{Files, Paths}
 
 import com.google.common.primitives.{Ints, Longs}
-import examples.commons.SimpleBoxTransaction
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
 import examples.curvepos.{Nonce, Value}
 import examples.curvepos.transaction.PublicKey25519NoncedBox
 import examples.trimchain.core.{Algos, Constants, TicketSerializer}
@@ -46,7 +46,7 @@ object OneMinerSimulation extends App with Simulators {
 
   def generateTransactions(richBoxes: Seq[PublicKey25519NoncedBox]): Seq[SimpleBoxTransaction] = {
     richBoxes.filter(_.value > 1).take(NewBoxesPerBlock).map { b =>
-      SimpleBoxTransaction.apply(
+      SimpleBoxTx.apply(
         from = IndexedSeq(minerPrivKey -> b.nonce),
         to = IndexedSeq(minerPubKey -> Value @@ (b.value / 2), minerPubKey -> Value @@ (b.value - (b.value / 2))),
         0, System.currentTimeMillis())

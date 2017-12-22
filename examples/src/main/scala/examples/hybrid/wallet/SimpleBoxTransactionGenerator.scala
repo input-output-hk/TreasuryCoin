@@ -1,7 +1,7 @@
 package examples.hybrid.wallet
 
 import akka.actor.{Actor, ActorRef}
-import examples.commons.{SimpleBoxTransaction, TreasuryMemPool}
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTx, TreasuryMemPool}
 import examples.curvepos.Value
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.HBoxStoredState
@@ -63,7 +63,7 @@ class SimpleBoxTransactionGenerator(viewHolderRef: ActorRef) extends Actor with 
     if (pubkeys.size < 10) wallet.generateNewSecret()
     val recipients = scala.util.Random.shuffle(pubkeys).take(Random.nextInt(pubkeys.size))
       .map(r => (r, Value @@ Random.nextInt(100).toLong))
-    val tx = SimpleBoxTransaction.create(wallet, recipients, Random.nextInt(100), ex)
+    val tx = SimpleBoxTx.create(wallet, recipients, Random.nextInt(100), ex)
     tx.map(t => t.boxIdsToOpen.foreach(id => ex += id))
     tx
   }

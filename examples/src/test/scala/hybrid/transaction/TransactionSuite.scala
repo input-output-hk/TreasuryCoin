@@ -1,6 +1,6 @@
 package hybrid.transaction
 
-import examples.commons.SimpleBoxTransaction
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
 import hybrid.HybridGenerators
 import io.iohk.iodb.ByteArrayWrapper
 import org.scalatest.{Matchers, PropSpec}
@@ -29,7 +29,7 @@ class TransactionSuite extends PropSpec
         box.proposition -> box.value
       }.toIndexedSeq
 
-      val tx: SimpleBoxTransaction = SimpleBoxTransaction(inputs, to, 0, 0)
+      val tx: SimpleBoxTransaction = SimpleBoxTx(inputs, to, 0, 0)
 
       val outKeys = boxesWithKeysOut.map(_._2).map(_.publicKeyBytes).map(ByteArrayWrapper.apply)
 

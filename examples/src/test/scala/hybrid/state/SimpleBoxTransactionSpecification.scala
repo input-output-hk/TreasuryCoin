@@ -1,6 +1,6 @@
 package hybrid.state
 
-import examples.commons.SimpleBoxTransaction
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
 import examples.curvepos.transaction.PublicKey25519NoncedBox
 import examples.curvepos.{Nonce, Value}
 import examples.hybrid.state.HBoxStoredState
@@ -29,7 +29,7 @@ class SimpleBoxTransactionSpecification extends PropSpec
     icoMembers.map(_.address).mkString(",") shouldBe "3m6nhP4AZjFn5pgMd3PvH6PwHx23AG4tvpLCuu7Wt3hhAPssKc,4ZJwiEzpTHhvT6BMYZg1FUXysHkuBLRHb7FvXhZGx6HtsWZCeG,3Y7Ji8wrYZ12EPup6ky2mWEaNo1wTgUKVPJ84xaHwHqTC6LXoh,3WqPcQ1w1HEaEDvHpnnqqYxJBzQGcf5gT5G5CrsXFL7UX4SA2N,4m5cG82kztD9bZVf1Tc1Ni1uvHobpKYuAUyxNSnDm7WLGCZvZh,4huPANjYcqcdRm99tsCw29JqFnHMTJZsQjoufRQTEDPPoWmPSt,3s3CauhVba81UefEuuaNqRqGLEV9jCZJpvLFg5dJdu29TivRZk,3HHuHxBf2eXmbUcGuFCx3dU6Wp7imeRiN5uz4rYDdQwsLwnwW4,38uZVfModMnCg5FSECtFiBE7Dbjmh7Tt1SgBD8gFTA1XDHxiqQ,3WTH7tB28nkbC9KFJTy8EBn1bWkxryiLKDnngeP9BYyuCik3aP"
 
     val genesisAccount = PrivateKey25519Companion.generateKeys("genesis".getBytes)._1
-    val tx = SimpleBoxTransaction(IndexedSeq(genesisAccount -> Nonce @@ 0L), icoMembers.map(_ -> GenesisBalance), 0L, 0L)
+    val tx = SimpleBoxTx(IndexedSeq(genesisAccount -> Nonce @@ 0L), icoMembers.map(_ -> GenesisBalance), 0L, 0L)
     tx.newBoxes.toSeq shouldBe
       Vector(
         PublicKey25519NoncedBox(PublicKey25519Proposition(PublicKey @@ Base58.decode("3m6nhP4AZjFn5pgMd3PvH6PwHx23AG4tvpLCuu7Wt3hhAPssKc").get.take(33).tail), Nonce @@ -6219502975712200872L, Value @@ 100000L),

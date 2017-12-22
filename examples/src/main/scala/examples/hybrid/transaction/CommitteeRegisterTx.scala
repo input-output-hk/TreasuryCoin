@@ -3,10 +3,14 @@ package examples.hybrid.transaction
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.wallet.HWallet
+import io.circe.Json
+import io.circe.syntax._
+import io.iohk.iodb.ByteArrayWrapper
 import scorex.core.ModifierTypeId
 import scorex.core.serialization.Serializer
 import scorex.core.transaction.proof.Signature25519
 import scorex.core.transaction.state.{PrivateKey25519, PrivateKey25519Companion}
+import scorex.crypto.encode.Base58
 import scorex.crypto.signatures.{Curve25519, Signature}
 import treasury.crypto.core.{Cryptosystem, KeyPair, PubKey}
 
@@ -15,16 +19,17 @@ import scala.util.Try
 case class CommitteeRegisterTx(committeePubKey: PubKey,
                                override val signature: Signature25519,
                                override val epochID: Long,
-                               override val blocksRangeToInclude: (Long, Long))
-  extends RegisterTTransaction {
+                               override val blocksRangeToInclude: (Long, Long),
+                               override val timestamp: Long)
+  extends RegisterTTransaction(0L) {
 
   override type M = CommitteeRegisterTx
 
   override val modifierTypeId: ModifierTypeId = CommitteeRegisterTx.ModifierTypeId
 
-  override lazy val serializer = CommitteeRegisterTxCompanion
+  override val serializer = CommitteeRegisterTxCompanion
 
-  override val messageToSign = {
+  override lazy val messageToSign = {
     val keyBytes = committeePubKey.getEncoded(true)
     Bytes.concat(Ints.toByteArray(keyBytes.length),
       keyBytes,
@@ -33,7 +38,9 @@ case class CommitteeRegisterTx(committeePubKey: PubKey,
       Longs.toByteArray(blocksRangeToInclude._2))
   }
 
-  override def json = ???
+  override lazy val json: Json = Map("id" -> Base58.encode(id).asJson).asJson //TODO
+
+  override lazy val semanticValidity: Try[Unit] = Try(Unit)
 }
 
 object CommitteeRegisterTx {
@@ -42,15 +49,16 @@ object CommitteeRegisterTx {
   def apply(account: PrivateKey25519,
             committeePubKey: PubKey,
             epochID: Long,
-            blocksRangeToInclude: (Long, Long)): CommitteeRegisterTx = {
+            blocksRangeToInclude: (Long, Long),
+            timestamp: Long): CommitteeRegisterTx = {
 
     val fakeSig = Signature25519(Signature @@ Array[Byte]())
-    val fakeSigned = CommitteeRegisterTx(committeePubKey, fakeSig, epochID, blocksRangeToInclude)
+    val fakeSigned = CommitteeRegisterTx(committeePubKey, fakeSig, epochID, blocksRangeToInclude, timestamp)
 
     val msg = fakeSigned.messageToSign
     val sig = PrivateKey25519Companion.sign(account, msg)
 
-    new CommitteeRegisterTx(committeePubKey, sig, epochID, blocksRangeToInclude)
+    new CommitteeRegisterTx(committeePubKey, sig, epochID, blocksRangeToInclude, timestamp)
   }
 
   def create(w: HWallet,
@@ -58,7 +66,8 @@ object CommitteeRegisterTx {
              blocksRangeToInclude: (Long,Long)): Try[(CommitteeRegisterTx, KeyPair)] = Try {
     val keyPair = new Cryptosystem().createKeyPair
     val acc = w.secretByPublicImage(w.boxes().head.box.proposition).get
-    (CommitteeRegisterTx(acc, keyPair._2, epochID, blocksRangeToInclude), keyPair)
+    val timestamp = System.currentTimeMillis()
+    (CommitteeRegisterTx(acc, keyPair._2, epochID, blocksRangeToInclude, timestamp), keyPair)
   }
 }
 
@@ -71,7 +80,8 @@ object CommitteeRegisterTxCompanion extends Serializer[CommitteeRegisterTx] {
       t.signature.bytes,
       Longs.toByteArray(t.epochID),
       Longs.toByteArray(t.blocksRangeToInclude._1),
-      Longs.toByteArray(t.blocksRangeToInclude._2)
+      Longs.toByteArray(t.blocksRangeToInclude._2),
+      Longs.toByteArray(t.timestamp)
     )
   }
 
@@ -82,7 +92,8 @@ object CommitteeRegisterTxCompanion extends Serializer[CommitteeRegisterTx] {
     val s = 4+keySize+Curve25519.SignatureLength
     val epochID = Longs.fromByteArray(bytes.slice(s,s+8))
     val blocksRangeToInclude = (Longs.fromByteArray(bytes.slice(s+8,s+16)), Longs.fromByteArray(bytes.slice(s+16,s+24)))
+    val timestamp = Longs.fromByteArray(bytes.slice(s+24,s+32))
 
-    CommitteeRegisterTx(committeePubKey, signature, epochID, blocksRangeToInclude)
+    CommitteeRegisterTx(committeePubKey, signature, epochID, blocksRangeToInclude, timestamp)
   }
 }
