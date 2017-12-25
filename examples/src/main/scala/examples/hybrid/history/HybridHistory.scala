@@ -78,6 +78,10 @@ class HybridHistory(val storage: HistoryStorage,
     chainBack(startBlock, isGenesis, count - 1).get.map(_._2)
   }
 
+  def lastPosBlockIds(startBlock: HybridBlock, count: Int): Seq[ModifierId] = {
+    posChainBack(startBlock, isGenesis, count - 1).get.map(_._2)
+  }
+
   /**
     * Is there's no history, even genesis block
     *
@@ -388,6 +392,33 @@ class HybridHistory(val storage: HistoryStorage,
     } else {
       parentBlock(m) match {
         case Some(parent) => chainBack(parent, until, limit - 1, sum)
+        case _ =>
+          log.warn(s"Parent block for ${Base58.encode(m.id)} not found ")
+          None
+      }
+    }
+  }
+
+  /**
+    * Go back though chain and get PoS block ids until condition until
+    * None if parent block is not in chain
+    */
+  @tailrec
+  private def posChainBack(m: HybridBlock,
+                           until: HybridBlock => Boolean,
+                           limit: Int = Int.MaxValue,
+                           acc: Seq[(ModifierTypeId, ModifierId)] = Seq()): Option[Seq[(ModifierTypeId, ModifierId)]] = {
+
+    val (sum: Seq[(ModifierTypeId, ModifierId)], newLimit: Int) =
+      if (m.isInstanceOf[PosBlock]) {
+        ((PosBlock.ModifierTypeId -> m.id) +: acc, limit-1)
+      } else (acc, limit)
+
+    if (limit <= 0 || until(m)) {
+      Some(sum)
+    } else {
+      parentBlock(m) match {
+        case Some(parent) => posChainBack(parent, until, newLimit, sum)
         case _ =>
           log.warn(s"Parent block for ${Base58.encode(m.id)} not found ")
           None
