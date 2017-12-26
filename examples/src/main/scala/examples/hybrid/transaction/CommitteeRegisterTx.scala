@@ -66,7 +66,7 @@ object CommitteeRegisterTx {
   def create(w: HWallet,
              epochID: Long,
              blocksRangeToInclude: (Long,Long)): Try[(CommitteeRegisterTx, KeyPair)] = Try {
-    val keyPair = new Cryptosystem().createKeyPair
+    val keyPair = TreasuryManager.cs.createKeyPair
     val acc = w.secretByPublicImage(w.boxes().head.box.proposition).get
     val timestamp = System.currentTimeMillis()
     (CommitteeRegisterTx(acc, keyPair._2, epochID, blocksRangeToInclude, timestamp), keyPair)

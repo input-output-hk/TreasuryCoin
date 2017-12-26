@@ -1,9 +1,10 @@
 package examples.hybrid.state
 
 import examples.hybrid.TreasuryManager
-import examples.hybrid.blocks.{HybridBlock, PosBlock}
+import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
-import examples.hybrid.transaction.{RegisterTTransaction, TreasuryTransaction}
+import examples.hybrid.transaction.{CommitteeRegisterTx, RegisterTTransaction, TreasuryTransaction}
+import treasury.crypto.core.PubKey
 
 import scala.util.Try
 
@@ -19,20 +20,39 @@ import scala.util.Try
   */
 
 case class TreasuryState(epochNum: Int,
-                         registrations: Seq[RegisterTTransaction])
+                         committeePubKeys: Seq[PubKey],
+                         expertsPubKeys: Seq[PubKey],
+                         votersPubKeys: Seq[PubKey])
                          /*distrKeyGen: Seq[DKGTransaction],
                            ballots: Seq[BallotTransaction]),
                            .... */ {
 
-  def put(tx: TreasuryTransaction): Try[TreasuryState] = Try {
+  protected def apply(tx: TreasuryTransaction): Try[TreasuryState] = Try {
     tx match {
-      case t: RegisterTTransaction => TreasuryState(epochNum, registrations :+ t)
+      case t: CommitteeRegisterTx => TreasuryState(epochNum, committeePubKeys :+ t.committeePubKey, expertsPubKeys, votersPubKeys)
     }
   }
 
-  def validate(mod: HybridBlock): Try[Unit] = Try {
-    // TODO: add validation
-    Try(Unit)
+  def apply(block: HybridBlock): Try[TreasuryState] = Try {
+    block match {
+      case b:PosBlock => {
+        val trTxs = b.transactions.collect { case t: TreasuryTransaction => t }
+        trTxs.foldLeft(this) { case (state, tx) => state.apply(tx).get }
+      }
+      case _ => this
+    }
+  }
+
+  def validate(block: HybridBlock, history: HybridHistory): Try[Unit] = Try {
+    block match {
+      case _:PowBlock => Unit
+      case b:PosBlock => {
+        val height = history.storage.parentHeight(b) + 1      // this block may not be applied yet so derive its height from the parent height
+        val trTxs = b.transactions.collect{case t:TreasuryTransaction => t}
+        val validator = new TreasuryTxValidator(this, height)
+        trTxs.foreach(validator.validate)
+      }
+    }
   }
 }
 
@@ -48,7 +68,7 @@ object TreasuryState {
 
     val epochBlocksIds = history.lastBlockIds(history.modifierById(stor.bestPosId).get, currentEpochLen)
 
-    val initial = TreasuryState(epochNum, Seq())
+    val initial = TreasuryState(epochNum, Seq(), Seq(), Seq())
 
     /* parse all blocks in the current epoch and extract all treasury transactions */
     epochBlocksIds.foldLeft(initial) { case (state, blockId) =>
@@ -56,7 +76,7 @@ object TreasuryState {
         case Some(b:PosBlock) => {
           val trTxs = b.transactions.collect {case t:TreasuryTransaction => t}
           trTxs.foldLeft(state) { case (state, tx) =>
-            state.put(tx).get
+            state.apply(tx).get
           }
         }
         case _ => state

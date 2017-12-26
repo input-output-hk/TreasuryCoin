@@ -1,21 +1,24 @@
 package examples.hybrid
 
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTxCompanion, SimpleBoxTx, TreasuryMemPool}
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTx, SimpleBoxTxCompanion, TreasuryMemPool}
 import examples.curvepos.{Nonce, Value}
 import examples.curvepos.transaction.PublicKey25519NoncedBox
 import examples.hybrid.blocks._
 import examples.hybrid.history.{HybridHistory, HybridSyncInfo}
 import examples.hybrid.mining.HybridMiningSettings
-import examples.hybrid.state.HBoxStoredState
+import examples.hybrid.state.{HBoxStoredState, TreasuryState}
 import examples.hybrid.wallet.HWallet
+import scorex.core.NodeViewHolder._
 import scorex.core.serialization.Serializer
 import scorex.core.settings.ScorexSettings
 import scorex.core.transaction.Transaction
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.transaction.state.PrivateKey25519Companion
-import scorex.core.{ModifierTypeId, NodeViewHolder, NodeViewModifier}
+import scorex.core.{ModifierTypeId, NodeViewHolder, NodeViewModifier, VersionTag}
 import scorex.crypto.encode.Base58
 import scorex.crypto.signatures.PublicKey
+
+import scala.util.{Failure, Success}
 
 
 class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMiningSettings) extends NodeViewHolder[PublicKey25519Proposition,
@@ -29,6 +32,8 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
   override type MS = HBoxStoredState
   override type VL = HWallet
   override type MP = TreasuryMemPool
+
+  private var treasuryState = TreasuryState.generate(history).get
 
   override val modifierSerializers: Map[ModifierTypeId, Serializer[_ <: NodeViewModifier]] =
     Map(PosBlock.ModifierTypeId -> PosBlockCompanion,
@@ -95,5 +100,67 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
         HWallet.readOrGenerate(settings, 1),
         TreasuryMemPool.emptyPool))
     } else None
+  }
+
+  override def pmodModify(pmod: HybridBlock): Unit = {
+
+    treasuryState.validate(pmod, history) match {
+      case Failure(e) =>
+        log.warn(s"Persistent modifier (id: ${pmod.encodedId}, contents: $pmod) is not valid against treasury state", e)
+        notifySubscribers(EventType.SemanticallyFailedPersistentModifier, SemanticallyFailedModification(pmod, e))
+        return
+      case _ =>
+    }
+
+    if (!history().contains(pmod.id)) {
+      notifySubscribers(EventType.StartingPersistentModifierApplication, StartingPersistentModifierApplication(pmod))
+
+      log.info(s"Apply modifier ${pmod.encodedId} of type ${pmod.modifierTypeId} to nodeViewHolder")
+
+      history().append(pmod) match {
+        case Success((historyBeforeStUpdate, progressInfo)) =>
+          log.debug(s"Going to apply modifications to the state: $progressInfo")
+          notifySubscribers(EventType.SuccessfulSyntacticallyValidModifier, SyntacticallySuccessfulModifier(pmod))
+          notifySubscribers(EventType.OpenSurfaceChanged, NewOpenSurface(historyBeforeStUpdate.openSurfaceIds()))
+
+          if (progressInfo.toApply.nonEmpty) {
+            val (newHistory, newStateTry) = updateState(historyBeforeStUpdate, minimalState(), progressInfo)
+            newStateTry match {
+              case Success(newMinState) =>
+                val newMemPool = updateMemPool(progressInfo, memoryPool(), newMinState)
+
+                //we consider that vault always able to perform a rollback needed
+                val newVault = if (progressInfo.chainSwitchingNeeded) {
+                  vault().rollback(VersionTag @@ progressInfo.branchPoint.get).get.scanPersistent(progressInfo.toApply)
+                } else {
+                  vault().scanPersistent(progressInfo.toApply)
+                }
+
+                log.info(s"Persistent modifier ${pmod.encodedId} applied successfully")
+                nodeView = (newHistory, newMinState, newVault, newMemPool)
+
+                /* if everything is ok we can update treasury state */
+                treasuryState = if (progressInfo.chainSwitchingNeeded) {
+                  TreasuryState.generate(newHistory).get // in case of rollback regenerate it entirely
+                } else {
+                  treasuryState.apply(pmod).get
+                }
+
+              case Failure(e) =>
+                log.warn(s"Can`t apply persistent modifier (id: ${pmod.encodedId}, contents: $pmod) to minimal state", e)
+                nodeView = (newHistory, minimalState(), vault(), memoryPool())
+                notifySubscribers(EventType.SemanticallyFailedPersistentModifier, SemanticallyFailedModification(pmod, e))
+            }
+          } else {
+            requestDownloads(progressInfo)
+            nodeView = (historyBeforeStUpdate, minimalState(), vault(), memoryPool())
+          }
+        case Failure(e) =>
+          log.warn(s"Can`t apply persistent modifier (id: ${pmod.encodedId}, contents: $pmod) to history", e)
+          notifySubscribers(EventType.SyntacticallyFailedPersistentModifier, SyntacticallyFailedModification(pmod, e))
+      }
+    } else {
+      log.warn(s"Trying to apply modifier ${pmod.encodedId} that's already in history")
+    }
   }
 }

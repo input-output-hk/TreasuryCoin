@@ -49,7 +49,7 @@ trait NodeViewHolder[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
     * state (result of log's modifiers application to pre-historical(genesis) state,
     * user-specific information stored in vault (it could be e.g. a wallet), and a memory pool.
     */
-  private var nodeView: NodeView = restoreState().getOrElse(genesisState)
+  protected var nodeView: NodeView = restoreState().getOrElse(genesisState)
 
   /**
     * Restore a local view during a node startup. If no any stored view found
@@ -150,7 +150,7 @@ trait NodeViewHolder[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
     }
   }
 
-  private def requestDownloads(pi: ProgressInfo[PMOD]): Unit =
+  protected def requestDownloads(pi: ProgressInfo[PMOD]): Unit =
     pi.toDownload.foreach { case (tid, id) =>
       notifySubscribers(EventType.DownloadNeeded, DownloadRequest(tid, id))
     }
@@ -184,7 +184,7 @@ trait NodeViewHolder[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
        */
 
   @tailrec
-  private def updateState(history: HIS,
+  protected final def updateState(history: HIS,
                           state: MS,
                           progressInfo: ProgressInfo[PMOD]): (HIS, Try[MS]) = {
     requestDownloads(progressInfo)
