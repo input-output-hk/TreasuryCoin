@@ -27,10 +27,8 @@ case class TreasuryState(epochNum: Int,
                            ballots: Seq[BallotTransaction]),
                            .... */ {
 
-  protected def apply(tx: TreasuryTransaction): Try[TreasuryState] = Try {
-    tx match {
-      case t: CommitteeRegisterTx => TreasuryState(epochNum, committeePubKeys :+ t.committeePubKey, expertsPubKeys, votersPubKeys)
-    }
+  protected def apply(tx: TreasuryTransaction): Try[TreasuryState] = tx match {
+      case t: CommitteeRegisterTx => Try(TreasuryState(epochNum, committeePubKeys :+ t.committeePubKey, expertsPubKeys, votersPubKeys))
   }
 
   def apply(block: HybridBlock): Try[TreasuryState] = Try {
@@ -50,7 +48,7 @@ case class TreasuryState(epochNum: Int,
         val height = history.storage.parentHeight(b) + 1      // this block may not be applied yet so derive its height from the parent height
         val trTxs = b.transactions.collect{case t:TreasuryTransaction => t}
         val validator = new TreasuryTxValidator(this, height)
-        trTxs.foreach(validator.validate)
+        trTxs.foreach(validator.validate(_).get)
       }
     }
   }

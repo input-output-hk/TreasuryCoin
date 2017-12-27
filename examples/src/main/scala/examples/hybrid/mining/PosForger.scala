@@ -1,23 +1,17 @@
 package examples.hybrid.mining
 
 import akka.actor.{Actor, ActorRef}
-import com.google.common.primitives.Longs
 import examples.commons.{SimpleBoxTransaction, TreasuryMemPool}
 import examples.curvepos.transaction.PublicKey25519NoncedBox
-import examples.hybrid.TreasuryManager
+import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
-import examples.hybrid.state.HBoxStoredState
-import examples.hybrid.transaction.{CommitteeRegisterTx, TreasuryTransaction}
+import examples.hybrid.state.{HBoxStoredState, TreasuryTxValidator}
 import examples.hybrid.wallet.HWallet
 import scorex.core.LocalInterface.LocallyGeneratedModifier
-import scorex.core.NodeViewHolder.{CurrentView, GetDataFromCurrentView}
-import scorex.core.settings.ScorexSettings
-import scorex.core.transaction.proof.Signature25519
 import scorex.core.transaction.state.PrivateKey25519
 import scorex.core.utils.ScorexLogging
 import scorex.crypto.hash.Blake2b256
-import scorex.crypto.signatures.{Curve25519, Signature}
 import scorex.utils.Random
 
 
@@ -97,13 +91,13 @@ object PosForger extends ScorexLogging {
     }
   }
 
-  val getRequiredData: GetDataFromCurrentView[HybridHistory,
+  val getRequiredData: GetDataFromCurrentViewWithTreasuryState[HybridHistory,
     HBoxStoredState,
     HWallet,
     TreasuryMemPool,
     PosForgingInfo] = {
-    val f: CurrentView[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] => PosForgingInfo = {
-      view: CurrentView[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] =>
+    val f: CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] => PosForgingInfo = {
+      view: CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] =>
 
         val diff = view.history.posDifficulty
         val pairCompleted = view.history.pairCompleted
@@ -111,8 +105,11 @@ object PosForger extends ScorexLogging {
         val boxes = view.vault.boxes().map(_.box).filter(box => view.state.closedBox(box.id).isDefined)
         val boxKeys = boxes.flatMap(b => view.vault.secretByPublicImage(b.proposition).map(s => (b, s)))
 
+        val treasuryTxValidator = new TreasuryTxValidator(view.trState, view.history.storage.heightOf(bestPowBlock.id).get + 1)
+
+        // TODO: probably here we also need to check that treasury txs from pull are consistent with each other (no duplicates, etc.)
         val txs = view.pool.take(TransactionsPerBlock).foldLeft(Seq[SimpleBoxTransaction]()) { case (collected, tx) =>
-          if (view.state.validate(tx).isSuccess &&
+          if (treasuryTxValidator.validate(tx).isSuccess && view.state.validate(tx).isSuccess &&
             tx.boxIdsToOpen.forall(id => !collected.flatMap(_.boxIdsToOpen)
               .exists(_ sameElements id))) collected :+ tx
           else collected
@@ -120,7 +117,7 @@ object PosForger extends ScorexLogging {
 
         PosForgingInfo(pairCompleted, bestPowBlock, diff, boxKeys, txs)
     }
-    GetDataFromCurrentView[HybridHistory,
+    GetDataFromCurrentViewWithTreasuryState[HybridHistory,
       HBoxStoredState,
       HWallet,
       TreasuryMemPool,

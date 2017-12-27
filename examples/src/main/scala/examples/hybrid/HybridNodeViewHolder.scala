@@ -3,6 +3,7 @@ package examples.hybrid
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTx, SimpleBoxTxCompanion, TreasuryMemPool}
 import examples.curvepos.{Nonce, Value}
 import examples.curvepos.transaction.PublicKey25519NoncedBox
+import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.blocks._
 import examples.hybrid.history.{HybridHistory, HybridSyncInfo}
 import examples.hybrid.mining.HybridMiningSettings
@@ -163,4 +164,18 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
       log.warn(s"Trying to apply modifier ${pmod.encodedId} that's already in history")
     }
   }
+
+  override def getCurrentInfo: Receive = {
+    super.getCurrentInfo orElse {
+      case GetDataFromCurrentViewWithTreasuryState(f) =>
+        sender() ! f(CurrentViewWithTreasuryState(history(), minimalState(), vault(), memoryPool(), treasuryState))
+    }
+  }
+}
+
+object HybridNodeViewHolder {
+
+  case class GetDataFromCurrentViewWithTreasuryState[HIS, MS, VL, MP, A](f: CurrentViewWithTreasuryState[HIS, MS, VL, MP] => A)
+
+  case class CurrentViewWithTreasuryState[HIS, MS, VL, MP](history: HIS, state: MS, vault: VL, pool: MP, trState: TreasuryState)
 }
