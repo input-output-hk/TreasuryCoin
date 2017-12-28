@@ -59,11 +59,11 @@ class HybridApp(val settingsFilename: String) extends Application {
   localInterface
   nodeViewSynchronizer
 
-  if (settings.network.nodeName.startsWith("node1")) {
-    log.info("Starting simple transactions generation")
-    val generator: ActorRef = actorSystem.actorOf(Props(new SimpleBoxTransactionGenerator(nodeViewHolderRef)))
-    generator ! SimpleBoxTransactionGenerator.StartGeneration(10 seconds)
-  }
+//  if (settings.network.nodeName.startsWith("node1")) {
+//    log.info("Starting simple transactions generation")
+//    val generator: ActorRef = actorSystem.actorOf(Props(new SimpleBoxTransactionGenerator(nodeViewHolderRef)))
+//    generator ! SimpleBoxTransactionGenerator.StartGeneration(10 seconds)
+//  }
 
   if (settings.network.nodeName.startsWith("node1")) {
     log.info("Starting treasury transactions generation")
