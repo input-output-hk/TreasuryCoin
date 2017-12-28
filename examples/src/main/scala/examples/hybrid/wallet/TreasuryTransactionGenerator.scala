@@ -4,7 +4,8 @@ import akka.actor.{Actor, ActorRef}
 import examples.commons.TreasuryMemPool
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.HBoxStoredState
-import examples.hybrid.transaction.{CommitteeRegisterTx, TreasuryTransaction}
+import examples.hybrid.transaction.RegisterTransaction.Role
+import examples.hybrid.transaction.{RegisterTransaction, TreasuryTransaction}
 import scorex.core.LocalInterface.LocallyGeneratedTransaction
 import scorex.core.NodeViewHolder.{CurrentView, GetDataFromCurrentView}
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
@@ -54,7 +55,7 @@ class TreasuryTransactionGenerator(viewHolderRef: ActorRef) extends Actor with S
   }
 
   def generate(wallet: HWallet): Try[TreasuryTransaction] = {
-    CommitteeRegisterTx.create(wallet, 1L, (1L,10L)).flatMap(t => Try(t._1))
+    RegisterTransaction.create(wallet, Role.Expert, 1L).flatMap(t => Try(t._1))
   }
 }
 

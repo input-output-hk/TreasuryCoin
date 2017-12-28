@@ -14,15 +14,4 @@ abstract class TreasuryTransaction(timestamp: Long)
   extends SimpleBoxTransaction(IndexedSeq(), IndexedSeq(), IndexedSeq(), 0L, timestamp) {
 
   val epochID: Long
-
-  val blocksRangeToInclude: (Long, Long)
-
-//  val depositBox: Box[P]
-
-  val signature: Signature25519
 }
-
-/**
-  * A base class for all registration transaction types in the Treasury system
-  */
-abstract class RegisterTTransaction(timestamp: Long) extends TreasuryTransaction(timestamp)

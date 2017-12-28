@@ -3,7 +3,8 @@ package examples.hybrid.state
 import examples.hybrid.TreasuryManager
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
-import examples.hybrid.transaction.{CommitteeRegisterTx, RegisterTTransaction, TreasuryTransaction}
+import examples.hybrid.transaction.RegisterTransaction.Role
+import examples.hybrid.transaction.{RegisterTransaction, TreasuryTransaction}
 import treasury.crypto.core.PubKey
 
 import scala.util.Try
@@ -28,7 +29,11 @@ case class TreasuryState(epochNum: Int,
                            .... */ {
 
   protected def apply(tx: TreasuryTransaction): Try[TreasuryState] = tx match {
-      case t: CommitteeRegisterTx => Try(TreasuryState(epochNum, committeePubKeys :+ t.committeePubKey, expertsPubKeys, votersPubKeys))
+      case t: RegisterTransaction => Try { t.role match {
+        case Role.Committee => TreasuryState(epochNum, committeePubKeys :+ t.pubKey, expertsPubKeys, votersPubKeys)
+        case Role.Expert => TreasuryState(epochNum, committeePubKeys, expertsPubKeys :+ t.pubKey, votersPubKeys)
+        case Role.Voter => TreasuryState(epochNum, committeePubKeys, expertsPubKeys, votersPubKeys :+ t.pubKey)
+      }}
   }
 
   def apply(block: HybridBlock): Try[TreasuryState] = Try {

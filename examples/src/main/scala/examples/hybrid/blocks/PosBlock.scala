@@ -3,7 +3,7 @@ package examples.hybrid.blocks
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTxCompanion, SimpleBoxTx}
 import examples.curvepos.transaction.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer}
-import examples.hybrid.transaction.{CommitteeRegisterTx, CommitteeRegisterTxCompanion}
+import examples.hybrid.transaction.{RegisterTransaction, RegisterTransactionCompanion}
 import io.circe.Json
 import io.circe.syntax._
 import scorex.core.{ModifierId, ModifierTypeId, TransactionsCarryingPersistentNodeViewModifier}
@@ -83,7 +83,7 @@ object PosBlockCompanion extends Serializer[PosBlock] {
       position = position + 1
       val l = Ints.fromByteArray(bytes.slice(position, position + 4))
       val tx: SimpleBoxTransaction = typeId match {
-        case CommitteeRegisterTx.ModifierTypeId => CommitteeRegisterTxCompanion.parseBytes(bytes.slice(position + 4, position + 4 + l)).get
+        case RegisterTransaction.ModifierTypeId => RegisterTransactionCompanion.parseBytes(bytes.slice(position + 4, position + 4 + l)).get
         //        TODO:
         //        case VoterRegisterTx.ModifierTypeId => ???
         //        case ExpertRegisterTx.ModifierTypeId => ???
