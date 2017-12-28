@@ -1,5 +1,6 @@
 package examples.hybrid.state
 
+import examples.hybrid.HybridNodeViewHolder.CurrentViewWithTreasuryState
 import examples.hybrid.TreasuryManager
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
@@ -75,13 +76,11 @@ object TreasuryState {
 
   def generate(history: HybridHistory): Try[TreasuryState] = Try {
 
-    val stor = history.storage
-    val currentHeight = stor.heightOf(stor.bestPosId).get.toInt
-
+    val currentHeight = history.storage.heightOf(history.storage.bestPosId).get.toInt
     val epochNum = currentHeight / TreasuryManager.EPOCH_LEN
-    val currentEpochLen = currentHeight - (epochNum * TreasuryManager.EPOCH_LEN)
+    val currentEpochHeight = currentHeight % TreasuryManager.EPOCH_LEN
 
-    val epochBlocksIds = history.lastBlockIds(history.modifierById(stor.bestPosId).get, currentEpochLen)
+    val epochBlocksIds = history.lastBlockIds(history.modifierById(history.storage.bestPosId).get, currentEpochHeight)
 
     val state = TreasuryState(epochNum)
 

@@ -141,7 +141,11 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
                 nodeView = (newHistory, newMinState, newVault, newMemPool)
 
                 /* if everything is ok we can update treasury state */
-                treasuryState = if (progressInfo.chainSwitchingNeeded) {
+                val epochNum = newHistory.storage.heightOf(newHistory.storage.bestPosId).get / TreasuryManager.EPOCH_LEN
+
+                treasuryState = if (treasuryState.epochNum != epochNum) { // new epoch has been started, reset treasury state
+                  TreasuryState.generate(newHistory).get
+                } else if (progressInfo.chainSwitchingNeeded) {
                   treasuryState.rollback(VersionTag @@ progressInfo.branchPoint.get)
                     .getOrElse(TreasuryState.generate(newHistory).get) // regenerate it entirely in case of failed rollback
                 } else {
