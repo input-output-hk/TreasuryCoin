@@ -5,9 +5,10 @@ import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.RegisterTransaction.Role
 import examples.hybrid.transaction.{RegisterTransaction, TreasuryTransaction}
+import scorex.core.{ModifierId, VersionTag}
 import treasury.crypto.core.PubKey
 
-import scala.util.Try
+import scala.util.{Success, Try}
 
 /**
   * Holds the current state of the treasury epoch
@@ -20,19 +21,23 @@ import scala.util.Try
   * just started or block is rolled back, or new epoch begun)
   */
 
-case class TreasuryState(epochNum: Int,
-                         committeePubKeys: Seq[PubKey],
-                         expertsPubKeys: Seq[PubKey],
-                         votersPubKeys: Seq[PubKey])
-                         /*distrKeyGen: Seq[DKGTransaction],
-                           ballots: Seq[BallotTransaction]),
-                           .... */ {
+case class TreasuryState(epochNum: Int) {
 
-  protected def apply(tx: TreasuryTransaction): Try[TreasuryState] = tx match {
+  private var version: VersionTag = VersionTag @@ (ModifierId @@ Array.fill(32)(0: Byte))
+  private var committeePubKeys: List[PubKey] = List()
+  private var expertsPubKeys: List[PubKey] = List()
+  private var votersPubKeys: List[PubKey] = List()
+
+  def getCommitteePubKeys = committeePubKeys
+  def getExpertsPubKeys = expertsPubKeys
+  def getVotersPubKeys = votersPubKeys
+
+
+  protected def apply(tx: TreasuryTransaction): Try[Unit] = tx match {
       case t: RegisterTransaction => Try { t.role match {
-        case Role.Committee => TreasuryState(epochNum, committeePubKeys :+ t.pubKey, expertsPubKeys, votersPubKeys)
-        case Role.Expert => TreasuryState(epochNum, committeePubKeys, expertsPubKeys :+ t.pubKey, votersPubKeys)
-        case Role.Voter => TreasuryState(epochNum, committeePubKeys, expertsPubKeys, votersPubKeys :+ t.pubKey)
+        case Role.Committee => committeePubKeys = committeePubKeys :+ t.pubKey
+        case Role.Expert => expertsPubKeys = expertsPubKeys :+ t.pubKey
+        case Role.Voter => votersPubKeys = votersPubKeys :+ t.pubKey
       }}
   }
 
@@ -40,10 +45,12 @@ case class TreasuryState(epochNum: Int,
     block match {
       case b:PosBlock => {
         val trTxs = b.transactions.collect { case t: TreasuryTransaction => t }
-        trTxs.foldLeft(this) { case (state, tx) => state.apply(tx).get }
+        trTxs.foreach(tx => apply(tx).get)
+        version = VersionTag @@ block.id
       }
       case _ => this
     }
+    this
   }
 
   def validate(block: HybridBlock, history: HybridHistory): Try[Unit] = Try {
@@ -56,6 +63,11 @@ case class TreasuryState(epochNum: Int,
         trTxs.foreach(validator.validate(_).get)
       }
     }
+  }
+
+  def rollback(to: VersionTag): Try[TreasuryState] = Try {
+    if (to sameElements version) this
+    else throw new UnsupportedOperationException("Deep rollback is unsupported")
   }
 }
 
@@ -71,19 +83,10 @@ object TreasuryState {
 
     val epochBlocksIds = history.lastBlockIds(history.modifierById(stor.bestPosId).get, currentEpochLen)
 
-    val initial = TreasuryState(epochNum, Seq(), Seq(), Seq())
+    val state = TreasuryState(epochNum)
 
     /* parse all blocks in the current epoch and extract all treasury transactions */
-    epochBlocksIds.foldLeft(initial) { case (state, blockId) =>
-      history.modifierById(blockId) match {
-        case Some(b:PosBlock) => {
-          val trTxs = b.transactions.collect {case t:TreasuryTransaction => t}
-          trTxs.foldLeft(state) { case (state, tx) =>
-            state.apply(tx).get
-          }
-        }
-        case _ => state
-      }
-    }
+    epochBlocksIds.foreach(blockId => state.apply(history.modifierById(blockId).get).get)
+    state
   }
 }

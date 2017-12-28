@@ -23,9 +23,9 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
             TreasuryManager.REGISTER_STAGE._2 > height, "Wrong height for register transaction")
 
     tx.role match {
-      case Role.Committee => require(!trState.committeePubKeys.contains(tx.pubKey), "Committee pubkey has been already registered")
-      case Role.Expert => require(!trState.expertsPubKeys.contains(tx.pubKey), "Expert pubkey has been already registered")
-      case Role.Voter => require(!trState.votersPubKeys.contains(tx.pubKey), "Voter pubkey has been already registered")
+      case Role.Committee => require(!trState.getCommitteePubKeys.contains(tx.pubKey), "Committee pubkey has been already registered")
+      case Role.Expert => require(!trState.getExpertsPubKeys.contains(tx.pubKey), "Expert pubkey has been already registered")
+      case Role.Voter => require(!trState.getVotersPubKeys.contains(tx.pubKey), "Voter pubkey has been already registered")
     }
 
     // TODO: check that transaction makes a necessary deposit. Probably there should be some special type of time-locked box.

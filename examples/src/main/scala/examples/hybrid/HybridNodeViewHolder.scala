@@ -142,7 +142,8 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
 
                 /* if everything is ok we can update treasury state */
                 treasuryState = if (progressInfo.chainSwitchingNeeded) {
-                  TreasuryState.generate(newHistory).get // in case of rollback regenerate it entirely
+                  treasuryState.rollback(VersionTag @@ progressInfo.branchPoint.get)
+                    .getOrElse(TreasuryState.generate(newHistory).get) // regenerate it entirely in case of failed rollback
                 } else {
                   treasuryState.apply(pmod).get
                 }
