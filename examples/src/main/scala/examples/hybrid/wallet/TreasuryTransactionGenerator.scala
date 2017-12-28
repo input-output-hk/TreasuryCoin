@@ -2,8 +2,9 @@ package examples.hybrid.wallet
 
 import akka.actor.{Actor, ActorRef}
 import examples.commons.TreasuryMemPool
+import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.history.HybridHistory
-import examples.hybrid.state.HBoxStoredState
+import examples.hybrid.state.{HBoxStoredState, TreasuryState}
 import examples.hybrid.transaction.RegisterTransaction.Role
 import examples.hybrid.transaction.{RegisterTransaction, TreasuryTransaction}
 import scorex.core.LocalInterface.LocallyGeneratedTransaction
@@ -22,16 +23,16 @@ class TreasuryTransactionGenerator(viewHolderRef: ActorRef) extends Actor with S
 
   import TreasuryTransactionGenerator._
 
-  private val getRequiredData: GetDataFromCurrentView[HybridHistory,
+  private val getRequiredData: GetDataFromCurrentViewWithTreasuryState[HybridHistory,
     HBoxStoredState,
     HWallet,
     TreasuryMemPool,
     GeneratorInfo] = {
-    val f: CurrentView[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] => GeneratorInfo = {
-      view: CurrentView[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] =>
-        GeneratorInfo(generate(view.vault))
+    val f: CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] => GeneratorInfo = {
+      view: CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] =>
+        GeneratorInfo(generate(view.vault, view.trState))
     }
-    GetDataFromCurrentView[HybridHistory,
+    GetDataFromCurrentViewWithTreasuryState[HybridHistory,
       HBoxStoredState,
       HWallet,
       TreasuryMemPool,
@@ -54,8 +55,8 @@ class TreasuryTransactionGenerator(viewHolderRef: ActorRef) extends Actor with S
       }
   }
 
-  def generate(wallet: HWallet): Try[TreasuryTransaction] = {
-    RegisterTransaction.create(wallet, Role.Expert, 1L).flatMap(t => Try(t._1))
+  def generate(wallet: HWallet, trState: TreasuryState): Try[TreasuryTransaction] = {
+    RegisterTransaction.create(wallet, Role.Expert, trState.epochNum).flatMap(t => Try(t._1))
   }
 }
 

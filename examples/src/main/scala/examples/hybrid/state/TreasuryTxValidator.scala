@@ -1,8 +1,7 @@
 package examples.hybrid.state
 
-import examples.commons.SimpleBoxTransaction
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
 import examples.hybrid.TreasuryManager
-import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.RegisterTransaction.Role
 import examples.hybrid.transaction.{RegisterTransaction, TreasuryTransaction}
 
@@ -11,11 +10,21 @@ import scala.util.{Success, Try}
 class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
 
   def validate(tx: SimpleBoxTransaction): Try[Unit] = tx match {
-      case t: RegisterTransaction => validate(t)
-      case _ => Success(Unit)
+      case t: TreasuryTransaction => validate(t)
+      case _: SimpleBoxTx => Success(Unit)
   }
 
-  def validate(tx: RegisterTransaction): Try[Unit] = Try {
+  def validate(tx: TreasuryTransaction): Try[Unit] = Try {
+    /* Common checks for all treasury txs */
+    require(tx.epochID == trState.epochNum, "Invalid tx: wrong epoch id")
+
+    /* Checks for specific treasury txs */
+    tx match {
+      case t: RegisterTransaction => validateRegistration(t).get
+    }
+  }
+
+  def validateRegistration(tx: RegisterTransaction): Try[Unit] = Try {
     val epochHeight = height - (trState.epochNum * TreasuryManager.EPOCH_LEN)
     require(epochHeight >= 0 && epochHeight < TreasuryManager.EPOCH_LEN, "Totally wrong situation. Probably treasury state is corrupted or problems with validation pipeline.")
 
