@@ -16,6 +16,8 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
 
   def validate(tx: TreasuryTransaction): Try[Unit] = Try {
     /* Common checks for all treasury txs */
+    val epochHeight = height - (trState.epochNum * TreasuryManager.EPOCH_LEN)
+    require(epochHeight >= 0 && epochHeight < TreasuryManager.EPOCH_LEN, "Totally wrong situation. Probably treasury state is corrupted or problems with validation pipeline.")
     require(tx.epochID == trState.epochNum, "Invalid tx: wrong epoch id")
 
     /* Checks for specific treasury txs */
@@ -26,9 +28,6 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
   }
 
   def validateRegistration(tx: RegisterTransaction): Try[Unit] = Try {
-    val epochHeight = height - (trState.epochNum * TreasuryManager.EPOCH_LEN)
-    require(epochHeight >= 0 && epochHeight < TreasuryManager.EPOCH_LEN, "Totally wrong situation. Probably treasury state is corrupted or problems with validation pipeline.")
-
     require(TreasuryManager.REGISTER_STAGE._1 <= height &&
             TreasuryManager.REGISTER_STAGE._2 > height, "Wrong height for register transaction")
 
@@ -43,6 +42,8 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
   }
 
   def validateProposal(tx: ProposalTransaction): Try[Unit] = Try {
+    require(TreasuryManager.PROPOSAL_SUBMISSION_STATE._1 <= height &&
+            TreasuryManager.PROPOSAL_SUBMISSION_STATE._2 > height, "Wrong height for proposal transaction")
     // TODO: add validation
   }
 }

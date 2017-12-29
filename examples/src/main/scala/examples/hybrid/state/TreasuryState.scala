@@ -1,11 +1,13 @@
 package examples.hybrid.state
 
+import examples.curvepos.Value
 import examples.hybrid.HybridNodeViewHolder.CurrentViewWithTreasuryState
 import examples.hybrid.TreasuryManager
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.RegisterTransaction.Role
 import examples.hybrid.transaction.{ProposalTransaction, RegisterTransaction, TreasuryTransaction}
+import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.{ModifierId, VersionTag}
 import treasury.crypto.core.PubKey
 
@@ -24,10 +26,13 @@ import scala.util.{Success, Try}
 
 case class TreasuryState(epochNum: Int) {
 
+  case class Proposal(name: String, requestedSum: Value, recipient: PublicKey25519Proposition)
+
   private var version: VersionTag = VersionTag @@ (ModifierId @@ Array.fill(32)(0: Byte))
   private var committeePubKeys: List[PubKey] = List()
   private var expertsPubKeys: List[PubKey] = List()
   private var votersPubKeys: List[PubKey] = List()
+  private var proposals: List[Proposal] = List()
 
   def getCommitteePubKeys = committeePubKeys
   def getExpertsPubKeys = expertsPubKeys
@@ -41,7 +46,7 @@ case class TreasuryState(epochNum: Int) {
         case Role.Voter => votersPubKeys = votersPubKeys :+ t.pubKey
       }}
       case t: ProposalTransaction => Try {
-        // TODO: implement state update
+        proposals = proposals :+ Proposal(t.name, t.requestedSum, t.recipient)
       }
   }
 
