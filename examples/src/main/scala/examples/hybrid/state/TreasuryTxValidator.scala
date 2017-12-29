@@ -3,7 +3,7 @@ package examples.hybrid.state
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.transaction.RegisterTransaction.Role
-import examples.hybrid.transaction.{RegisterTransaction, TreasuryTransaction}
+import examples.hybrid.transaction.{ProposalTransaction, RegisterTransaction, TreasuryTransaction}
 
 import scala.util.{Success, Try}
 
@@ -21,6 +21,7 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
     /* Checks for specific treasury txs */
     tx match {
       case t: RegisterTransaction => validateRegistration(t).get
+      case t: ProposalTransaction => validateProposal(t).get
     }
   }
 
@@ -41,5 +42,7 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
     // tx.to.foreach()
   }
 
-  //def validate(tx: BallotTTransaction)
+  def validateProposal(tx: ProposalTransaction): Try[Unit] = Try {
+    // TODO: add validation
+  }
 }

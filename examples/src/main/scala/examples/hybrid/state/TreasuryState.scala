@@ -5,7 +5,7 @@ import examples.hybrid.TreasuryManager
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.RegisterTransaction.Role
-import examples.hybrid.transaction.{RegisterTransaction, TreasuryTransaction}
+import examples.hybrid.transaction.{ProposalTransaction, RegisterTransaction, TreasuryTransaction}
 import scorex.core.{ModifierId, VersionTag}
 import treasury.crypto.core.PubKey
 
@@ -40,6 +40,9 @@ case class TreasuryState(epochNum: Int) {
         case Role.Expert => expertsPubKeys = expertsPubKeys :+ t.pubKey
         case Role.Voter => votersPubKeys = votersPubKeys :+ t.pubKey
       }}
+      case t: ProposalTransaction => Try {
+        // TODO: implement state update
+      }
   }
 
   def apply(block: HybridBlock): Try[TreasuryState] = Try {

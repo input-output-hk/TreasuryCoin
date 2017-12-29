@@ -1,9 +1,9 @@
 package examples.hybrid.blocks
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTxCompanion, SimpleBoxTx}
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTx, SimpleBoxTxCompanion}
 import examples.curvepos.transaction.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer}
-import examples.hybrid.transaction.{RegisterTransaction, RegisterTransactionCompanion}
+import examples.hybrid.transaction.{ProposalTransaction, ProposalTransactionCompanion, RegisterTransaction, RegisterTransactionCompanion}
 import io.circe.Json
 import io.circe.syntax._
 import scorex.core.{ModifierId, ModifierTypeId, TransactionsCarryingPersistentNodeViewModifier}
@@ -82,11 +82,11 @@ object PosBlockCompanion extends Serializer[PosBlock] {
       val typeId: ModifierTypeId = ModifierTypeId @@ bytes(position)
       position = position + 1
       val l = Ints.fromByteArray(bytes.slice(position, position + 4))
+      val txBytes = bytes.slice(position + 4, position + 4 + l)
       val tx: SimpleBoxTransaction = typeId match {
-        case RegisterTransaction.ModifierTypeId => RegisterTransactionCompanion.parseBytes(bytes.slice(position + 4, position + 4 + l)).get
-        //        TODO:
-        //        case VoterRegisterTx.ModifierTypeId => ???
-        //        case ExpertRegisterTx.ModifierTypeId => ???
+        case RegisterTransaction.ModifierTypeId => RegisterTransactionCompanion.parseBytes(txBytes).get
+        case ProposalTransaction.ModifierTypeId => ProposalTransactionCompanion.parseBytes(txBytes).get
+        //        TODO: add other treasury txs
         //        case VoterBallotTx.ModifierTypeId => ???
 
         case SimpleBoxTx.ModifierTypeId => SimpleBoxTxCompanion.parseBytes(bytes.slice(position + 4, position + 4 + l)).get

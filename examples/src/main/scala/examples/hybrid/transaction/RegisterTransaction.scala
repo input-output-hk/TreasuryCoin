@@ -26,10 +26,15 @@ case class RegisterTransaction(role: Role,
   override val serializer = RegisterTransactionCompanion
 
   override lazy val messageToSign = {
-    val keyBytes = pubKey.getEncoded(true)
-    Bytes.concat(Ints.toByteArray(keyBytes.length),
-      keyBytes,
-      Longs.toByteArray(epochID))
+    val superBytes = Bytes.concat(if (newBoxes.nonEmpty) scorex.core.utils.concatBytes(newBoxes.map(_.bytes)) else Array[Byte](),
+      scorex.core.utils.concatFixLengthBytes(unlockers.map(_.closedBoxId)),
+      Longs.toByteArray(timestamp),
+      Longs.toByteArray(fee))
+
+    Bytes.concat(Ints.toByteArray(role.id),
+      pubKey.getEncoded(true),
+      Longs.toByteArray(epochID),
+      superBytes)
   }
 
   override lazy val json: Json = Map("id" -> Base58.encode(id).asJson).asJson //TODO
