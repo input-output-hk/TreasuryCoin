@@ -2,11 +2,12 @@ package examples.hybrid.wallet
 
 import akka.actor.{Actor, ActorRef}
 import examples.commons.TreasuryMemPool
+import examples.curvepos.Value
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.{HBoxStoredState, TreasuryState}
 import examples.hybrid.transaction.RegisterTransaction.Role
-import examples.hybrid.transaction.{RegisterTransaction, TreasuryTransaction}
+import examples.hybrid.transaction.{ProposalTransaction, RegisterTransaction, TreasuryTransaction}
 import scorex.core.LocalInterface.LocallyGeneratedTransaction
 import scorex.core.NodeViewHolder.{CurrentView, GetDataFromCurrentView}
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
@@ -56,7 +57,10 @@ class TreasuryTransactionGenerator(viewHolderRef: ActorRef) extends Actor with S
   }
 
   def generate(wallet: HWallet, trState: TreasuryState): Try[TreasuryTransaction] = {
-    RegisterTransaction.create(wallet, Role.Expert, trState.epochNum).flatMap(t => Try(t._1))
+    RegisterTransaction.create(wallet, Role.Expert, trState.epochNum)
+
+//    val pubkey = wallet.publicKeys.toSeq.head
+//    ProposalTransaction.create(wallet, "TestProposal", Value @@ 10L, pubkey, trState.epochNum)
   }
 }
 

@@ -47,7 +47,7 @@ class PowMiner(viewHolderRef: ActorRef, settings: HybridMiningSettings) extends 
         val pubkey = if (view.vault.publicKeys.nonEmpty) {
           view.vault.publicKeys.head
         } else {
-          view.vault.generateNewSecret().publicKeys.head
+          view.vault.generateNewSecret().publicKeys.head // TODO: new wallet isn't stored. The new secret will be lost.
         }
         PowMiningInfo(pairCompleted, difficulty, bestPowBlock, bestPosId, pubkey)
     }

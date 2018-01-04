@@ -1,8 +1,10 @@
 package hybrid.wallet
 
 import examples.curvepos.Value
+import examples.hybrid.TreasuryManager
 import examples.hybrid.blocks.PosBlock
-import examples.hybrid.wallet.HWallet
+import examples.hybrid.transaction.RegisterTransaction.Role
+import examples.hybrid.wallet.{HWallet, TreasurySecret, TreasurySecretCompanion}
 import hybrid.HybridGenerators
 import org.scalatest.prop.{GeneratorDrivenPropertyChecks, PropertyChecks}
 import org.scalatest.{Matchers, PropSpec}
@@ -77,5 +79,34 @@ class HWalletSpecification extends PropSpec
     }
   }
 
+  property("Treasury secrets serialization works correctly") {
+    val (priv1, pub1) = TreasuryManager.cs.createKeyPair
+    val (priv2, pub2) = TreasuryManager.cs.createKeyPair
+    val secrets = List(
+      TreasurySecret(Role.Voter, 12, priv1, pub1),
+      TreasurySecret(Role.Expert, 12, priv2, pub2)
+    )
 
+    val bytes = TreasurySecretCompanion.batchToBytes(secrets)
+    val parsedSecrets = TreasurySecretCompanion.parseBatch(bytes)
+
+    parsedSecrets.length shouldBe 2
+    parsedSecrets(0).role shouldBe Role.Voter
+    parsedSecrets(1).role shouldBe Role.Expert
+    parsedSecrets(0).privKey.equals(priv1) shouldBe true
+    parsedSecrets(1).pubKey.equals(pub2) shouldBe true
+  }
+
+  property("Wallet should generate new treasury keys") {
+    val s = w.treasurySecrets.size
+    val voterKeys = w.treasurySecrets(Role.Voter, 1).size
+
+    w.generateNewTreasurySecret(Role.Voter, 1)
+    w.generateNewTreasurySecret(Role.Committee, 5)
+    w.treasurySecrets.size shouldBe s + 2
+
+    w.treasurySecrets(Role.Voter, 1).size shouldBe voterKeys + 1
+
+    w.treasurySecretbyPubKey(w.treasuryPubKeys(Role.Committee, 5).head).isDefined shouldBe true
+  }
 }

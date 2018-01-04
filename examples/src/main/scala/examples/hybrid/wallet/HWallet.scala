@@ -2,22 +2,28 @@ package examples.hybrid.wallet
 
 import java.io.File
 
-import com.google.common.primitives.Ints
+import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.commons.SimpleBoxTransaction
 import examples.curvepos.transaction.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer}
+import examples.hybrid.TreasuryManager
 import examples.hybrid.blocks.HybridBlock
 import examples.hybrid.state.HBoxStoredState
+import examples.hybrid.transaction.RegisterTransaction.Role
+import examples.hybrid.transaction.RegisterTransaction.Role.Role
 import io.iohk.iodb.{ByteArrayWrapper, LSMStore}
 import scorex.core.VersionTag
-import scorex.core.settings.{ScorexSettings}
+import scorex.core.serialization.Serializer
+import scorex.core.settings.ScorexSettings
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.transaction.state.{PrivateKey25519, PrivateKey25519Companion, PrivateKey25519Serializer}
 import scorex.core.transaction.wallet.{Wallet, WalletBox, WalletBoxSerializer, WalletTransaction}
 import scorex.core.utils.{ByteStr, ScorexLogging}
 import scorex.crypto.encode.Base58
 import scorex.crypto.hash.Blake2b256
+import treasury.crypto.core.{PrivKey, PubKey}
 
-import scala.util.Try
+import scala.annotation.tailrec
+import scala.util.{Success, Failure, Try}
 
 
 case class HWallet(seed: ByteStr, store: LSMStore)
@@ -27,9 +33,9 @@ case class HWallet(seed: ByteStr, store: LSMStore)
   override type S = PrivateKey25519
   override type PI = PublicKey25519Proposition
 
-  private val SecretsKey: ByteArrayWrapper = ByteArrayWrapper(Array.fill(store.keySize)(2: Byte))
-
   private val BoxIdsKey: ByteArrayWrapper = ByteArrayWrapper(Array.fill(store.keySize)(1: Byte))
+  private val SecretsKey: ByteArrayWrapper = ByteArrayWrapper(Array.fill(store.keySize)(2: Byte))
+  private val TreasurySecretsKey: ByteArrayWrapper = ByteArrayWrapper(Array.fill(store.keySize)(3: Byte))
 
   def boxIds: Seq[Array[Byte]] = {
     store.get(BoxIdsKey).map(_.data.grouped(store.keySize).toSeq).getOrElse(Seq[Array[Byte]]())
@@ -71,6 +77,30 @@ case class HWallet(seed: ByteStr, store: LSMStore)
     HWallet(seed, store)
   }
 
+  def treasurySecrets: Set[TreasurySecret] = store.get(TreasurySecretsKey)
+    .map(b => TreasurySecretCompanion.parseBatch(b.data).toSet).getOrElse(Set.empty[TreasurySecret])
+
+  def treasurySecrets(role: Role, epochId: Long): Set[TreasurySecret] =
+    treasurySecrets.filter(s => s.role == role && s.epochId == epochId)
+
+  def treasuryPubKeys(role: Role, epochId: Long): Set[PubKey] =
+    treasurySecrets(role, epochId).map(_.pubKey)
+
+  def treasurySecretbyPubKey(pubKey: PubKey): Option[TreasurySecret] =
+    treasurySecrets.find(s => s.pubKey.equals(pubKey))
+
+  def generateNewTreasurySecret(role: Role, epochId: Long): PubKey = {
+    val prevTrSecrets = treasurySecrets
+    val (priv, pub) = TreasuryManager.cs.createKeyPair // TODO: keys should be generated from on a particular seed that includes role,epochId,nonce
+    val newTrSecret = TreasurySecret(role, epochId, priv, pub)
+    val allTrSecrets: Set[TreasurySecret] = Set(newTrSecret) ++ prevTrSecrets
+    store.update(ByteArrayWrapper(priv.toByteArray),
+      Seq(),
+      Seq(TreasurySecretsKey -> ByteArrayWrapper(TreasurySecretCompanion.batchToBytes(allTrSecrets.toSeq))))
+
+    newTrSecret.pubKey
+  }
+
   //we do not process offchain (e.g. by adding them to the wallet)
   override def scanOffchain(tx: SimpleBoxTransaction): HWallet = this
 
@@ -97,6 +127,7 @@ case class HWallet(seed: ByteStr, store: LSMStore)
     HWallet(seed, store)
   }
 
+  // TODO: is it ok that Secrets and TreasurySecrets are rolled back too?. Probably private keys should never been deleted.
   override def rollback(to: VersionTag): Try[HWallet] = Try {
     if (store.lastVersionID.exists(_.data sameElements to)) {
       this
@@ -155,5 +186,51 @@ object HWallet {
     initialBlocks.foldLeft(readOrGenerate(settings).generateNewSecret()) { (a, b) =>
       a.scanPersistent(b)
     }
+  }
+}
+
+case class TreasurySecret(role: Role, epochId: Long, privKey: PrivKey, pubKey: PubKey)
+
+object TreasurySecretCompanion extends Serializer[TreasurySecret] {
+
+  def batchToBytes(batch: Seq[TreasurySecret]): Array[Byte] = {
+    batch.foldLeft(Array[Byte]()) { case (acc, s) =>
+      val bytes = toBytes(s)
+      Bytes.concat(acc, Ints.toByteArray(bytes.length), bytes)
+    }
+  }
+
+  //@tailrec
+  def parseBatch(bytes: Array[Byte]): List[TreasurySecret] =
+    if (bytes.length < 4) List()
+    else {
+      val size = Ints.fromByteArray(bytes.slice(0,4))
+      parseBytes(bytes.slice(4, size+4)) match {
+        case Success(s) => s :: parseBatch(bytes.drop(size+4))
+        case Failure(_) => parseBatch(bytes.drop(size+4))
+      }
+    }
+
+  def toBytes(s: TreasurySecret): Array[Byte] = {
+    val privBytes = s.privKey.toByteArray
+    val pubBytes = s.pubKey.getEncoded(true)
+    Bytes.concat(
+      Array(s.role.id.toByte),
+      Longs.toByteArray(s.epochId),
+      Ints.toByteArray(privBytes.length),
+      privBytes,
+      Ints.toByteArray(pubBytes.length),
+      pubBytes)
+  }
+
+  def parseBytes(bytes: Array[Byte]): Try[TreasurySecret] = Try {
+    val role: Role = Role(bytes(0))
+    val epochID = Longs.fromByteArray(bytes.slice(1,9))
+    val privSize = Ints.fromByteArray(bytes.slice(9,13))
+    val privKey = new PrivKey(bytes.slice(13,privSize+13))
+    val pubSize = Ints.fromByteArray(bytes.slice(privSize+13,privSize+17))
+    val pubKey = TreasuryManager.cs.decodePoint(bytes.slice(privSize+17,privSize+17+pubSize))
+
+    TreasurySecret(role, epochID, privKey, pubKey)
   }
 }

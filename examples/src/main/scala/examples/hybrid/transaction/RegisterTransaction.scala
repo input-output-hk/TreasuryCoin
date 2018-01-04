@@ -53,25 +53,23 @@ object RegisterTransaction {
   }
 
   def apply(role: Role,
-            committeePubKey: PubKey,
+            pubKey: PubKey,
             epochID: Long,
             timestamp: Long): RegisterTransaction = {
-
-    new RegisterTransaction(role, committeePubKey, epochID, timestamp)
+    new RegisterTransaction(role, pubKey, epochID, timestamp)
   }
 
-  // TODO: store new keypair in HWallet?
   def create(w: HWallet,
              role: Role,
-             epochID: Long): Try[(RegisterTransaction, KeyPair)] = Try {
-    val keyPair = TreasuryManager.cs.createKeyPair
-    //val acc = w.secretByPublicImage(w.boxes().head.box.proposition).get
+             epochID: Long): Try[RegisterTransaction] = Try {
+    val pubKey = w.generateNewTreasurySecret(role, epochID)
     val timestamp = System.currentTimeMillis()
-    (RegisterTransaction(role, keyPair._2, epochID, timestamp), keyPair)
+    RegisterTransaction(role, pubKey, epochID, timestamp)
   }
 }
 
 object RegisterTransactionCompanion extends Serializer[RegisterTransaction] {
+
   def toBytes(t: RegisterTransaction): Array[Byte] = {
     val keyBytes = t.pubKey.getEncoded(true)
     Bytes.concat(
