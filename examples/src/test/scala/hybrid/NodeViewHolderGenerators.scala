@@ -14,8 +14,9 @@ trait NodeViewHolderGenerators { this: ModifierGenerators with StateGenerators w
 
     override protected def genesisState: (HIS, MS, VL, MP) = {
       val store = lsmStoreGen.sample.get
+      val treasuryStore = lsmStoreGen.sample.get
       val byteStr = ByteStr(Array.fill(10)(1:Byte))
-      val gw = new HWallet(byteStr, store)
+      val gw = new HWallet(byteStr, store, treasuryStore)
       (h, s, gw, TreasuryMemPool.emptyPool)
     }
 

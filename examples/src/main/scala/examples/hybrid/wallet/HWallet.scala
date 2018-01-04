@@ -26,7 +26,7 @@ import scala.annotation.tailrec
 import scala.util.{Success, Failure, Try}
 
 
-case class HWallet(seed: ByteStr, store: LSMStore)
+case class HWallet(seed: ByteStr, store: LSMStore, treasuryStore: LSMStore)
   extends Wallet[PublicKey25519Proposition, SimpleBoxTransaction, HybridBlock, HWallet]
     with ScorexLogging {
 
@@ -35,7 +35,6 @@ case class HWallet(seed: ByteStr, store: LSMStore)
 
   private val BoxIdsKey: ByteArrayWrapper = ByteArrayWrapper(Array.fill(store.keySize)(1: Byte))
   private val SecretsKey: ByteArrayWrapper = ByteArrayWrapper(Array.fill(store.keySize)(2: Byte))
-  private val TreasurySecretsKey: ByteArrayWrapper = ByteArrayWrapper(Array.fill(store.keySize)(3: Byte))
 
   def boxIds: Seq[Array[Byte]] = {
     store.get(BoxIdsKey).map(_.data.grouped(store.keySize).toSeq).getOrElse(Seq[Array[Byte]]())
@@ -74,29 +73,41 @@ case class HWallet(seed: ByteStr, store: LSMStore)
     store.update(ByteArrayWrapper(priv.privKeyBytes),
       Seq(),
       Seq(SecretsKey -> ByteArrayWrapper(allSecrets.toArray.flatMap(p => PrivateKey25519Serializer.toBytes(p)))))
-    HWallet(seed, store)
+    HWallet(seed, store, treasuryStore)
   }
 
-  def treasurySecrets: Set[TreasurySecret] = store.get(TreasurySecretsKey)
-    .map(b => TreasurySecretCompanion.parseBatch(b.data).toSet).getOrElse(Set.empty[TreasurySecret])
+  /**
+    * @return sequence of treasury secrets by epochs
+    */
+  def treasurySecrets: Seq[(Long, Set[TreasurySecret])] = treasuryStore.getAll().map { b =>
+    val epochID = Longs.fromByteArray(b._1.data)
+    val trsecrets = TreasurySecretCompanion.parseBatch(b._2.data).toSet
+    (epochID, trsecrets)
+  }.toSeq
+
+  def treasurySecrets(epochId: Long): Set[TreasurySecret] =
+    treasuryStore.get(ByteArrayWrapper(Longs.toByteArray(epochId)))
+      .map(s => TreasurySecretCompanion.parseBatch(s.data).toSet)
+      .getOrElse(Set.empty[TreasurySecret])
 
   def treasurySecrets(role: Role, epochId: Long): Set[TreasurySecret] =
-    treasurySecrets.filter(s => s.role == role && s.epochId == epochId)
+    treasurySecrets(epochId).filter(_.role == role)
 
   def treasuryPubKeys(role: Role, epochId: Long): Set[PubKey] =
     treasurySecrets(role, epochId).map(_.pubKey)
 
+  // TODO: maybe add treasurySecretbyPubKey(pubKey, epochId) for more effective search
   def treasurySecretbyPubKey(pubKey: PubKey): Option[TreasurySecret] =
-    treasurySecrets.find(s => s.pubKey.equals(pubKey))
+    treasurySecrets.flatMap(_._2).find(s => s.pubKey.equals(pubKey))
 
   def generateNewTreasurySecret(role: Role, epochId: Long): PubKey = {
-    val prevTrSecrets = treasurySecrets
+    val prevTrSecrets = treasurySecrets(epochId)
     val (priv, pub) = TreasuryManager.cs.createKeyPair // TODO: keys should be generated from on a particular seed that includes role,epochId,nonce
     val newTrSecret = TreasurySecret(role, epochId, priv, pub)
     val allTrSecrets: Set[TreasurySecret] = Set(newTrSecret) ++ prevTrSecrets
-    store.update(ByteArrayWrapper(priv.toByteArray),
+    treasuryStore.update(ByteArrayWrapper(priv.toByteArray),
       Seq(),
-      Seq(TreasurySecretsKey -> ByteArrayWrapper(TreasurySecretCompanion.batchToBytes(allTrSecrets.toSeq))))
+      Seq(ByteArrayWrapper(Longs.toByteArray(epochId)) -> ByteArrayWrapper(TreasurySecretCompanion.batchToBytes(allTrSecrets.toSeq))))
 
     newTrSecret.pubKey
   }
@@ -124,7 +135,7 @@ case class HWallet(seed: ByteStr, store: LSMStore)
     store.update(ByteArrayWrapper(modifier.id), boxIdsToRemove, Seq(BoxIdsKey -> newBoxIds) ++ newBoxes)
     log.debug(s"Successfully applied modifier to wallet: ${Base58.encode(modifier.id)}")
 
-    HWallet(seed, store)
+    HWallet(seed, store, treasuryStore)
   }
 
   // TODO: is it ok that Secrets and TreasurySecrets are rolled back too?. Probably private keys should never been deleted.
@@ -135,7 +146,7 @@ case class HWallet(seed: ByteStr, store: LSMStore)
       log.debug(s"Rolling back wallet to: ${Base58.encode(to)}")
       store.rollback(ByteArrayWrapper(to))
       log.debug(s"Successfully rolled back wallet to: ${Base58.encode(to)}")
-      HWallet(seed, store)
+      HWallet(seed, store, treasuryStore)
     }
   }
 
@@ -151,20 +162,31 @@ object HWallet {
     new File(s"${settings.wallet.walletDir.getAbsolutePath}/wallet.dat")
   }
 
-  def exists(settings: ScorexSettings): Boolean = walletFile(settings).exists()
+  def treasuryWalletFile(settings: ScorexSettings): File = {
+    settings.wallet.walletDir.mkdirs()
+
+    new File(s"${settings.wallet.walletDir.getAbsolutePath}/treasury_wallet.dat")
+  }
+
+  def exists(settings: ScorexSettings): Boolean = walletFile(settings).exists() && treasuryWalletFile(settings).exists()
 
   def readOrGenerate(settings: ScorexSettings, seed: ByteStr): HWallet = {
     val wFile = walletFile(settings)
     wFile.mkdirs()
+    val trFile = treasuryWalletFile(settings)
+    trFile.mkdirs()
+
     val boxesStorage = new LSMStore(wFile, maxJournalEntryCount = 10000)
+    val treasuryStorage = new LSMStore(trFile, keySize = 8, maxJournalEntryCount = 10000)
 
     Runtime.getRuntime.addShutdownHook(new Thread() {
       override def run(): Unit = {
         boxesStorage.close()
+        treasuryStorage.close()
       }
     })
 
-    HWallet(seed, boxesStorage)
+    HWallet(seed, boxesStorage, treasuryStorage)
   }
 
   def readOrGenerate(settings: ScorexSettings): HWallet = {
