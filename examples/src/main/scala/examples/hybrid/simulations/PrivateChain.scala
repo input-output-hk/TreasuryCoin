@@ -3,7 +3,8 @@ package examples.hybrid.simulations
 import examples.commons.TreasuryMemPool
 import examples.hybrid.blocks.{PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
-import examples.hybrid.mining.{HybridSettings, PosForger, PowMiner}
+import examples.hybrid.mining.{PosForger, PowMiner}
+import examples.hybrid.settings.HybridSettings
 import examples.hybrid.state.HBoxStoredState
 import examples.hybrid.util.FileFunctions
 import examples.hybrid.wallet.HWallet

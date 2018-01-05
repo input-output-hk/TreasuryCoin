@@ -1,4 +1,4 @@
-package examples.hybrid.mining
+package examples.hybrid.settings
 
 import com.typesafe.config.Config
 import net.ceedubs.ficus.Ficus._

@@ -6,7 +6,7 @@ import examples.curvepos.transaction.{PublicKey25519NoncedBox, PublicKey25519Non
 import examples.curvepos.{Nonce, Value}
 import examples.hybrid.blocks._
 import examples.hybrid.history.HybridSyncInfo
-import examples.hybrid.mining.HybridSettings
+import examples.hybrid.settings.HybridSettings
 import examples.hybrid.state.HBoxStoredState
 import examples.hybrid.transaction.TreasuryTransaction
 import org.scalacheck.rng.Seed

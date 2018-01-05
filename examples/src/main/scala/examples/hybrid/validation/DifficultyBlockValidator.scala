@@ -2,7 +2,8 @@ package examples.hybrid.validation
 
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HistoryStorage
-import examples.hybrid.mining.{HybridMiningSettings, PosForger}
+import examples.hybrid.mining.PosForger
+import examples.hybrid.settings.HybridMiningSettings
 import scorex.core.block.BlockValidator
 import scorex.crypto.encode.Base58
 

@@ -6,7 +6,7 @@ import examples.curvepos.transaction.PublicKey25519NoncedBox
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.blocks._
 import examples.hybrid.history.{HybridHistory, HybridSyncInfo}
-import examples.hybrid.mining.HybridMiningSettings
+import examples.hybrid.settings.HybridMiningSettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryState}
 import examples.hybrid.wallet.HWallet
 import scorex.core.NodeViewHolder._

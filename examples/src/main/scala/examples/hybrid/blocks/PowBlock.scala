@@ -2,7 +2,7 @@ package examples.hybrid.blocks
 
 import com.google.common.primitives.{Ints, Longs}
 import examples.commons.SimpleBoxTransaction
-import examples.hybrid.mining.HybridMiningSettings
+import examples.hybrid.settings.HybridMiningSettings
 import io.circe.Json
 import io.circe.syntax._
 import scorex.core._

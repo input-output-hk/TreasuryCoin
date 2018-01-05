@@ -3,7 +3,8 @@ package examples.hybrid.history
 import com.google.common.primitives.Longs
 import examples.commons.SimpleBoxTransaction
 import examples.hybrid.blocks._
-import examples.hybrid.mining.{HybridMiningSettings, PosForger}
+import examples.hybrid.mining.PosForger
+import examples.hybrid.settings.HybridMiningSettings
 import io.iohk.iodb.{ByteArrayWrapper, LSMStore}
 import scorex.core.ModifierId
 import scorex.core.block.Block

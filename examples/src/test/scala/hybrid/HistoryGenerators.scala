@@ -2,7 +2,7 @@ package hybrid
 
 import examples.hybrid.blocks.PowBlock
 import examples.hybrid.history.{HistoryStorage, HybridHistory}
-import examples.hybrid.mining.{HybridMiningSettings, HybridSettings}
+import examples.hybrid.settings.HybridSettings
 import org.scalacheck.Gen
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.crypto.signatures.PublicKey

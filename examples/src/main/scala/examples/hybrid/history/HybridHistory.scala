@@ -5,7 +5,7 @@ import java.io.File
 
 import examples.commons.{FileLogger, SimpleBoxTransaction}
 import examples.hybrid.blocks._
-import examples.hybrid.mining.HybridMiningSettings
+import examples.hybrid.settings.HybridMiningSettings
 import examples.hybrid.validation.{DifficultyBlockValidator, ParentBlockValidator, SemanticBlockValidator}
 import io.iohk.iodb.LSMStore
 import scorex.core.block.{Block, BlockValidator}

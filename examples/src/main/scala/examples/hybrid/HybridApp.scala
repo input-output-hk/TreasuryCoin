@@ -5,7 +5,8 @@ import examples.commons.SimpleBoxTransaction
 import examples.hybrid.api.http.{DebugApiRoute, StatsApiRoute, WalletApiRoute}
 import examples.hybrid.blocks.HybridBlock
 import examples.hybrid.history.{HybridSyncInfo, HybridSyncInfoMessageSpec}
-import examples.hybrid.mining.{HybridSettings, PosForger, PowMiner}
+import examples.hybrid.mining.{PosForger, PowMiner}
+import examples.hybrid.settings.HybridSettings
 import examples.hybrid.transaction.TreasuryTxForger
 import examples.hybrid.wallet.{SimpleBoxTransactionGenerator, TreasuryTransactionGenerator}
 import scorex.core.api.http.{ApiRoute, NodeViewApiRoute, PeersApiRoute, UtilsApiRoute}
