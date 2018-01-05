@@ -12,7 +12,8 @@ import scorex.core.utils.ScorexLogging
 import scala.concurrent.duration._
 
 case class HybridSettings(mining: HybridMiningSettings,
-                          scorexSettings: ScorexSettings)
+                          scorexSettings: ScorexSettings,
+                          treasurySettings: TreasurySettings)
 
 case class HybridMiningSettings(offlineGeneration: Boolean,
                                 targetBlockDelay: FiniteDuration,
@@ -23,6 +24,10 @@ case class HybridMiningSettings(offlineGeneration: Boolean,
   lazy val MaxTarget = BigInt(1, Array.fill(32)(Byte.MinValue))
   lazy val GenesisParentId = ModifierId @@ Array.fill(32)(1: Byte)
 }
+
+case class TreasurySettings(isVoter: Boolean,
+                            isExpert: Boolean,
+                            isCommittee: Boolean)
 
 object HybridSettings extends ScorexLogging {
   def read(userConfigPath: Option[String]): HybridSettings = {
@@ -36,7 +41,8 @@ object HybridSettings extends ScorexLogging {
     log.info(config.toString)
     val miningSettings = config.as[HybridMiningSettings]("scorex.miner")
     val scorexSettings = config.as[ScorexSettings]("scorex")
-    HybridSettings(miningSettings, scorexSettings)
+    val treasurySettings = config.as[TreasurySettings]("scorex.treasury")
+    HybridSettings(miningSettings, scorexSettings, treasurySettings)
   }
 }
 

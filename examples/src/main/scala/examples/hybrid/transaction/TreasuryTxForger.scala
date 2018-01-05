@@ -4,6 +4,7 @@ import akka.actor.{Actor, ActorRef}
 import examples.commons.TreasuryMemPool
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.history.HybridHistory
+import examples.hybrid.settings.TreasurySettings
 import examples.hybrid.state.HBoxStoredState
 import examples.hybrid.transaction.RegisterTransaction.Role
 import examples.hybrid.transaction.RegisterTransaction.Role.Role
@@ -21,7 +22,7 @@ import scorex.core.utils.ScorexLogging
   * node needs to perform some actions depending on the current state of the epoch.
   * The bot is intended to take control only of those transactions that don't require human decision.
   */
-class TreasuryTxForger(viewHolderRef: ActorRef) extends Actor with ScorexLogging {
+class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) extends Actor with ScorexLogging {
 
   import TreasuryTxForger._
 
@@ -77,13 +78,11 @@ class TreasuryTxForger(viewHolderRef: ActorRef) extends Actor with ScorexLogging
     }
 
     var txs = List[RegisterTransaction]()
-
-    //TODO: check settings if this node wants to be a committee/voter/expert
-    if (true) // if committee
+    if (settings.isCommittee)
       txs = txs ::: generateRegisterTx(Role.Committee, view).map(List(_)).getOrElse(List())
-    if (false) // if expert
+    if (settings.isExpert)
       txs = txs ::: generateRegisterTx(Role.Expert, view).map(List(_)).getOrElse(List())
-    if (false) // if voter
+    if (settings.isVoter)
       txs = txs ::: generateRegisterTx(Role.Voter, view).map(List(_)).getOrElse(List())
     txs
   }

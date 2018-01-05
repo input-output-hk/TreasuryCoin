@@ -49,7 +49,7 @@ class HybridApp(val settingsFilename: String) extends Application {
 
   val miner = actorSystem.actorOf(Props(new PowMiner(nodeViewHolderRef, hybridSettings.mining)))
   val forger = actorSystem.actorOf(Props(new PosForger(hybridSettings, nodeViewHolderRef)))
-  val treasuryTxsForger: ActorRef = actorSystem.actorOf(Props(new TreasuryTxForger(nodeViewHolderRef)))
+  val treasuryTxsForger: ActorRef = actorSystem.actorOf(Props(new TreasuryTxForger(nodeViewHolderRef, hybridSettings.treasurySettings)))
 
   override val localInterface: ActorRef = actorSystem.actorOf(Props(
     new HLocalInterface(nodeViewHolderRef, miner, forger, treasuryTxsForger, hybridSettings.mining)))
