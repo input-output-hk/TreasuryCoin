@@ -6,6 +6,7 @@ import examples.hybrid.TreasuryManager
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.RegisterTransaction.Role
+import examples.hybrid.transaction.RegisterTransaction.Role.Role
 import examples.hybrid.transaction.{ProposalTransaction, RegisterTransaction, TreasuryTransaction}
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.{ModifierId, VersionTag}
@@ -34,6 +35,11 @@ case class TreasuryState(epochNum: Int) {
   private var votersPubKeys: List[PubKey] = List()
   private var proposals: List[Proposal] = List()
 
+  def getKeys(role: Role) = role match {
+    case Role.Committee => getCommitteePubKeys
+    case Role.Expert => getExpertsPubKeys
+    case Role.Voter => getVotersPubKeys
+  }
   def getCommitteePubKeys = committeePubKeys
   def getExpertsPubKeys = expertsPubKeys
   def getVotersPubKeys = votersPubKeys

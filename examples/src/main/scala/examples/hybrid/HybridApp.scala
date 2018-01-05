@@ -6,6 +6,7 @@ import examples.hybrid.api.http.{DebugApiRoute, StatsApiRoute, WalletApiRoute}
 import examples.hybrid.blocks.HybridBlock
 import examples.hybrid.history.{HybridSyncInfo, HybridSyncInfoMessageSpec}
 import examples.hybrid.mining.{HybridSettings, PosForger, PowMiner}
+import examples.hybrid.transaction.TreasuryTxForger
 import examples.hybrid.wallet.{SimpleBoxTransactionGenerator, TreasuryTransactionGenerator}
 import scorex.core.api.http.{ApiRoute, NodeViewApiRoute, PeersApiRoute, UtilsApiRoute}
 import scorex.core.app.Application
@@ -47,8 +48,10 @@ class HybridApp(val settingsFilename: String) extends Application {
 
   val miner = actorSystem.actorOf(Props(new PowMiner(nodeViewHolderRef, hybridSettings.mining)))
   val forger = actorSystem.actorOf(Props(new PosForger(hybridSettings, nodeViewHolderRef)))
+  val treasuryTxsForger: ActorRef = actorSystem.actorOf(Props(new TreasuryTxForger(nodeViewHolderRef)))
 
-  override val localInterface: ActorRef = actorSystem.actorOf(Props(new HLocalInterface(nodeViewHolderRef, miner, forger, hybridSettings.mining)))
+  override val localInterface: ActorRef = actorSystem.actorOf(Props(
+    new HLocalInterface(nodeViewHolderRef, miner, forger, treasuryTxsForger, hybridSettings.mining)))
 
   override val nodeViewSynchronizer: ActorRef =
     actorSystem.actorOf(Props(new NodeViewSynchronizer[P, TX, HybridSyncInfo, HybridSyncInfoMessageSpec.type]

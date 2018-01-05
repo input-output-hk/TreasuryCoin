@@ -28,8 +28,7 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
   }
 
   def validateRegistration(tx: RegisterTransaction): Try[Unit] = Try {
-    require(TreasuryManager.REGISTER_STAGE._1 <= height &&
-            TreasuryManager.REGISTER_STAGE._2 > height, "Wrong height for register transaction")
+    require(TreasuryManager.REGISTER_RANGE.contains(height), "Wrong height for register transaction")
 
     tx.role match {
       case Role.Committee => require(!trState.getCommitteePubKeys.contains(tx.pubKey), "Committee pubkey has been already registered")
@@ -42,8 +41,7 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
   }
 
   def validateProposal(tx: ProposalTransaction): Try[Unit] = Try {
-    require(TreasuryManager.PROPOSAL_SUBMISSION_STATE._1 <= height &&
-            TreasuryManager.PROPOSAL_SUBMISSION_STATE._2 > height, "Wrong height for proposal transaction")
+    require(TreasuryManager.PROPOSAL_SUBMISSION_RANGE.contains(height), "Wrong height for proposal transaction")
     // TODO: add validation
   }
 }

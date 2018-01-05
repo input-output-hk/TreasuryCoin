@@ -57,10 +57,10 @@ class TreasuryTransactionGenerator(viewHolderRef: ActorRef) extends Actor with S
   }
 
   def generate(wallet: HWallet, trState: TreasuryState): Try[TreasuryTransaction] = {
-    RegisterTransaction.create(wallet, Role.Expert, trState.epochNum)
+    //RegisterTransaction.create(wallet, Role.Expert, trState.epochNum)
 
-//    val pubkey = wallet.publicKeys.toSeq.head
-//    ProposalTransaction.create(wallet, "TestProposal", Value @@ 10L, pubkey, trState.epochNum)
+    val pubkey = wallet.publicKeys.toSeq.head
+    ProposalTransaction.create(wallet, "TestProposal", Value @@ 10L, pubkey, trState.epochNum)
   }
 }
 

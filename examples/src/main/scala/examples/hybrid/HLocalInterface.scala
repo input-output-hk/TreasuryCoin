@@ -6,12 +6,14 @@ import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.mining.HybridMiningSettings
 import examples.hybrid.mining.PosForger.{StartForging, StopForging}
 import examples.hybrid.mining.PowMiner.{MineBlock, StartMining, StopMining}
+import examples.hybrid.transaction.TreasuryTxForger.SuccessfullStateModification
 import scorex.core.{LocalInterface, ModifierId, VersionTag}
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 
 class HLocalInterface(override val viewHolderRef: ActorRef,
                       powMinerRef: ActorRef,
                       posForgerRef: ActorRef,
+                      treasuryTxsForgerRef: ActorRef,
                       minerSettings: HybridMiningSettings)
   extends LocalInterface[PublicKey25519Proposition, SimpleBoxTransaction, HybridBlock] {
 
@@ -52,6 +54,8 @@ class HLocalInterface(override val viewHolderRef: ActorRef,
             powMinerRef ! StartMining
           }
       }
+
+      treasuryTxsForgerRef ! SuccessfullStateModification
     }
   }
 
