@@ -60,6 +60,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       case h if REGISTER_RANGE.contains(h) => generateRegisterTx(view)
       case h if DISTR_KEY_GEN_RANGE.contains(h) => Seq() // generateDKGTx(view)
       // TODO: other stages
+      case _ => Seq()
     }
   }
 

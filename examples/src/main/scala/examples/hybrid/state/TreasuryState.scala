@@ -29,11 +29,14 @@ case class TreasuryState(epochNum: Int) {
 
   case class Proposal(name: String, requestedSum: Value, recipient: PublicKey25519Proposition)
 
+  private val cs = TreasuryManager.cs
+
   private var version: VersionTag = VersionTag @@ (ModifierId @@ Array.fill(32)(0: Byte))
   private var committeePubKeys: List[PubKey] = List()
   private var expertsPubKeys: List[PubKey] = List()
   private var votersPubKeys: List[PubKey] = List()
   private var proposals: List[Proposal] = List()
+  private var sharedPublicKey: Option[PubKey] = None
 
   def getKeys(role: Role) = role match {
     case Role.Committee => getCommitteePubKeys
@@ -56,7 +59,7 @@ case class TreasuryState(epochNum: Int) {
       }
   }
 
-  def apply(block: HybridBlock): Try[TreasuryState] = Try {
+  def apply(block: HybridBlock, history: HybridHistory): Try[TreasuryState] = Try {
     block match {
       case b:PosBlock => {
         val trTxs = b.transactions.collect { case t: TreasuryTransaction => t }
@@ -65,6 +68,15 @@ case class TreasuryState(epochNum: Int) {
       }
       case _ => this
     }
+
+    val epochHeight = history.storage.heightOf(block.id).get.toInt % TreasuryManager.EPOCH_LEN
+    epochHeight match {
+      case TreasuryManager.DISTR_KEY_GEN_RANGE.end =>
+        require(committeePubKeys.nonEmpty, "No committee members found!")
+        sharedPublicKey = Some(committeePubKeys.foldLeft(cs.infinityPoint)((sum,next) => sum.add(next)))
+      case _ =>
+    }
+
     this
   }
 
@@ -99,7 +111,7 @@ object TreasuryState {
     val state = TreasuryState(epochNum)
 
     /* parse all blocks in the current epoch and extract all treasury transactions */
-    epochBlocksIds.foreach(blockId => state.apply(history.modifierById(blockId).get).get)
+    epochBlocksIds.foreach(blockId => state.apply(history.modifierById(blockId).get, history).get)
     state
   }
 }
