@@ -2,10 +2,10 @@ package examples.hybrid
 
 package object transaction {
 
-  /* Treasury transaction types */
+  val SimpleTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 40.toByte
+
+  /* Treasury transaction types. */
   val RegisterTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 50.toByte
-
   val VoterBallotTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 51.toByte
-
   val ProposalTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 52.toByte
 }

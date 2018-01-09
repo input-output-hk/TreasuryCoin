@@ -2,6 +2,7 @@ package examples.commons
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.curvepos.{Nonce, Value}
+import examples.hybrid.transaction
 import examples.hybrid.wallet.HWallet
 import io.circe.Json
 import io.circe.syntax._
@@ -22,10 +23,10 @@ case class SimpleBoxTx(override val from: IndexedSeq[(PublicKey25519Proposition,
                        override val fee: Long,
                        override val timestamp: Long) extends SimpleBoxTransaction(from, to, signatures, fee, timestamp) {
 
-  override val modifierTypeId: ModifierTypeId = SimpleBoxTx.ModifierTypeId
+  override val transactionTypeId: ModifierTypeId = SimpleBoxTx.TransactionTypeId
 
   override type M = SimpleBoxTransaction
-  override lazy val serializer = SimpleBoxTxCompanion
+  override val serializer = SimpleBoxTransactionCompanion
 
   override lazy val json: Json = Map(
     "id" -> Base58.encode(id).asJson,
@@ -64,7 +65,7 @@ case class SimpleBoxTx(override val from: IndexedSeq[(PublicKey25519Proposition,
 
 object SimpleBoxTx {
 
-  val ModifierTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 2.toByte
+  val TransactionTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ transaction.SimpleTxTypeId
 
   def apply(from: IndexedSeq[(PrivateKey25519, Nonce)],
             to: IndexedSeq[(PublicKey25519Proposition, Value)],

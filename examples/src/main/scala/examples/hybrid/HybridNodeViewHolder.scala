@@ -1,6 +1,6 @@
 package examples.hybrid
 
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTx, SimpleBoxTxCompanion, TreasuryMemPool}
+import examples.commons._
 import examples.curvepos.{Nonce, Value}
 import examples.curvepos.transaction.PublicKey25519NoncedBox
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
@@ -39,7 +39,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
   override val modifierSerializers: Map[ModifierTypeId, Serializer[_ <: NodeViewModifier]] =
     Map(PosBlock.ModifierTypeId -> PosBlockCompanion,
       PowBlock.ModifierTypeId -> PowBlockCompanion,
-      Transaction.ModifierTypeId -> SimpleBoxTxCompanion)
+      Transaction.ModifierTypeId -> SimpleBoxTransactionCompanion)
 
   override def preRestart(reason: Throwable, message: Option[Any]): Unit = {
     super.preRestart(reason, message)

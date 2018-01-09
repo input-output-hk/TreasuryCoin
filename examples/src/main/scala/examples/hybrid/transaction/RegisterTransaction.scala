@@ -1,6 +1,7 @@
 package examples.hybrid.transaction
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.transaction.RegisterTransaction.Role
 import examples.hybrid.transaction.RegisterTransaction.Role.Role
@@ -19,11 +20,11 @@ case class RegisterTransaction(role: Role,
                                epochID: Long,
                                override val timestamp: Long) extends TreasuryTransaction(timestamp) {
 
-  override type M = RegisterTransaction
+  override type M = SimpleBoxTransaction
 
-  override val modifierTypeId: ModifierTypeId = RegisterTransaction.ModifierTypeId
+  override val transactionTypeId: ModifierTypeId = RegisterTransaction.TransactionTypeId
 
-  override val serializer = RegisterTransactionCompanion
+  override val serializer = SimpleBoxTransactionCompanion
 
   override lazy val messageToSign = {
     val superBytes = Bytes.concat(if (newBoxes.nonEmpty) scorex.core.utils.concatBytes(newBoxes.map(_.bytes)) else Array[Byte](),
@@ -45,7 +46,7 @@ case class RegisterTransaction(role: Role,
 }
 
 object RegisterTransaction {
-  val ModifierTypeId: scorex.core.ModifierTypeId = RegisterTxTypeId
+  val TransactionTypeId: scorex.core.ModifierTypeId = RegisterTxTypeId
 
   object Role extends Enumeration {
     type Role = Value

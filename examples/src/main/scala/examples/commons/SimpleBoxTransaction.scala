@@ -3,6 +3,7 @@ package examples.commons
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.curvepos.{Nonce, Value}
 import examples.curvepos.transaction.PublicKey25519NoncedBox
+import examples.hybrid.transaction.{ProposalTransaction, ProposalTransactionCompanion, RegisterTransaction, RegisterTransactionCompanion}
 import scorex.core.{ModifierId, ModifierTypeId}
 import scorex.core.serialization.Serializer
 import scorex.core.transaction.{BoxTransaction, Transaction}
@@ -10,12 +11,9 @@ import scorex.core.transaction.account.PublicKeyNoncedBox
 import scorex.core.transaction.box.BoxUnlocker
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.transaction.proof.{Proof, Signature25519}
-import scorex.core.transaction.state.{PrivateKey25519, PrivateKey25519Companion}
-import scorex.crypto.encode.Base58
 import scorex.crypto.hash.Blake2b256
-import scorex.crypto.signatures.{Curve25519, PublicKey, Signature}
 
-import scala.util.Try
+import scala.util.{Failure, Try}
 
 //A transaction orders to destroy boxes associated with (pubkey -> nonce) and create new boxes (pubkey -> nonce)
 // where a nonce is derived from a transaction and also a box index
@@ -29,6 +27,8 @@ abstract class SimpleBoxTransaction(val from: IndexedSeq[(PublicKey25519Proposit
                                     override val fee: Long,
                                     override val timestamp: Long)
   extends BoxTransaction[PublicKey25519Proposition, PublicKey25519NoncedBox] {
+
+  val transactionTypeId: ModifierTypeId
 
   lazy val boxIdsToOpen: IndexedSeq[ModifierId] = from.map { case (prop, nonce) =>
     PublicKeyNoncedBox.idFromBox(prop, nonce)
@@ -60,4 +60,25 @@ abstract class SimpleBoxTransaction(val from: IndexedSeq[(PublicKey25519Proposit
 object SimpleBoxTransaction {
 
   def nonceFromDigest(digest: Array[Byte]): Nonce = Nonce @@ Longs.fromByteArray(digest.take(8))
+}
+
+object SimpleBoxTransactionCompanion extends Serializer[SimpleBoxTransaction] {
+
+  override def toBytes(m: SimpleBoxTransaction): Array[Byte] = {
+    m match {
+      case t: SimpleBoxTx => Bytes.concat(Array(m.transactionTypeId), SimpleBoxTxCompanion.toBytes(t))
+      case t: RegisterTransaction => Bytes.concat(Array(m.transactionTypeId), RegisterTransactionCompanion.toBytes(t))
+      case t: ProposalTransaction => Bytes.concat(Array(m.transactionTypeId), ProposalTransactionCompanion.toBytes(t))
+    }
+  }
+
+  override def parseBytes(bytes: Array[Byte]): Try[SimpleBoxTransaction] = {
+    val transactionTypeId = ModifierTypeId @@ bytes(0)
+    transactionTypeId match {
+      case SimpleBoxTx.TransactionTypeId => SimpleBoxTxCompanion.parseBytes(bytes.drop(1))
+      case RegisterTransaction.TransactionTypeId => RegisterTransactionCompanion.parseBytes(bytes.drop(1))
+      case ProposalTransaction.TransactionTypeId => ProposalTransactionCompanion.parseBytes(bytes.drop(1))
+      case _ => Failure(new MatchError("Unknown transaction type id"))
+    }
+  }
 }

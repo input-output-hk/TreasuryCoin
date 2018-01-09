@@ -1,6 +1,7 @@
 package examples.hybrid.transaction
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
 import examples.curvepos.Value
 import examples.curvepos.transaction.PublicKey25519NoncedBox
 import examples.hybrid.wallet.HWallet
@@ -20,11 +21,11 @@ case class ProposalTransaction(name: String,
                                epochID: Long,
                                override val timestamp: Long) extends TreasuryTransaction(timestamp) {
 
-  override type M = ProposalTransaction
+  override type M = SimpleBoxTransaction
 
-  override val modifierTypeId: ModifierTypeId = ProposalTransaction.ModifierTypeId
+  override val transactionTypeId: ModifierTypeId = ProposalTransaction.TransactionTypeId
 
-  override val serializer = ProposalTransactionCompanion
+  override val serializer = SimpleBoxTransactionCompanion
 
   override lazy val messageToSign = {
     val superBytes = Bytes.concat(if (newBoxes.nonEmpty) scorex.core.utils.concatBytes(newBoxes.map(_.bytes)) else Array[Byte](),
@@ -48,7 +49,7 @@ case class ProposalTransaction(name: String,
 }
 
 object ProposalTransaction {
-  val ModifierTypeId: scorex.core.ModifierTypeId = ProposalTxTypeId
+  val TransactionTypeId: scorex.core.ModifierTypeId = ProposalTxTypeId
 
   def apply(name: String,
             requestedSum: Value,
