@@ -85,11 +85,11 @@ object RegisterTransactionCompanion extends Serializer[RegisterTransaction] {
   def parseBytes(bytes: Array[Byte]): Try[RegisterTransaction] = Try {
     val role: Role = Role(bytes(0))
     val keySize = Ints.fromByteArray(bytes.slice(1,5))
-    val committeePubKey = TreasuryManager.cs.decodePoint(bytes.slice(5,keySize+5))
+    val pubKey = TreasuryManager.cs.decodePoint(bytes.slice(5,keySize+5))
     val s = 5+keySize
     val epochID = Longs.fromByteArray(bytes.slice(s,s+8))
     val timestamp = Longs.fromByteArray(bytes.slice(s+8,s+16))
 
-    RegisterTransaction(role, committeePubKey, epochID, timestamp)
+    RegisterTransaction(role, pubKey, epochID, timestamp)
   }
 }

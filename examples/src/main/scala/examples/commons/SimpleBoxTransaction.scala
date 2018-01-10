@@ -3,7 +3,7 @@ package examples.commons
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.curvepos.{Nonce, Value}
 import examples.curvepos.transaction.PublicKey25519NoncedBox
-import examples.hybrid.transaction.{ProposalTransaction, ProposalTransactionCompanion, RegisterTransaction, RegisterTransactionCompanion}
+import examples.hybrid.transaction._
 import scorex.core.{ModifierId, ModifierTypeId}
 import scorex.core.serialization.Serializer
 import scorex.core.transaction.{BoxTransaction, Transaction}
@@ -69,6 +69,7 @@ object SimpleBoxTransactionCompanion extends Serializer[SimpleBoxTransaction] {
       case t: SimpleBoxTx => Bytes.concat(Array(m.transactionTypeId), SimpleBoxTxCompanion.toBytes(t))
       case t: RegisterTransaction => Bytes.concat(Array(m.transactionTypeId), RegisterTransactionCompanion.toBytes(t))
       case t: ProposalTransaction => Bytes.concat(Array(m.transactionTypeId), ProposalTransactionCompanion.toBytes(t))
+      case t: BallotTransaction => Bytes.concat(Array(m.transactionTypeId), BallotTransactionCompanion.toBytes(t))
     }
   }
 
@@ -78,6 +79,7 @@ object SimpleBoxTransactionCompanion extends Serializer[SimpleBoxTransaction] {
       case SimpleBoxTx.TransactionTypeId => SimpleBoxTxCompanion.parseBytes(bytes.drop(1))
       case RegisterTransaction.TransactionTypeId => RegisterTransactionCompanion.parseBytes(bytes.drop(1))
       case ProposalTransaction.TransactionTypeId => ProposalTransactionCompanion.parseBytes(bytes.drop(1))
+      case BallotTransaction.TransactionTypeId => BallotTransactionCompanion.parseBytes(bytes.drop(1))
       case _ => Failure(new MatchError("Unknown transaction type id"))
     }
   }

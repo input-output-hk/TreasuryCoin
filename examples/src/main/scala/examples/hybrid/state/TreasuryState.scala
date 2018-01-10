@@ -46,6 +46,8 @@ case class TreasuryState(epochNum: Int) {
   def getCommitteePubKeys = committeePubKeys
   def getExpertsPubKeys = expertsPubKeys
   def getVotersPubKeys = votersPubKeys
+  def getProposals = proposals
+  def getSharedPubKey = sharedPublicKey
 
 
   protected def apply(tx: TreasuryTransaction): Try[Unit] = tx match {

@@ -2,8 +2,12 @@ package examples.hybrid.state
 
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
 import examples.hybrid.TreasuryManager
+import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.transaction.RegisterTransaction.Role
-import examples.hybrid.transaction.{ProposalTransaction, RegisterTransaction, TreasuryTransaction}
+import examples.hybrid.transaction.{BallotTransaction, ProposalTransaction, RegisterTransaction, TreasuryTransaction}
+import treasury.crypto.core.One
+import treasury.crypto.voting.{Expert, RegularVoter, Voter}
+import treasury.crypto.voting.ballots.{ExpertBallot, VoterBallot}
 
 import scala.util.{Success, Try}
 
@@ -24,6 +28,7 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
     tx match {
       case t: RegisterTransaction => validateRegistration(t).get
       case t: ProposalTransaction => validateProposal(t).get
+      case t: BallotTransaction => validateBallot(t).get
     }
   }
 
@@ -43,5 +48,37 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
   def validateProposal(tx: ProposalTransaction): Try[Unit] = Try {
     require(TreasuryManager.PROPOSAL_SUBMISSION_RANGE.contains(height), "Wrong height for proposal transaction")
     // TODO: add validation
+  }
+
+  def validateBallot(tx: BallotTransaction): Try[Unit] = Try {
+    require(TreasuryManager.VOTING_RANGE.contains(height), "Wrong height for ballot transaction")
+    require(trState.getSharedPubKey.isDefined, "Shared key is not defined in TreasuryState")
+    require(trState.getProposals.nonEmpty, "Proposals are not defined")
+
+    tx.voterType match {
+      case VoterType.Voter =>
+        require(trState.getVotersPubKeys.contains(tx.pubKey), "Voter is not registered")
+        tx.ballots.foreach(b => require(b.isInstanceOf[VoterBallot], "Incompatible ballot"))
+        val expertsNum = trState.getExpertsPubKeys.size
+        val voter = new RegularVoter(TreasuryManager.cs, expertsNum, trState.getSharedPubKey.get, One)
+        tx.ballots.foreach { b =>
+          require(b.unitVector.length == expertsNum + Voter.VOTER_CHOISES_NUM)
+          require(voter.verifyBallot(b), "Ballot NIZK is not verified")}
+
+      case VoterType.Expert =>
+        require(trState.getExpertsPubKeys.contains(tx.pubKey), "Expert is not registered")
+        tx.ballots.foreach(b => require(b.isInstanceOf[ExpertBallot], "Incompatible ballot"))
+        val expertId = trState.getExpertsPubKeys.indexOf(tx.pubKey)
+        val expert = new Expert(TreasuryManager.cs, expertId, trState.getSharedPubKey.get)
+        tx.ballots.foreach { b =>
+          require(b.unitVector.length == Voter.VOTER_CHOISES_NUM)
+          require(expert.verifyBallot(b), "Ballot NIZK is not verified")}
+    }
+
+    require(trState.getProposals.size == tx.ballots.size, "Number of ballots isn't equal to the number of proposals")
+    trState.getProposals.indices.foreach(i =>
+      require(tx.ballots.find(p => p.proposalId == i).isDefined, s"No ballot for proposal ${i}"))
+
+    // TODO: check that it hasn't been voted yet
   }
 }

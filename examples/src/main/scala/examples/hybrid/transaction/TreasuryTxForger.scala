@@ -3,15 +3,20 @@ package examples.hybrid.transaction
 import akka.actor.{Actor, ActorRef}
 import examples.commons.TreasuryMemPool
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
+import examples.hybrid.TreasuryManager
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.settings.TreasurySettings
 import examples.hybrid.state.HBoxStoredState
+import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.transaction.RegisterTransaction.Role
 import examples.hybrid.transaction.RegisterTransaction.Role.Role
 import examples.hybrid.wallet.HWallet
 import scorex.core.LocalInterface.LocallyGeneratedTransaction
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
+import treasury.crypto.core.{One, VoteCases}
+import treasury.crypto.voting.RegularVoter
+import treasury.crypto.voting.ballots.Ballot
 
 
 /**
@@ -59,6 +64,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     view.history.height match {
       case h if REGISTER_RANGE.contains(h) => generateRegisterTx(view)
       case h if DISTR_KEY_GEN_RANGE.contains(h) => Seq() // generateDKGTx(view)
+      case h if VOTING_RANGE.contains(h) => generateBallotTx(view) // Only for testing! Normally a ballot should be created manually by a voter
       // TODO: other stages
       case _ => Seq()
     }
@@ -86,6 +92,19 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     if (settings.isVoter)
       txs = txs ::: generateRegisterTx(Role.Voter, view).map(List(_)).getOrElse(List())
     txs
+  }
+
+  private def generateBallotTx(view: NodeView): Seq[BallotTransaction] = {
+    val myStoredKeys = view.vault.treasurySecrets(Role.Voter, view.trState.epochNum)
+    if (myStoredKeys.nonEmpty && view.trState.getSharedPubKey.isDefined) {
+      val numberOfExperts = view.trState.getExpertsPubKeys.size
+      val voter = new RegularVoter(TreasuryManager.cs, numberOfExperts, view.trState.getSharedPubKey.get, One)
+      var ballots = List[Ballot]()
+      for (i <- view.trState.getProposals.indices)
+        ballots = voter.produceVote(i, VoteCases.Abstain) :: ballots
+
+      Seq(BallotTransaction.create(myStoredKeys.head.pubKey, VoterType.Voter, ballots, view.trState.epochNum).get)
+    } else Seq()
   }
 }
 
