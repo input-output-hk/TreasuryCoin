@@ -7,14 +7,14 @@ import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDa
 import examples.hybrid.blocks._
 import examples.hybrid.history.{HybridHistory, HybridSyncInfo}
 import examples.hybrid.settings.HybridMiningSettings
-import examples.hybrid.state.{HBoxStoredState, TreasuryState}
+import examples.hybrid.state.{HBoxStoredState, TreasuryState, TreasuryTxValidator}
 import examples.hybrid.wallet.HWallet
 import scorex.core.NodeViewHolder._
 import scorex.core.serialization.Serializer
 import scorex.core.settings.ScorexSettings
 import scorex.core.transaction.Transaction
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
-import scorex.core.transaction.state.PrivateKey25519Companion
+import scorex.core.transaction.state.{PrivateKey25519Companion, TransactionValidation}
 import scorex.core.{ModifierTypeId, NodeViewHolder, NodeViewModifier, VersionTag}
 import scorex.crypto.encode.Base58
 import scorex.crypto.signatures.PublicKey
@@ -33,6 +33,9 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
   override type MS = HBoxStoredState
   override type VL = HWallet
   override type MP = TreasuryMemPool
+
+  type P = PublicKey25519Proposition
+  type TX = SimpleBoxTransaction
 
   private var treasuryState = TreasuryState.generate(history).get
 
@@ -101,6 +104,40 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
         HWallet.readOrGenerate(settings, 1),
         TreasuryMemPool.emptyPool))
     } else None
+  }
+
+  override protected def txModify(tx: SimpleBoxTransaction): Unit = {
+    //todo: async validation?
+    val treasuryTxValidator = new TreasuryTxValidator(treasuryState, history().height)
+
+    val errorOpt: Option[Throwable] = minimalState() match {
+      case txValidator: TransactionValidation[P, TX] =>
+        txValidator.validate(tx) match {
+          case Success(_) => treasuryTxValidator.validate(tx) match {
+            case Success(_) => None
+            case Failure(e) => Some(e)
+          }
+          case Failure(e) => Some(e)
+        }
+      case _ => None
+    }
+
+    errorOpt match {
+      case None =>
+        memoryPool().put(tx) match {
+          case Success(updPool) =>
+            log.debug(s"Unconfirmed transaction $tx added to the memory pool")
+            val updWallet = vault().scanOffchain(tx)
+            nodeView = (history(), minimalState(), updWallet, updPool)
+            notifySubscribers(EventType.SuccessfulTransaction, SuccessfulTransaction[P, TX](tx))
+
+          case Failure(e) =>
+            notifySubscribers(EventType.FailedTransaction, FailedTransaction[P, TX](tx, e))
+        }
+
+      case Some(e) =>
+        notifySubscribers(EventType.FailedTransaction, FailedTransaction[P, TX](tx, e))
+    }
   }
 
   override def pmodModify(pmod: HybridBlock): Unit = {
