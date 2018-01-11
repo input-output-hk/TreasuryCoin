@@ -6,7 +6,7 @@ import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDa
 import examples.hybrid.TreasuryManager
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.settings.TreasurySettings
-import examples.hybrid.state.HBoxStoredState
+import examples.hybrid.state.{HBoxStoredState, TreasuryTxValidator}
 import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.transaction.RegisterTransaction.Role
 import examples.hybrid.transaction.RegisterTransaction.Role.Role
@@ -15,7 +15,7 @@ import scorex.core.LocalInterface.LocallyGeneratedTransaction
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 import treasury.crypto.core.{One, VoteCases}
-import treasury.crypto.voting.RegularVoter
+import treasury.crypto.voting.{Expert, RegularVoter}
 import treasury.crypto.voting.ballots.Ballot
 
 
@@ -94,17 +94,43 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     txs
   }
 
+  /* It is only for testing purposes. Normally Ballot transactions should be created manually by a voter */
   private def generateBallotTx(view: NodeView): Seq[BallotTransaction] = {
-    val myStoredKeys = view.vault.treasurySecrets(Role.Voter, view.trState.epochNum)
-    if (myStoredKeys.nonEmpty && view.trState.getSharedPubKey.isDefined) {
+    val myVoterKeys = view.vault.treasurySecrets(Role.Voter, view.trState.epochNum)
+    val voterBallot = if (myVoterKeys.nonEmpty &&
+        view.trState.getSharedPubKey.isDefined &&
+        view.trState.getVotersPubKeys.contains(myVoterKeys.head.pubKey)) {
       val numberOfExperts = view.trState.getExpertsPubKeys.size
       val voter = new RegularVoter(TreasuryManager.cs, numberOfExperts, view.trState.getSharedPubKey.get, One)
       var ballots = List[Ballot]()
       for (i <- view.trState.getProposals.indices)
         ballots = voter.produceVote(i, VoteCases.Abstain) :: ballots
 
-      Seq(BallotTransaction.create(myStoredKeys.head.pubKey, VoterType.Voter, ballots, view.trState.epochNum).get)
+      Seq(BallotTransaction.create(myVoterKeys.head.pubKey, VoterType.Voter, ballots, view.trState.epochNum).get)
     } else Seq()
+
+    val myExpertKeys = view.vault.treasurySecrets(Role.Expert, view.trState.epochNum)
+    val expertBallot = if (myExpertKeys.nonEmpty &&
+      view.trState.getSharedPubKey.isDefined &&
+      view.trState.getExpertsPubKeys.contains(myExpertKeys.head.pubKey)) {
+      val expertId = view.trState.getExpertsPubKeys.indexOf(myExpertKeys.head.pubKey)
+      val expert = new Expert(TreasuryManager.cs, expertId, view.trState.getSharedPubKey.get)
+      var ballots = List[Ballot]()
+      for (i <- view.trState.getProposals.indices)
+        ballots = expert.produceVote(i, VoteCases.Abstain) :: ballots
+
+      Seq(BallotTransaction.create(myExpertKeys.head.pubKey, VoterType.Expert, ballots, view.trState.epochNum).get)
+    } else Seq()
+
+    // check that txs are valid and haven't been submitted before
+    (voterBallot ++ expertBallot).filter { tx =>
+      val pending = view.pool.unconfirmed.map(_._2).find {
+        case t: BallotTransaction => t.pubKey == tx.pubKey
+        case _ => false
+      }.isDefined
+      val valid = new TreasuryTxValidator(view.trState, view.history.height).validate(tx).isSuccess
+      !pending && valid
+    }
   }
 }
 

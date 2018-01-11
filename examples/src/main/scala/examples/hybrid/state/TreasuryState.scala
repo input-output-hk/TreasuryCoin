@@ -1,16 +1,17 @@
 package examples.hybrid.state
 
 import examples.curvepos.Value
-import examples.hybrid.HybridNodeViewHolder.CurrentViewWithTreasuryState
 import examples.hybrid.TreasuryManager
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
+import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.transaction.RegisterTransaction.Role
 import examples.hybrid.transaction.RegisterTransaction.Role.Role
-import examples.hybrid.transaction.{ProposalTransaction, RegisterTransaction, TreasuryTransaction}
+import examples.hybrid.transaction.{BallotTransaction, ProposalTransaction, RegisterTransaction, TreasuryTransaction}
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.{ModifierId, VersionTag}
 import treasury.crypto.core.PubKey
+import treasury.crypto.voting.ballots.{ExpertBallot, VoterBallot}
 
 import scala.util.{Success, Try}
 
@@ -37,6 +38,8 @@ case class TreasuryState(epochNum: Int) {
   private var votersPubKeys: List[PubKey] = List()
   private var proposals: List[Proposal] = List()
   private var sharedPublicKey: Option[PubKey] = None
+  private var votersBallots: Map[Int, Seq[VoterBallot]] = Map() // voterId -> Seq(ballot)
+  private var expertsBallots: Map[Int, Seq[ExpertBallot]] = Map() // expertId -> Seq(ballot)
 
   def getKeys(role: Role) = role match {
     case Role.Committee => getCommitteePubKeys
@@ -48,6 +51,8 @@ case class TreasuryState(epochNum: Int) {
   def getVotersPubKeys = votersPubKeys
   def getProposals = proposals
   def getSharedPubKey = sharedPublicKey
+  def getVotersBallots = votersBallots
+  def getExpertsBallots = expertsBallots
 
 
   protected def apply(tx: TreasuryTransaction): Try[Unit] = tx match {
@@ -59,6 +64,16 @@ case class TreasuryState(epochNum: Int) {
       case t: ProposalTransaction => Try {
         proposals = proposals :+ Proposal(t.name, t.requestedSum, t.recipient)
       }
+      case t: BallotTransaction => Try { t.voterType match {
+        case VoterType.Voter =>
+          val id = votersPubKeys.indexOf(t.pubKey)
+          require(id >= 0, "Voter isn't found")
+          votersBallots = votersBallots + (id -> t.ballots.map(_.asInstanceOf[VoterBallot]))
+        case VoterType.Expert =>
+          val id = expertsPubKeys.indexOf(t.pubKey)
+          require(id >= 0, "Expert isn't found")
+          expertsBallots = expertsBallots + (id -> t.ballots.map(_.asInstanceOf[ExpertBallot]))
+      }}
   }
 
   def apply(block: HybridBlock, history: HybridHistory): Try[TreasuryState] = Try {
