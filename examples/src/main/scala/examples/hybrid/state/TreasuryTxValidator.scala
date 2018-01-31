@@ -4,7 +4,7 @@ import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.transaction.RegisterTransaction.Role
-import examples.hybrid.transaction.{BallotTransaction, ProposalTransaction, RegisterTransaction, TreasuryTransaction}
+import examples.hybrid.transaction._
 import treasury.crypto.core.One
 import treasury.crypto.voting.{Expert, RegularVoter, Voter}
 import treasury.crypto.voting.ballots.{ExpertBallot, VoterBallot}
@@ -27,6 +27,7 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
     /* Checks for specific treasury txs */
     tx match {
       case t: RegisterTransaction => validateRegistration(t).get
+      case t: CommitteeRegisterTransaction => validateCommitteeRegistration(t).get
       case t: ProposalTransaction => validateProposal(t).get
       case t: BallotTransaction => validateBallot(t).get
     }
@@ -36,10 +37,19 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
     require(TreasuryManager.REGISTER_RANGE.contains(height), "Wrong height for register transaction")
 
     tx.role match {
-      case Role.Committee => require(!trState.getCommitteePubKeys.contains(tx.pubKey), "Committee pubkey has been already registered")
-      case Role.Expert => require(!trState.getExpertsPubKeys.contains(tx.pubKey), "Expert pubkey has been already registered")
-      case Role.Voter => require(!trState.getVotersPubKeys.contains(tx.pubKey), "Voter pubkey has been already registered")
+      case Role.Expert => require(!trState.getExpertsSigningKeys.contains(tx.pubKey), "Expert pubkey has been already registered")
+      case Role.Voter => require(!trState.getVotersSigningKeys.contains(tx.pubKey), "Voter pubkey has been already registered")
     }
+
+    // TODO: check that transaction makes a necessary deposit. Probably there should be some special type of time-locked box.
+    // tx.to.foreach()
+  }
+
+  def validateCommitteeRegistration(tx: CommitteeRegisterTransaction): Try[Unit] = Try {
+    require(TreasuryManager.REGISTER_RANGE.contains(height), "Wrong height for register transaction")
+
+    require(!trState.getCommitteeSigningKeys.contains(tx.signingPubKey), "Committee signing pubkey has been already registered")
+    require(!trState.getCommitteeProxyKeys.contains(tx.proxyPubKey), "Committee proxy pubkey has been already registered")
 
     // TODO: check that transaction makes a necessary deposit. Probably there should be some special type of time-locked box.
     // tx.to.foreach()
@@ -57,22 +67,22 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
 
     tx.voterType match {
       case VoterType.Voter =>
-        val id = trState.getVotersPubKeys.indexOf(tx.pubKey)
+        val id = trState.getVotersSigningKeys.indexOf(tx.pubKey)
         require(id >= 0, "Voter is not registered")
         require(trState.getVotersBallots.contains(id) == false, "The voter has already voted")
         tx.ballots.foreach(b => require(b.isInstanceOf[VoterBallot], "Incompatible ballot"))
-        val expertsNum = trState.getExpertsPubKeys.size
+        val expertsNum = trState.getExpertsSigningKeys.size
         val voter = new RegularVoter(TreasuryManager.cs, expertsNum, trState.getSharedPubKey.get, One)
         tx.ballots.foreach { b =>
           require(b.unitVector.length == expertsNum + Voter.VOTER_CHOISES_NUM)
           require(voter.verifyBallot(b), "Ballot NIZK is not verified")}
 
       case VoterType.Expert =>
-        val id = trState.getExpertsPubKeys.indexOf(tx.pubKey)
+        val id = trState.getExpertsSigningKeys.indexOf(tx.pubKey)
         require(id >= 0, "Expert is not registered")
         require(trState.getExpertsBallots.contains(id) == false, "The expert has already voted")
         tx.ballots.foreach(b => require(b.isInstanceOf[ExpertBallot], "Incompatible ballot"))
-        val expertId = trState.getExpertsPubKeys.indexOf(tx.pubKey)
+        val expertId = trState.getExpertsSigningKeys.indexOf(tx.pubKey)
         val expert = new Expert(TreasuryManager.cs, expertId, trState.getSharedPubKey.get)
         tx.ballots.foreach { b =>
           require(b.unitVector.length == Voter.VOTER_CHOISES_NUM)

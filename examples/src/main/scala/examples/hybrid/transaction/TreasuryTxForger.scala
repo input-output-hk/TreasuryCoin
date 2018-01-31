@@ -70,21 +70,26 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     }
   }
 
-  private def generateRegisterTx(view: NodeView): Seq[RegisterTransaction] = {
-    def generateRegisterTx(role: Role, view: NodeView): Option[RegisterTransaction] = {
-      val myStoredKeys = view.vault.treasurySecrets(role, view.trState.epochNum).map(_.pubKey)
-      val myAlreadyRegistredKeys = view.trState.getKeys(role).filter(k => myStoredKeys.contains(k))
+  private def generateRegisterTx(view: NodeView): Seq[TreasuryTransaction] = {
+    def generateRegisterTx(role: Role, view: NodeView): Option[TreasuryTransaction] = {
+      val myStoredKeys = view.vault.treasurySigningPubKeys(role, view.trState.epochNum)
+      val myAlreadyRegistredKeys = view.trState.getSigningKeys(role).filter(k => myStoredKeys.contains(k))
       val myPendingRegistrationKeys = view.pool.unconfirmed.map(_._2).filter {
         case tx: RegisterTransaction => tx.role == role && myStoredKeys.contains(tx.pubKey)
+        case tx: CommitteeRegisterTransaction => Role.Committee == role && myStoredKeys.contains(tx.signingPubKey)
         case _ => false
       }
 
       if (myAlreadyRegistredKeys.isEmpty && myPendingRegistrationKeys.isEmpty)
-        RegisterTransaction.create(view.vault, role, view.trState.epochNum).map(Some(_)).getOrElse(None)
+        if (role == Role.Expert || role == Role.Voter)
+          RegisterTransaction.create(view.vault, role, view.trState.epochNum).map(Some(_)).getOrElse(None)
+        else if (role == Role.Committee)
+          CommitteeRegisterTransaction.create(view.vault, view.trState.epochNum).map(Some(_)).getOrElse(None)
+        else None
       else None
     }
 
-    var txs = List[RegisterTransaction]()
+    var txs = List[TreasuryTransaction]()
     if (settings.isCommittee)
       txs = txs ::: generateRegisterTx(Role.Committee, view).map(List(_)).getOrElse(List())
     if (settings.isExpert)
@@ -96,30 +101,30 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
 
   /* It is only for testing purposes. Normally Ballot transactions should be created manually by a voter */
   private def generateBallotTx(view: NodeView): Seq[BallotTransaction] = {
-    val myVoterKeys = view.vault.treasurySecrets(Role.Voter, view.trState.epochNum)
+    val myVoterKeys = view.vault.treasurySigningPubKeys(Role.Voter, view.trState.epochNum)
     val voterBallot = if (myVoterKeys.nonEmpty &&
         view.trState.getSharedPubKey.isDefined &&
-        view.trState.getVotersPubKeys.contains(myVoterKeys.head.pubKey)) {
-      val numberOfExperts = view.trState.getExpertsPubKeys.size
+        view.trState.getVotersSigningKeys.contains(myVoterKeys.head)) {
+      val numberOfExperts = view.trState.getExpertsSigningKeys.size
       val voter = new RegularVoter(TreasuryManager.cs, numberOfExperts, view.trState.getSharedPubKey.get, One)
       var ballots = List[Ballot]()
       for (i <- view.trState.getProposals.indices)
         ballots = voter.produceVote(i, VoteCases.Abstain) :: ballots
 
-      Seq(BallotTransaction.create(myVoterKeys.head.pubKey, VoterType.Voter, ballots, view.trState.epochNum).get)
+      Seq(BallotTransaction.create(myVoterKeys.head, VoterType.Voter, ballots, view.trState.epochNum).get)
     } else Seq()
 
-    val myExpertKeys = view.vault.treasurySecrets(Role.Expert, view.trState.epochNum)
+    val myExpertKeys = view.vault.treasurySigningPubKeys(Role.Expert, view.trState.epochNum)
     val expertBallot = if (myExpertKeys.nonEmpty &&
-      view.trState.getSharedPubKey.isDefined &&
-      view.trState.getExpertsPubKeys.contains(myExpertKeys.head.pubKey)) {
-      val expertId = view.trState.getExpertsPubKeys.indexOf(myExpertKeys.head.pubKey)
+        view.trState.getSharedPubKey.isDefined &&
+        view.trState.getExpertsSigningKeys.contains(myExpertKeys.head)) {
+      val expertId = view.trState.getExpertsSigningKeys.indexOf(myExpertKeys.head)
       val expert = new Expert(TreasuryManager.cs, expertId, view.trState.getSharedPubKey.get)
       var ballots = List[Ballot]()
       for (i <- view.trState.getProposals.indices)
         ballots = expert.produceVote(i, VoteCases.Abstain) :: ballots
 
-      Seq(BallotTransaction.create(myExpertKeys.head.pubKey, VoterType.Expert, ballots, view.trState.epochNum).get)
+      Seq(BallotTransaction.create(myExpertKeys.head, VoterType.Expert, ballots, view.trState.epochNum).get)
     } else Seq()
 
     // check that txs are valid and haven't been submitted before

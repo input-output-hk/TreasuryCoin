@@ -9,7 +9,9 @@ import examples.hybrid.TreasuryManager
 import examples.hybrid.blocks.HybridBlock
 import examples.hybrid.state.HBoxStoredState
 import examples.hybrid.transaction.RegisterTransaction.Role
-import examples.hybrid.transaction.RegisterTransaction.Role.Role
+import examples.hybrid.transaction.RegisterTransaction.Role.{Role, Value}
+import examples.hybrid.wallet.TreasurySecret.Type
+import examples.hybrid.wallet.TreasurySecret.Type.{Type}
 import io.iohk.iodb.{ByteArrayWrapper, LSMStore}
 import scorex.core.VersionTag
 import scorex.core.serialization.Serializer
@@ -20,10 +22,11 @@ import scorex.core.transaction.wallet.{Wallet, WalletBox, WalletBoxSerializer, W
 import scorex.core.utils.{ByteStr, ScorexLogging}
 import scorex.crypto.encode.Base58
 import scorex.crypto.hash.Blake2b256
+import scorex.crypto.signatures.{Curve25519, PublicKey}
 import treasury.crypto.core.{PrivKey, PubKey}
 
 import scala.annotation.tailrec
-import scala.util.{Success, Failure, Try}
+import scala.util.{Failure, Success, Try}
 
 
 case class HWallet(seed: ByteStr, store: LSMStore, treasuryStore: LSMStore)
@@ -81,33 +84,53 @@ case class HWallet(seed: ByteStr, store: LSMStore, treasuryStore: LSMStore)
     */
   def treasurySecrets: Seq[(Long, Set[TreasurySecret])] = treasuryStore.getAll().map { b =>
     val epochID = Longs.fromByteArray(b._1.data)
-    val trsecrets = TreasurySecretCompanion.parseBatch(b._2.data).toSet
+    val trsecrets = TreasurySecretSerializer.parseBatch(b._2.data).toSet
     (epochID, trsecrets)
   }.toSeq
 
   def treasurySecrets(epochId: Long): Set[TreasurySecret] =
     treasuryStore.get(ByteArrayWrapper(Longs.toByteArray(epochId)))
-      .map(s => TreasurySecretCompanion.parseBatch(s.data).toSet)
+      .map(s => TreasurySecretSerializer.parseBatch(s.data).toSet)
       .getOrElse(Set.empty[TreasurySecret])
 
-  def treasurySecrets(role: Role, epochId: Long): Set[TreasurySecret] =
-    treasurySecrets(epochId).filter(_.role == role)
+  def treasurySigningSecrets(epochId: Long): Set[TreasurySigningSecret] =
+    treasurySecrets(epochId).collect {case s: TreasurySigningSecret => s}
 
-  def treasuryPubKeys(role: Role, epochId: Long): Set[PubKey] =
-    treasurySecrets(role, epochId).map(_.pubKey)
+  def treasuryCommitteeSecrets(epochId: Long): Set[TreasuryCommitteeSecret] =
+    treasurySecrets(epochId).collect {case s: TreasuryCommitteeSecret => s}
 
-  // TODO: maybe add treasurySecretbyPubKey(pubKey, epochId) for more effective search
-  def treasurySecretbyPubKey(pubKey: PubKey): Option[TreasurySecret] =
-    treasurySecrets.flatMap(_._2).find(s => s.pubKey.equals(pubKey))
+  def treasurySigningSecrets(role: Role, epochId: Long): Set[TreasurySigningSecret] =
+    treasurySigningSecrets(epochId).filter(_.role == role)
 
-  def generateNewTreasurySecret(role: Role, epochId: Long): PubKey = {
+  def treasurySigningPubKeys(role: Role, epochId: Long): Set[PublicKey25519Proposition] =
+    treasurySigningSecrets(role, epochId).map(_.privKey.publicImage)
+
+  def treasurySigningSecretByPubKey(epochId: Long, pubKey: PublicKey25519Proposition): Option[TreasurySigningSecret] =
+    treasurySigningSecrets(epochId).find(s => s.privKey.publicImage.equals(pubKey))
+
+  def generateNewTreasurySigningSecret(role: Role, epochId: Long): PublicKey25519Proposition = {
+    val prevSigningSecrets = treasurySigningSecrets(epochId)
+    val nonce: Array[Byte] = Bytes.concat(Longs.toByteArray(epochId), Ints.toByteArray(prevSigningSecrets.size))
+    val s = Blake2b256(seed.arr ++ nonce)
+    val (priv, _) = PrivateKey25519Companion.generateKeys(s)
+    val newSecret = TreasurySigningSecret(role, priv, epochId)
+    val allSecrets: Set[TreasurySecret] = Set(newSecret) ++ treasurySecrets(epochId)
+
+    treasuryStore.update(ByteArrayWrapper(priv.bytes),
+      Seq(),
+      Seq(ByteArrayWrapper(Longs.toByteArray(epochId)) -> ByteArrayWrapper(TreasurySecretSerializer.batchToBytes(allSecrets.toSeq))))
+
+    newSecret.privKey.publicImage
+  }
+
+  def generateNewTreasuryCommitteeSecret(epochId: Long): PubKey = {
     val prevTrSecrets = treasurySecrets(epochId)
     val (priv, pub) = TreasuryManager.cs.createKeyPair // TODO: keys should be generated from on a particular seed that includes role,epochId,nonce
-    val newTrSecret = TreasurySecret(role, epochId, priv, pub)
+    val newTrSecret = TreasuryCommitteeSecret(priv, pub, epochId)
     val allTrSecrets: Set[TreasurySecret] = Set(newTrSecret) ++ prevTrSecrets
     treasuryStore.update(ByteArrayWrapper(priv.toByteArray),
       Seq(),
-      Seq(ByteArrayWrapper(Longs.toByteArray(epochId)) -> ByteArrayWrapper(TreasurySecretCompanion.batchToBytes(allTrSecrets.toSeq))))
+      Seq(ByteArrayWrapper(Longs.toByteArray(epochId)) -> ByteArrayWrapper(TreasurySecretSerializer.batchToBytes(allTrSecrets.toSeq))))
 
     newTrSecret.pubKey
   }
@@ -208,51 +231,5 @@ object HWallet {
     initialBlocks.foldLeft(readOrGenerate(settings).generateNewSecret()) { (a, b) =>
       a.scanPersistent(b)
     }
-  }
-}
-
-case class TreasurySecret(role: Role, epochId: Long, privKey: PrivKey, pubKey: PubKey)
-
-object TreasurySecretCompanion extends Serializer[TreasurySecret] {
-
-  def batchToBytes(batch: Seq[TreasurySecret]): Array[Byte] = {
-    batch.foldLeft(Array[Byte]()) { case (acc, s) =>
-      val bytes = toBytes(s)
-      Bytes.concat(acc, Ints.toByteArray(bytes.length), bytes)
-    }
-  }
-
-  //@tailrec
-  def parseBatch(bytes: Array[Byte]): List[TreasurySecret] =
-    if (bytes.length < 4) List()
-    else {
-      val size = Ints.fromByteArray(bytes.slice(0,4))
-      parseBytes(bytes.slice(4, size+4)) match {
-        case Success(s) => s :: parseBatch(bytes.drop(size+4))
-        case Failure(_) => parseBatch(bytes.drop(size+4))
-      }
-    }
-
-  def toBytes(s: TreasurySecret): Array[Byte] = {
-    val privBytes = s.privKey.toByteArray
-    val pubBytes = s.pubKey.getEncoded(true)
-    Bytes.concat(
-      Array(s.role.id.toByte),
-      Longs.toByteArray(s.epochId),
-      Ints.toByteArray(privBytes.length),
-      privBytes,
-      Ints.toByteArray(pubBytes.length),
-      pubBytes)
-  }
-
-  def parseBytes(bytes: Array[Byte]): Try[TreasurySecret] = Try {
-    val role: Role = Role(bytes(0))
-    val epochID = Longs.fromByteArray(bytes.slice(1,9))
-    val privSize = Ints.fromByteArray(bytes.slice(9,13))
-    val privKey = new PrivKey(bytes.slice(13,privSize+13))
-    val pubSize = Ints.fromByteArray(bytes.slice(privSize+13,privSize+17))
-    val pubKey = TreasuryManager.cs.decodePoint(bytes.slice(privSize+17,privSize+17+pubSize))
-
-    TreasurySecret(role, epochID, privKey, pubKey)
   }
 }

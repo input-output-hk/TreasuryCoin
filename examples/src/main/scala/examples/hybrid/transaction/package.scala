@@ -6,6 +6,7 @@ package object transaction {
 
   /* Treasury transaction types. */
   val RegisterTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 50.toByte
-  val BallotTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 51.toByte
-  val ProposalTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 52.toByte
+  val CommitteeRegisterTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 51.toByte
+  val BallotTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 61.toByte
+  val ProposalTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 62.toByte
 }

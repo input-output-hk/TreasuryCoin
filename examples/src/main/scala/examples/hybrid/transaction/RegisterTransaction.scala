@@ -10,15 +10,18 @@ import io.circe.Json
 import io.circe.syntax._
 import scorex.core.ModifierTypeId
 import scorex.core.serialization.Serializer
+import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.crypto.encode.Base58
+import scorex.crypto.signatures.{Curve25519, PublicKey}
 import treasury.crypto.core.{Cryptosystem, KeyPair, PubKey}
 
 import scala.util.Try
 
 case class RegisterTransaction(role: Role,
-                               pubKey: PubKey,
+                               pubKey: PublicKey25519Proposition,
                                epochID: Long,
                                override val timestamp: Long) extends TreasuryTransaction(timestamp) {
+  require(role == Role.Voter || role == Role.Expert)
 
   override type M = SimpleBoxTransaction
 
@@ -33,7 +36,7 @@ case class RegisterTransaction(role: Role,
       Longs.toByteArray(fee))
 
     Bytes.concat(Ints.toByteArray(role.id),
-      pubKey.getEncoded(true),
+      pubKey.bytes,
       Longs.toByteArray(epochID),
       superBytes)
   }
@@ -54,7 +57,7 @@ object RegisterTransaction {
   }
 
   def apply(role: Role,
-            pubKey: PubKey,
+            pubKey: PublicKey25519Proposition,
             epochID: Long,
             timestamp: Long): RegisterTransaction = {
     new RegisterTransaction(role, pubKey, epochID, timestamp)
@@ -63,7 +66,7 @@ object RegisterTransaction {
   def create(w: HWallet,
              role: Role,
              epochID: Long): Try[RegisterTransaction] = Try {
-    val pubKey = w.generateNewTreasurySecret(role, epochID)
+    val pubKey = w.generateNewTreasurySigningSecret(role, epochID)
     val timestamp = System.currentTimeMillis()
     RegisterTransaction(role, pubKey, epochID, timestamp)
   }
@@ -72,11 +75,9 @@ object RegisterTransaction {
 object RegisterTransactionCompanion extends Serializer[RegisterTransaction] {
 
   def toBytes(t: RegisterTransaction): Array[Byte] = {
-    val keyBytes = t.pubKey.getEncoded(true)
     Bytes.concat(
       Array(t.role.id.toByte),
-      Ints.toByteArray(keyBytes.length),
-      keyBytes,
+      t.pubKey.bytes,
       Longs.toByteArray(t.epochID),
       Longs.toByteArray(t.timestamp)
     )
@@ -84,9 +85,8 @@ object RegisterTransactionCompanion extends Serializer[RegisterTransaction] {
 
   def parseBytes(bytes: Array[Byte]): Try[RegisterTransaction] = Try {
     val role: Role = Role(bytes(0))
-    val keySize = Ints.fromByteArray(bytes.slice(1,5))
-    val pubKey = TreasuryManager.cs.decodePoint(bytes.slice(5,keySize+5))
-    val s = 5+keySize
+    val pubKey = PublicKey25519Proposition(PublicKey @@ bytes.slice(1, Curve25519.KeyLength+1))
+    val s = 1+Curve25519.KeyLength
     val epochID = Longs.fromByteArray(bytes.slice(s,s+8))
     val timestamp = Longs.fromByteArray(bytes.slice(s+8,s+16))
 

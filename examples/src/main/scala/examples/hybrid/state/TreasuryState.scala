@@ -7,8 +7,9 @@ import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.transaction.RegisterTransaction.Role
 import examples.hybrid.transaction.RegisterTransaction.Role.Role
-import examples.hybrid.transaction.{BallotTransaction, ProposalTransaction, RegisterTransaction, TreasuryTransaction}
+import examples.hybrid.transaction._
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
+import scorex.core.utils.ScorexLogging
 import scorex.core.{ModifierId, VersionTag}
 import treasury.crypto.core.PubKey
 import treasury.crypto.voting.ballots.{ExpertBallot, VoterBallot}
@@ -26,29 +27,31 @@ import scala.util.{Success, Try}
   * just started or block is rolled back, or new epoch begun)
   */
 
-case class TreasuryState(epochNum: Int) {
+case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   case class Proposal(name: String, requestedSum: Value, recipient: PublicKey25519Proposition)
 
   private val cs = TreasuryManager.cs
 
   private var version: VersionTag = VersionTag @@ (ModifierId @@ Array.fill(32)(0: Byte))
-  private var committeePubKeys: List[PubKey] = List()
-  private var expertsPubKeys: List[PubKey] = List()
-  private var votersPubKeys: List[PubKey] = List()
+  private var committeePubKeys: List[(PublicKey25519Proposition, PubKey)] = List()
+  private var expertsPubKeys: List[PublicKey25519Proposition] = List()
+  private var votersPubKeys: List[PublicKey25519Proposition] = List()
   private var proposals: List[Proposal] = List()
   private var sharedPublicKey: Option[PubKey] = None
   private var votersBallots: Map[Int, Seq[VoterBallot]] = Map() // voterId -> Seq(ballot)
   private var expertsBallots: Map[Int, Seq[ExpertBallot]] = Map() // expertId -> Seq(ballot)
 
-  def getKeys(role: Role) = role match {
-    case Role.Committee => getCommitteePubKeys
-    case Role.Expert => getExpertsPubKeys
-    case Role.Voter => getVotersPubKeys
+  def getSigningKeys(role: Role): List[PublicKey25519Proposition] = role match {
+    case Role.Committee => getCommitteeSigningKeys
+    case Role.Expert => getExpertsSigningKeys
+    case Role.Voter => getVotersSigningKeys
   }
-  def getCommitteePubKeys = committeePubKeys
-  def getExpertsPubKeys = expertsPubKeys
-  def getVotersPubKeys = votersPubKeys
+  def getCommitteeSigningKeys = committeePubKeys.map(_._1)
+  def getCommitteeProxyKeys = committeePubKeys.map(_._2)
+  def getExpertsSigningKeys = expertsPubKeys
+  def getVotersSigningKeys = votersPubKeys
+
   def getProposals = proposals
   def getSharedPubKey = sharedPublicKey
   def getVotersBallots = votersBallots
@@ -57,10 +60,12 @@ case class TreasuryState(epochNum: Int) {
 
   protected def apply(tx: TreasuryTransaction): Try[Unit] = tx match {
       case t: RegisterTransaction => Try { t.role match {
-        case Role.Committee => committeePubKeys = committeePubKeys :+ t.pubKey
         case Role.Expert => expertsPubKeys = expertsPubKeys :+ t.pubKey
         case Role.Voter => votersPubKeys = votersPubKeys :+ t.pubKey
       }}
+      case t: CommitteeRegisterTransaction => Try {
+        committeePubKeys = committeePubKeys :+ (t.signingPubKey, t.proxyPubKey)
+      }
       case t: ProposalTransaction => Try {
         proposals = proposals :+ Proposal(t.name, t.requestedSum, t.recipient)
       }
@@ -89,8 +94,10 @@ case class TreasuryState(epochNum: Int) {
     val epochHeight = history.storage.heightOf(block.id).get.toInt % TreasuryManager.EPOCH_LEN
     epochHeight match {
       case TreasuryManager.DISTR_KEY_GEN_RANGE.end =>
-        require(committeePubKeys.nonEmpty, "No committee members found!")
-        sharedPublicKey = Some(committeePubKeys.foldLeft(cs.infinityPoint)((sum,next) => sum.add(next)))
+        if (committeePubKeys.nonEmpty)
+          sharedPublicKey = Some(committeePubKeys.map(_._2).foldLeft(cs.infinityPoint)((sum,next) => sum.add(next)))
+        else
+          log.warn("No committee members found!")
       case _ =>
     }
 

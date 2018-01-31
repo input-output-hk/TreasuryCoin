@@ -9,13 +9,15 @@ import io.circe.Json
 import io.circe.syntax._
 import scorex.core.ModifierTypeId
 import scorex.core.serialization.Serializer
+import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.crypto.encode.Base58
+import scorex.crypto.signatures.{Curve25519, PublicKey}
 import treasury.crypto.core.PubKey
 import treasury.crypto.voting.ballots.{Ballot, BallotCompanion}
 
 import scala.util.Try
 
-case class BallotTransaction(pubKey: PubKey, // previously registered voter/expert public key. TODO: Probably we can include only id instead of the whole key
+case class BallotTransaction(pubKey: PublicKey25519Proposition, // previously registered voter/expert public key. TODO: Probably we can include only id instead of the whole key
                              voterType: VoterType,
                              ballots: Seq[Ballot],
                              override val epochID: Long,
@@ -34,7 +36,7 @@ case class BallotTransaction(pubKey: PubKey, // previously registered voter/expe
       Longs.toByteArray(fee))
 
     Bytes.concat(
-      pubKey.getEncoded(true),
+      pubKey.bytes,
       Ints.toByteArray(voterType.id),
       ballots.foldLeft(Array[Byte]())((a,b) => Bytes.concat(a, b.bytes)),
       Longs.toByteArray(epochID),
@@ -57,7 +59,7 @@ object BallotTransaction {
 
   val TransactionTypeId: scorex.core.ModifierTypeId = BallotTxTypeId
 
-  def apply(pubKey: PubKey,
+  def apply(pubKey: PublicKey25519Proposition,
             voterType: VoterType,
             ballots: Seq[Ballot],
             epochID: Long,
@@ -65,7 +67,7 @@ object BallotTransaction {
     new BallotTransaction(pubKey, voterType, ballots, epochID, timestamp)
   }
 
-  def create(pubKey: PubKey,
+  def create(pubKey: PublicKey25519Proposition,
              voterType: VoterType,
              ballots: Seq[Ballot],
              epochID: Long): Try[BallotTransaction] = Try {
@@ -76,11 +78,9 @@ object BallotTransaction {
 
 object BallotTransactionCompanion extends Serializer[BallotTransaction] {
   def toBytes(t: BallotTransaction): Array[Byte] = {
-    val keyBytes = t.pubKey.getEncoded(true)
     val ballotBytes = t.ballots.foldLeft(Array[Byte]())((a,b) => Bytes.concat(a, b.bytes))
     Bytes.concat(
-      Ints.toByteArray(keyBytes.length),
-      keyBytes,
+      t.pubKey.bytes,
       Array(t.voterType.id.toByte),
       Ints.toByteArray(t.ballots.length),
       ballotBytes,
@@ -90,10 +90,9 @@ object BallotTransactionCompanion extends Serializer[BallotTransaction] {
   }
 
   def parseBytes(bytes: Array[Byte]): Try[BallotTransaction] = Try {
-    val keyBytesLen = Ints.fromByteArray(bytes.slice(0,4))
-    val pubKey = TreasuryManager.cs.decodePoint(bytes.slice(4,keyBytesLen+4))
-    val voterType = VoterType(bytes(4+keyBytesLen))
-    var s = 4 + keyBytesLen + 1
+    val pubKey = PublicKey25519Proposition(PublicKey @@ bytes.slice(0, Curve25519.KeyLength))
+    val voterType = VoterType(bytes(Curve25519.KeyLength))
+    var s = Curve25519.KeyLength + 1
 
     val ballotsSize = Ints.fromByteArray(bytes.slice(s,s+4))
     s = s + 4
