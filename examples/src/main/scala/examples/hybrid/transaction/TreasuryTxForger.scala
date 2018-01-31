@@ -76,7 +76,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       val myAlreadyRegistredKeys = view.trState.getSigningKeys(role).filter(k => myStoredKeys.contains(k))
       val myPendingRegistrationKeys = view.pool.unconfirmed.map(_._2).filter {
         case tx: RegisterTransaction => tx.role == role && myStoredKeys.contains(tx.pubKey)
-        case tx: CommitteeRegisterTransaction => Role.Committee == role && myStoredKeys.contains(tx.signingPubKey)
+        case tx: CommitteeRegisterTransaction => Role.Committee == role && myStoredKeys.contains(tx.pubKey)
         case _ => false
       }
 
@@ -111,7 +111,8 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       for (i <- view.trState.getProposals.indices)
         ballots = voter.produceVote(i, VoteCases.Abstain) :: ballots
 
-      Seq(BallotTransaction.create(myVoterKeys.head, VoterType.Voter, ballots, view.trState.epochNum).get)
+      val privKey = view.vault.treasurySigningSecretByPubKey(view.trState.epochNum, myVoterKeys.head).get.privKey
+      Seq(BallotTransaction.create(privKey, VoterType.Voter, ballots, view.trState.epochNum).get)
     } else Seq()
 
     val myExpertKeys = view.vault.treasurySigningPubKeys(Role.Expert, view.trState.epochNum)
@@ -124,7 +125,8 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       for (i <- view.trState.getProposals.indices)
         ballots = expert.produceVote(i, VoteCases.Abstain) :: ballots
 
-      Seq(BallotTransaction.create(myExpertKeys.head, VoterType.Expert, ballots, view.trState.epochNum).get)
+      val privKey = view.vault.treasurySigningSecretByPubKey(view.trState.epochNum, myExpertKeys.head).get.privKey
+      Seq(BallotTransaction.create(privKey, VoterType.Expert, ballots, view.trState.epochNum).get)
     } else Seq()
 
     // check that txs are valid and haven't been submitted before

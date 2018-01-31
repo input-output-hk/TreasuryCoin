@@ -64,7 +64,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         case Role.Voter => votersPubKeys = votersPubKeys :+ t.pubKey
       }}
       case t: CommitteeRegisterTransaction => Try {
-        committeePubKeys = committeePubKeys :+ (t.signingPubKey, t.proxyPubKey)
+        committeePubKeys = committeePubKeys :+ (t.pubKey, t.proxyPubKey)
       }
       case t: ProposalTransaction => Try {
         proposals = proposals :+ Proposal(t.name, t.requestedSum, t.recipient)

@@ -9,12 +9,20 @@ import scorex.core.transaction.proof.Signature25519
 
 /**
   * A base class for all transactions related to treasury subsystem
-  * @param signature signature with previously registered pub key. Treasury txs should be created only by registered entities (voters/experts/committee members)
-  * @param timestamp
   */
-abstract class TreasuryTransaction(/*signature: Signature25519,*/
-                                   timestamp: Long)
+abstract class TreasuryTransaction(timestamp: Long)
   extends SimpleBoxTransaction(IndexedSeq(), IndexedSeq(), IndexedSeq(), 0L, timestamp) {
 
-  val epochID: Long
+  def epochID: Long
+}
+
+/**
+  *  A base class for all treasury transactions that should be signed by a previously registered key (RegisterTransaction, BallotTransaction, etc.)
+  *    pubKey - previously registered public key that identifies a creator of a transaction
+  *    signature - signature of the transaction that has been made with pubKey
+  */
+abstract class SignedTreasuryTransaction(timestamp: Long) extends TreasuryTransaction(timestamp) {
+
+  def pubKey: PublicKey25519Proposition
+  def signature: Signature25519
 }

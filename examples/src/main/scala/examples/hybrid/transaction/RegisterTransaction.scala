@@ -10,15 +10,18 @@ import io.circe.syntax._
 import scorex.core.ModifierTypeId
 import scorex.core.serialization.Serializer
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
+import scorex.core.transaction.proof.Signature25519
+import scorex.core.transaction.state.PrivateKey25519Companion
 import scorex.crypto.encode.Base58
-import scorex.crypto.signatures.{Curve25519, PublicKey}
+import scorex.crypto.signatures.{Curve25519, PublicKey, Signature}
 
 import scala.util.Try
 
 case class RegisterTransaction(role: Role,
-                               pubKey: PublicKey25519Proposition,
-                               epochID: Long,
-                               override val timestamp: Long) extends TreasuryTransaction(timestamp) {
+                               override val epochID: Long,
+                               override val pubKey: PublicKey25519Proposition,
+                               override val signature: Signature25519,
+                               override val timestamp: Long) extends SignedTreasuryTransaction(timestamp) {
   require(role == Role.Voter || role == Role.Expert)
 
   override type M = SimpleBoxTransaction
@@ -41,7 +44,10 @@ case class RegisterTransaction(role: Role,
 
   override lazy val json: Json = Map("id" -> Base58.encode(id).asJson).asJson //TODO
 
-  override lazy val semanticValidity: Try[Unit] = Try(Unit) //TODO
+  override lazy val semanticValidity: Try[Unit] = Try {
+    require(timestamp >= 0)
+    require(signature.isValid(pubKey, messageToSign))
+  }
 
   override def toString: String = s"RegisterTransaction(${json.noSpaces})"
 }
@@ -49,19 +55,18 @@ case class RegisterTransaction(role: Role,
 object RegisterTransaction {
   val TransactionTypeId: scorex.core.ModifierTypeId = RegisterTxTypeId
 
-  def apply(role: Role,
-            pubKey: PublicKey25519Proposition,
-            epochID: Long,
-            timestamp: Long): RegisterTransaction = {
-    new RegisterTransaction(role, pubKey, epochID, timestamp)
-  }
-
   def create(w: HWallet,
              role: Role,
              epochID: Long): Try[RegisterTransaction] = Try {
     val pubKey = w.generateNewTreasurySigningSecret(role, epochID)
+    val privKey = w.treasurySigningSecretByPubKey(epochID, pubKey).get.privKey
     val timestamp = System.currentTimeMillis()
-    RegisterTransaction(role, pubKey, epochID, timestamp)
+
+    val fakeSig = Signature25519(Signature @@ Array[Byte]())
+    val unsigned = RegisterTransaction(role, epochID, pubKey, fakeSig, timestamp)
+    val sig = PrivateKey25519Companion.sign(privKey, unsigned.messageToSign)
+
+    RegisterTransaction(role, epochID, pubKey, sig, timestamp)
   }
 }
 
@@ -70,19 +75,22 @@ object RegisterTransactionCompanion extends Serializer[RegisterTransaction] {
   def toBytes(t: RegisterTransaction): Array[Byte] = {
     Bytes.concat(
       Array(t.role.id.toByte),
-      t.pubKey.bytes,
       Longs.toByteArray(t.epochID),
+      t.pubKey.bytes,
+      t.signature.bytes,
       Longs.toByteArray(t.timestamp)
     )
   }
 
   def parseBytes(bytes: Array[Byte]): Try[RegisterTransaction] = Try {
     val role: Role = Role(bytes(0))
-    val pubKey = PublicKey25519Proposition(PublicKey @@ bytes.slice(1, Curve25519.KeyLength+1))
-    val s = 1+Curve25519.KeyLength
-    val epochID = Longs.fromByteArray(bytes.slice(s,s+8))
-    val timestamp = Longs.fromByteArray(bytes.slice(s+8,s+16))
+    val epochID = Longs.fromByteArray(bytes.slice(1,9))
+    val pubKey = PublicKey25519Proposition(PublicKey @@ bytes.slice(9, Curve25519.KeyLength+9))
+    var s = 9+Curve25519.KeyLength
+    val sig = Signature25519(Signature @@ bytes.slice(s, s+Curve25519.SignatureLength))
+    s = s + Curve25519.SignatureLength
+    val timestamp = Longs.fromByteArray(bytes.slice(s,s+8))
 
-    RegisterTransaction(role, pubKey, epochID, timestamp)
+    RegisterTransaction(role, epochID, pubKey, sig, timestamp)
   }
 }
