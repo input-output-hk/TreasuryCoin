@@ -2,9 +2,8 @@ package examples.hybrid.transaction
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
-import examples.hybrid.TreasuryManager
-import examples.hybrid.transaction.RegisterTransaction.Role
-import examples.hybrid.transaction.RegisterTransaction.Role.Role
+import examples.hybrid.TreasuryManager.Role
+import examples.hybrid.TreasuryManager.Role.Role
 import examples.hybrid.wallet.HWallet
 import io.circe.Json
 import io.circe.syntax._
@@ -13,7 +12,6 @@ import scorex.core.serialization.Serializer
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.crypto.encode.Base58
 import scorex.crypto.signatures.{Curve25519, PublicKey}
-import treasury.crypto.core.{Cryptosystem, KeyPair, PubKey}
 
 import scala.util.Try
 
@@ -50,11 +48,6 @@ case class RegisterTransaction(role: Role,
 
 object RegisterTransaction {
   val TransactionTypeId: scorex.core.ModifierTypeId = RegisterTxTypeId
-
-  object Role extends Enumeration {
-    type Role = Value
-    val Committee, Expert, Voter = Value
-  }
 
   def apply(role: Role,
             pubKey: PublicKey25519Proposition,

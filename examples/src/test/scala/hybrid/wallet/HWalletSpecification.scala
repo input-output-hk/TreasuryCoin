@@ -2,8 +2,8 @@ package hybrid.wallet
 
 import examples.curvepos.Value
 import examples.hybrid.TreasuryManager
+import examples.hybrid.TreasuryManager.Role
 import examples.hybrid.blocks.PosBlock
-import examples.hybrid.transaction.RegisterTransaction.Role
 import examples.hybrid.wallet._
 import hybrid.HybridGenerators
 import org.scalatest.prop.{GeneratorDrivenPropertyChecks, PropertyChecks}

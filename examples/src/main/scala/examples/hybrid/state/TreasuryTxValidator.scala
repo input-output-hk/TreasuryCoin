@@ -2,12 +2,12 @@ package examples.hybrid.state
 
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
 import examples.hybrid.TreasuryManager
+import examples.hybrid.TreasuryManager.Role
 import examples.hybrid.transaction.BallotTransaction.VoterType
-import examples.hybrid.transaction.RegisterTransaction.Role
 import examples.hybrid.transaction._
 import treasury.crypto.core.One
-import treasury.crypto.voting.{Expert, RegularVoter, Voter}
 import treasury.crypto.voting.ballots.{ExpertBallot, VoterBallot}
+import treasury.crypto.voting.{Expert, RegularVoter, Voter}
 
 import scala.util.{Success, Try}
 

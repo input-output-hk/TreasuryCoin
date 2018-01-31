@@ -13,4 +13,9 @@ object TreasuryManager {
   val DISTR_KEY_GEN_RANGE =       30 until 35
   val VOTING_RANGE =              35 until 200
   val VOTING_DECR_RANGE =         200 until 500
+
+  object Role extends Enumeration {
+    type Role = Value
+    val Committee, Expert, Voter = Value
+  }
 }

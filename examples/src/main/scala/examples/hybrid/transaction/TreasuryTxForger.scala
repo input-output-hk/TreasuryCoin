@@ -4,19 +4,19 @@ import akka.actor.{Actor, ActorRef}
 import examples.commons.TreasuryMemPool
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.TreasuryManager
+import examples.hybrid.TreasuryManager.Role
+import examples.hybrid.TreasuryManager.Role.Role
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.settings.TreasurySettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryTxValidator}
 import examples.hybrid.transaction.BallotTransaction.VoterType
-import examples.hybrid.transaction.RegisterTransaction.Role
-import examples.hybrid.transaction.RegisterTransaction.Role.Role
 import examples.hybrid.wallet.HWallet
 import scorex.core.LocalInterface.LocallyGeneratedTransaction
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 import treasury.crypto.core.{One, VoteCases}
-import treasury.crypto.voting.{Expert, RegularVoter}
 import treasury.crypto.voting.ballots.Ballot
+import treasury.crypto.voting.{Expert, RegularVoter}
 
 
 /**

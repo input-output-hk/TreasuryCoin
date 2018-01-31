@@ -2,11 +2,11 @@ package examples.hybrid.state
 
 import examples.curvepos.Value
 import examples.hybrid.TreasuryManager
+import examples.hybrid.TreasuryManager.Role
+import examples.hybrid.TreasuryManager.Role.Role
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.BallotTransaction.VoterType
-import examples.hybrid.transaction.RegisterTransaction.Role
-import examples.hybrid.transaction.RegisterTransaction.Role.Role
 import examples.hybrid.transaction._
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
@@ -14,7 +14,7 @@ import scorex.core.{ModifierId, VersionTag}
 import treasury.crypto.core.PubKey
 import treasury.crypto.voting.ballots.{ExpertBallot, VoterBallot}
 
-import scala.util.{Success, Try}
+import scala.util.Try
 
 /**
   * Holds the current state of the treasury epoch

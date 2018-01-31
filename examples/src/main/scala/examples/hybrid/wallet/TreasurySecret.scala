@@ -2,8 +2,8 @@ package examples.hybrid.wallet
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.hybrid.TreasuryManager
-import examples.hybrid.transaction.RegisterTransaction.Role
-import examples.hybrid.transaction.RegisterTransaction.Role.Role
+import examples.hybrid.TreasuryManager.Role
+import examples.hybrid.TreasuryManager.Role.Role
 import examples.hybrid.wallet.TreasurySecret.Type
 import examples.hybrid.wallet.TreasurySecret.Type.Type
 import scorex.core.serialization.Serializer

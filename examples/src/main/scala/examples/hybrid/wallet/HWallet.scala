@@ -6,15 +6,11 @@ import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.commons.SimpleBoxTransaction
 import examples.curvepos.transaction.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer}
 import examples.hybrid.TreasuryManager
+import examples.hybrid.TreasuryManager.Role.Role
 import examples.hybrid.blocks.HybridBlock
 import examples.hybrid.state.HBoxStoredState
-import examples.hybrid.transaction.RegisterTransaction.Role
-import examples.hybrid.transaction.RegisterTransaction.Role.{Role, Value}
-import examples.hybrid.wallet.TreasurySecret.Type
-import examples.hybrid.wallet.TreasurySecret.Type.{Type}
 import io.iohk.iodb.{ByteArrayWrapper, LSMStore}
 import scorex.core.VersionTag
-import scorex.core.serialization.Serializer
 import scorex.core.settings.ScorexSettings
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.transaction.state.{PrivateKey25519, PrivateKey25519Companion, PrivateKey25519Serializer}
@@ -22,11 +18,9 @@ import scorex.core.transaction.wallet.{Wallet, WalletBox, WalletBoxSerializer, W
 import scorex.core.utils.{ByteStr, ScorexLogging}
 import scorex.crypto.encode.Base58
 import scorex.crypto.hash.Blake2b256
-import scorex.crypto.signatures.{Curve25519, PublicKey}
-import treasury.crypto.core.{PrivKey, PubKey}
+import treasury.crypto.core.PubKey
 
-import scala.annotation.tailrec
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 
 case class HWallet(seed: ByteStr, store: LSMStore, treasuryStore: LSMStore)
