@@ -3,9 +3,8 @@ package examples.hybrid.state
 import java.io.File
 
 import com.google.common.primitives.Longs
-import examples.commons.SimpleBoxTransaction
-import examples.curvepos.transaction.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer}
-import examples.curvepos.{Nonce, Value}
+import examples.commons.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer, SimpleBoxTransaction}
+import examples.commons.{Nonce, Value}
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import io.iohk.iodb.{ByteArrayWrapper, LSMStore}
 import scorex.core.VersionTag
@@ -68,17 +67,16 @@ case class HBoxStoredState(store: LSMStore, override val version: VersionTag) ex
   override def applyChanges(changes: BoxStateChanges[PublicKey25519Proposition, PublicKey25519NoncedBox],
                             newVersion: VersionTag): Try[HBoxStoredState] = Try {
     val boxIdsToRemove = changes.toRemove.map(_.boxId).map(ByteArrayWrapper.apply)
+      .ensuring(_.forall(i => closedBox(i.data).isDefined) || store.lastVersionID.isEmpty)
     val boxesToAdd = changes.toAppend.map(_.box).map(b => ByteArrayWrapper(b.id) -> ByteArrayWrapper(b.bytes))
 
     log.trace(s"Update HBoxStoredState from version $lastVersionString to version ${Base58.encode(newVersion)}. " +
       s"Removing boxes with ids ${boxIdsToRemove.map(b => Base58.encode(b.data))}, " +
       s"adding boxes ${boxesToAdd.map(b => Base58.encode(b._1.data))}")
-    assert(store.lastVersionID.isEmpty || boxIdsToRemove.forall(i => closedBox(i.data).isDefined))
     store.update(ByteArrayWrapper(newVersion), boxIdsToRemove, boxesToAdd)
-    val newSt = HBoxStoredState(store, newVersion)
-    assert(boxIdsToRemove.forall(box => newSt.closedBox(box.data).isEmpty), s"Removed box is still in state")
-    newSt
-  } ensuring { r => if (r.isSuccess) { r.get.version sameElements newVersion } else true }
+    HBoxStoredState(store, newVersion)
+      .ensuring(st => boxIdsToRemove.forall(box => st.closedBox(box.data).isEmpty), s"Removed box is still in state")
+  } ensuring { r => r.toOption.forall(_.version sameElements newVersion )}
 
   override def maxRollbackDepth: Int = store.keepVersions
 

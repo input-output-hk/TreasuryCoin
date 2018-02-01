@@ -1,7 +1,6 @@
 package examples.commons
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
-import examples.curvepos.{Nonce, Value}
 import examples.hybrid.transaction
 import examples.hybrid.wallet.HWallet
 import io.circe.Json

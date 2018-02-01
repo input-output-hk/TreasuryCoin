@@ -1,8 +1,7 @@
 package examples.hybrid.mining
 
 import akka.actor.{Actor, ActorRef}
-import examples.commons.{SimpleBoxTransaction, TreasuryMemPool}
-import examples.curvepos.transaction.PublicKey25519NoncedBox
+import examples.commons.{PublicKey25519NoncedBox, SimpleBoxTransaction, TreasuryMemPool}
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory

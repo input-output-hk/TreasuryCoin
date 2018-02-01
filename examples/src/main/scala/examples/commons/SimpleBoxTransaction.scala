@@ -1,16 +1,14 @@
 package examples.commons
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
-import examples.curvepos.{Nonce, Value}
-import examples.curvepos.transaction.PublicKey25519NoncedBox
 import examples.hybrid.transaction._
-import scorex.core.{ModifierId, ModifierTypeId}
 import scorex.core.serialization.Serializer
-import scorex.core.transaction.{BoxTransaction, Transaction}
+import scorex.core.transaction.BoxTransaction
 import scorex.core.transaction.account.PublicKeyNoncedBox
 import scorex.core.transaction.box.BoxUnlocker
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.transaction.proof.{Proof, Signature25519}
+import scorex.core.{ModifierId, ModifierTypeId}
 import scorex.crypto.hash.Blake2b256
 
 import scala.util.{Failure, Try}

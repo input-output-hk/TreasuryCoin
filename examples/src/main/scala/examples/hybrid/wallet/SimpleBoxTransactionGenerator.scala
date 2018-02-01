@@ -1,8 +1,7 @@
 package examples.hybrid.wallet
 
 import akka.actor.{Actor, ActorRef}
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTx, TreasuryMemPool}
-import examples.curvepos.Value
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTx, TreasuryMemPool, Value}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.HBoxStoredState
 import scorex.core.LocalInterface.LocallyGeneratedTransaction

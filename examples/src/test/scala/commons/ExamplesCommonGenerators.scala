@@ -1,7 +1,6 @@
 package commons
 
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
-import examples.curvepos.{Nonce, Value}
+import examples.commons.{Nonce, SimpleBoxTransaction, SimpleBoxTx, Value}
 import org.scalacheck.Gen
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.transaction.state.PrivateKey25519

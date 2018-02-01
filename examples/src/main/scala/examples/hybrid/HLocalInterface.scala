@@ -33,8 +33,6 @@ class HLocalInterface(override val viewHolderRef: ActorRef,
 
   override protected def onNewSurface(newSurface: Seq[ModifierId]): Unit = {}
 
-  override protected def onChangedState(isRollback: Boolean, newVersion: VersionTag): Unit = {}
-
   override protected def onRollbackFailed(): Unit = {
     log.error("Too deep rollback occurred!")
   }

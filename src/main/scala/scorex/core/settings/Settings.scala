@@ -3,48 +3,44 @@ package scorex.core.settings
 import java.io.File
 import java.net.InetSocketAddress
 
-import com.github.swagger.akka.model.Info
 import com.typesafe.config.{Config, ConfigFactory}
-import scorex.core.utils.{ByteStr, ScorexLogging}
+import scorex.core.utils.{ByteStr, NetworkTimeProviderSettings, ScorexLogging}
 import net.ceedubs.ficus.Ficus._
 
 import scala.concurrent.duration._
 import net.ceedubs.ficus.readers.ArbitraryTypeReader._
 
-import scala.util.Random
-
-case class RESTApiSettings(bindAddress: String,
-                           port: Int,
+case class RESTApiSettings(bindAddress: InetSocketAddress,
                            apiKeyHash: Option[String],
                            corsAllowed: Boolean,
-                           timeout: FiniteDuration,
-                           swaggerInfo: Info)
+                           timeout: FiniteDuration)
 
 case class NetworkSettings(nodeName: String,
-                           nodeNonce: Option[Long] = Some(new Random().nextLong()),
                            addedMaxDelay: Option[FiniteDuration],
                            networkChunkSize: Int,
                            localOnly: Boolean,
                            knownPeers: Seq[InetSocketAddress],
-                           bindAddress: String,
+                           bindAddress: InetSocketAddress,
                            maxConnections: Int,
                            connectionTimeout: FiniteDuration,
                            upnpEnabled: Boolean,
                            upnpGatewayTimeout: Option[FiniteDuration],
                            upnpDiscoverTimeout: Option[FiniteDuration],
-                           port: Int,
-                           declaredAddress: Option[String],
+                           declaredAddress: Option[InetSocketAddress],
                            handshakeTimeout: FiniteDuration,
                            deliveryTimeout: FiniteDuration,
                            maxDeliveryChecks: Int,
                            appVersion: String,
                            agentName: String,
                            maxPacketLen: Int,
-                           maxInvObjects: Int)
-
-case class MinerSettings(offlineGeneration: Boolean,
-                         targetBlockDelay: FiniteDuration,
-                         blockGenerationDelay: FiniteDuration)
+                           maxInvObjects: Int,
+                           syncInterval: FiniteDuration,
+                           syncStatusRefresh: FiniteDuration,
+                           syncIntervalStable: FiniteDuration,
+                           syncStatusRefreshStable: FiniteDuration,
+                           syncTimeout: Option[FiniteDuration],
+                           controllerTimeout: Option[FiniteDuration]
+                          )
 
 case class WalletSettings(seed: ByteStr,
                           password: String,
@@ -54,20 +50,20 @@ case class ScorexSettings(dataDir: File,
                           logDir: File,
                           network: NetworkSettings,
                           restApi: RESTApiSettings,
-                          miner: MinerSettings,
-                          wallet: WalletSettings)
+                          wallet: WalletSettings,
+                          ntp: NetworkTimeProviderSettings
+                         )
 
 
-object ScorexSettings extends ScorexLogging {
+object ScorexSettings extends ScorexLogging with SettingsReaders {
 
   protected val configPath: String = "scorex"
 
   def readConfigFromPath(userConfigPath: Option[String], configPath: String): Config = {
-    val maybeConfigFile = for {
-      maybeFilename <- userConfigPath
-      file = new File(maybeFilename)
-      if file.exists
-    } yield file
+
+    val maybeConfigFile: Option[File] = userConfigPath.map(filename => new File(filename)).filter(_.exists())
+      .orElse(userConfigPath.flatMap(filename => Option(getClass.getClassLoader.getResource(filename))).
+        map(r => new File(r.toURI)).filter(_.exists()))
 
     val config = maybeConfigFile match {
       // if no user config is supplied, the library will handle overrides/application/reference automatically

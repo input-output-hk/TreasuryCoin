@@ -1,7 +1,7 @@
 package examples.trimchain.simulation
 
-import examples.commons.SimpleBoxTransaction
-import examples.curvepos.transaction.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer}
+import examples.commons.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer, SimpleBoxTransaction}
+import examples.commons.PublicKey25519NoncedBoxSerializer
 import examples.trimchain.modifiers.{TBlock, TModifier, UtxoSnapshot}
 import examples.trimchain.utxo.PersistentAuthenticatedUtxo.ProverType
 import examples.trimchain.utxo.{AuthenticatedUtxo, PersistentAuthenticatedUtxo}
@@ -65,7 +65,7 @@ case class InMemoryAuthenticatedUtxo(size: Int, proverOpt: Option[ProverType], o
       case _ =>
     }
     mod match {
-      case block: TBlock => block.transactions.foreach (tx => validate (tx).ensuring (_.isSuccess) )
+      case block: TBlock => block.transactions.foreach (tx => validate(tx).get)
       case _ => ;
     }
   }

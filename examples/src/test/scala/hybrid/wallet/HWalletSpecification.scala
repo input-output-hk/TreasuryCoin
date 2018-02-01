@@ -1,8 +1,8 @@
 package hybrid.wallet
 
-import examples.curvepos.Value
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
+import examples.commons.Value
 import examples.hybrid.blocks.PosBlock
 import examples.hybrid.wallet._
 import hybrid.HybridGenerators

@@ -1,6 +1,6 @@
 package hybrid
 
-import examples.commons.SimpleBoxTransaction
+import examples.commons.{SimpleBoxTransaction, TreasuryMemPool}
 import examples.hybrid.blocks.HybridBlock
 import examples.hybrid.history.{HybridHistory, HybridSyncInfo}
 import examples.hybrid.state.HBoxStoredState
@@ -12,4 +12,8 @@ class NodeViewSynchronizerSpec extends NodeViewSynchronizerTests[PublicKey25519P
   HybridBlock,
   HBoxStoredState,
   HybridSyncInfo,
-  HybridHistory] with HybridGenerators
+  HybridHistory,
+  TreasuryMemPool] with HybridGenerators {
+
+  override lazy val memPool: TreasuryMemPool = TreasuryMemPool.emptyPool
+}

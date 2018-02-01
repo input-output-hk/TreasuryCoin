@@ -1,14 +1,11 @@
 package hybrid
 
 import commons.ExamplesCommonGenerators
-import examples.commons.{SimpleBoxTransaction, TreasuryMemPool}
-import examples.curvepos.transaction.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer}
-import examples.curvepos.{Nonce, Value}
+import examples.commons._
 import examples.hybrid.blocks._
 import examples.hybrid.history.HybridSyncInfo
 import examples.hybrid.settings.HybridSettings
 import examples.hybrid.state.HBoxStoredState
-import examples.hybrid.transaction.TreasuryTransaction
 import org.scalacheck.rng.Seed
 import org.scalacheck.{Arbitrary, Gen}
 import scorex.core.block.Block._

@@ -3,8 +3,7 @@ package examples.hybrid.wallet
 import java.io.File
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
-import examples.commons.SimpleBoxTransaction
-import examples.curvepos.transaction.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer}
+import examples.commons.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer, SimpleBoxTransaction}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role.Role
 import examples.hybrid.blocks.HybridBlock

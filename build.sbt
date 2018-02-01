@@ -40,7 +40,8 @@ resolvers += "Sonatype Releases" at "https://oss.sonatype.org/content/repositori
 val circeVersion = "0.8.0"
 
 val networkDependencies = Seq(
-  "com.typesafe.akka" %% "akka-actor" % "2.4.+",
+  "com.typesafe.akka" %% "akka-actor" % "2.5.+",
+  "com.typesafe.akka" %% "akka-stream" % "2.5.+",
   "org.bitlet" % "weupnp" % "0.1.+",
   "commons-net" % "commons-net" % "3.+"
 )
@@ -49,9 +50,8 @@ val apiDependencies = Seq(
   "io.circe" %% "circe-core" % circeVersion,
   "io.circe" %% "circe-generic" % circeVersion,
   "io.circe" %% "circe-parser" % circeVersion,
-  "io.swagger" %% "swagger-scala-module" % "1.0.3",
-  "com.github.swagger-akka-http" %% "swagger-akka-http" % "0.10.0",
-  "com.typesafe.akka" %% "akka-http" % "10.+"
+  "com.typesafe.akka" %% "akka-http" % "10.+",
+  "de.heikoseeberger" %% "akka-http-circe" % "1.18.0"
 )
 
 val loggingDependencies = Seq(
@@ -60,10 +60,11 @@ val loggingDependencies = Seq(
 )
 
 val testingDependencies = Seq(
-  "com.typesafe.akka" %% "akka-testkit" % "2.5.3" % "test",
+  "com.typesafe.akka" %% "akka-testkit" % "2.5.+" % "test",
+  "com.typesafe.akka" %% "akka-http-testkit" % "10.+" % "test",
   "org.scalactic" %% "scalactic" % "3.0.3" % "test",
   "org.scalatest" %% "scalatest" % "3.0.3" % "test",
-  "org.scalacheck" %% "scalacheck" % "1.13.+" % "test",
+  "org.scalacheck" %% "scalacheck" % "1.13.+",
   "net.databinder.dispatch" %% "dispatch-core" % "+" % "test"
 )
 
@@ -162,3 +163,8 @@ pomExtra in ThisBuild :=
         <url>https://github.com/catena2w</url>
       </developer>
     </developers>
+
+
+//FindBugs settings
+
+findbugsReportType := Some(FindbugsReport.PlainHtml)

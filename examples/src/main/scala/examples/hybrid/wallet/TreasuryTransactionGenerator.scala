@@ -1,15 +1,12 @@
 package examples.hybrid.wallet
 
 import akka.actor.{Actor, ActorRef}
-import examples.commons.TreasuryMemPool
-import examples.curvepos.Value
+import examples.commons.{TreasuryMemPool, Value}
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.{HBoxStoredState, TreasuryState}
-import examples.hybrid.transaction.RegisterTransaction.Role
-import examples.hybrid.transaction.{ProposalTransaction, RegisterTransaction, TreasuryTransaction}
+import examples.hybrid.transaction.{ProposalTransaction, TreasuryTransaction}
 import scorex.core.LocalInterface.LocallyGeneratedTransaction
-import scorex.core.NodeViewHolder.{CurrentView, GetDataFromCurrentView}
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 

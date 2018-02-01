@@ -4,9 +4,7 @@ import java.io.{File, FileOutputStream, FileWriter}
 import java.nio.file.{Files, Paths}
 
 import com.google.common.primitives.{Ints, Longs}
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
-import examples.curvepos.{Nonce, Value}
-import examples.curvepos.transaction.PublicKey25519NoncedBox
+import examples.commons._
 import examples.trimchain.core.{Algos, Constants, TicketSerializer}
 import examples.trimchain.modifiers.{BlockHeader, TBlock}
 import io.iohk.iodb.ByteArrayWrapper
@@ -70,8 +68,7 @@ object OneMinerSimulation extends App with Simulators {
 
   var miningHeight = 0
   var miningUtxo = InMemoryAuthenticatedUtxo(genesisBoxes.size, None, defaultId).applyChanges(genesisChanges, defaultId).get
-
-  assert(currentUtxo.rootHash sameElements miningUtxo.rootHash)
+    .ensuring(_.rootHash sameElements currentUtxo.rootHash)
 
   var generatingBoxes: Seq[PublicKey25519NoncedBox] = genesisBoxes
 
