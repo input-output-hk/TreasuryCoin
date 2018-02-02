@@ -1,7 +1,7 @@
 package examples.hybrid.transaction
 
 import akka.actor.{Actor, ActorRef}
-import examples.commons.TreasuryMemPool
+import examples.commons.SimpleBoxTransactionMemPool
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
@@ -34,16 +34,16 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
   private val getRequiredData: GetDataFromCurrentViewWithTreasuryState[HybridHistory,
     HBoxStoredState,
     HWallet,
-    TreasuryMemPool,
+    SimpleBoxTransactionMemPool,
     GeneratorInfo] = {
-    val f: CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] => GeneratorInfo = {
-      view: CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] =>
+    val f: CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool] => GeneratorInfo = {
+      view: CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool] =>
         GeneratorInfo(generate(view))
     }
     GetDataFromCurrentViewWithTreasuryState[HybridHistory,
       HBoxStoredState,
       HWallet,
-      TreasuryMemPool,
+      SimpleBoxTransactionMemPool,
       GeneratorInfo](f)
   }
 
@@ -143,7 +143,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
 
 object TreasuryTxForger {
 
-  type NodeView = CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool]
+  type NodeView = CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool]
 
   case class GeneratorInfo(txs: Seq[TreasuryTransaction])
 

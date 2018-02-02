@@ -1,6 +1,6 @@
 package hybrid
 
-import examples.commons.{SimpleBoxTransaction, TreasuryMemPool}
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionMemPool}
 import examples.hybrid.blocks.HybridBlock
 import examples.hybrid.history.{HybridHistory, HybridSyncInfo}
 import examples.hybrid.state.HBoxStoredState
@@ -14,6 +14,6 @@ class NodeViewHolderSpec extends NodeViewHolderTests[PublicKey25519Proposition,
   HBoxStoredState,
   HybridSyncInfo,
   HybridHistory,
-  TreasuryMemPool] with HybridGenerators {
+  SimpleBoxTransactionMemPool] with HybridGenerators {
   type VL = HWallet
 }

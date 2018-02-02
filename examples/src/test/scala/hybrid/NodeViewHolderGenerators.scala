@@ -1,7 +1,7 @@
 package hybrid
 
 import akka.actor.{ActorRef, ActorSystem, Props}
-import examples.commons.TreasuryMemPool
+import examples.commons.SimpleBoxTransactionMemPool
 import examples.hybrid.HybridNodeViewHolder
 import examples.hybrid.wallet.HWallet
 import io.iohk.iodb.ByteArrayWrapper
@@ -17,7 +17,7 @@ trait NodeViewHolderGenerators { this: ModifierGenerators with StateGenerators w
       val treasuryStore = lsmStoreGen.sample.get
       val byteStr = ByteStr(Array.fill(10)(1:Byte))
       val gw = new HWallet(byteStr, store, treasuryStore)
-      (h, s, gw, TreasuryMemPool.emptyPool)
+      (h, s, gw, SimpleBoxTransactionMemPool.emptyPool)
     }
 
     override def restoreState(): Option[(HIS, MS, VL, MP)] = None

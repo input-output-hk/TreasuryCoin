@@ -1,7 +1,7 @@
 package examples.hybrid.wallet
 
 import akka.actor.{Actor, ActorRef}
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTx, TreasuryMemPool}
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTx, SimpleBoxTransactionMemPool}
 import examples.curvepos.Value
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.HBoxStoredState
@@ -25,16 +25,16 @@ class SimpleBoxTransactionGenerator(viewHolderRef: ActorRef) extends Actor with 
   private val getRequiredData: GetDataFromCurrentView[HybridHistory,
     HBoxStoredState,
     HWallet,
-    TreasuryMemPool,
+    SimpleBoxTransactionMemPool,
     GeneratorInfo] = {
-    val f: CurrentView[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] => GeneratorInfo = {
-      view: CurrentView[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] =>
+    val f: CurrentView[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool] => GeneratorInfo = {
+      view: CurrentView[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool] =>
         GeneratorInfo(generate(view.vault))
     }
     GetDataFromCurrentView[HybridHistory,
       HBoxStoredState,
       HWallet,
-      TreasuryMemPool,
+      SimpleBoxTransactionMemPool,
       GeneratorInfo](f)
   }
 

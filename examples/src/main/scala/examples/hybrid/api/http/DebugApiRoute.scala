@@ -4,7 +4,7 @@ import javax.ws.rs.Path
 
 import akka.actor.{ActorRef, ActorRefFactory}
 import akka.http.scaladsl.server.Route
-import examples.commons.TreasuryMemPool
+import examples.commons.SimpleBoxTransactionMemPool
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.HBoxStoredState
@@ -23,7 +23,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 @Api(value = "/debug", description = "Useful functions", position = 3, produces = "application/json")
 case class DebugApiRoute(override val settings: RESTApiSettings, nodeViewHolderRef: ActorRef)
                         (implicit val context: ActorRefFactory)
-  extends ApiRouteWithFullView[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] {
+  extends ApiRouteWithFullView[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool] {
 
   override val route = pathPrefix("debug") {
     infoRoute ~ chain ~ delay ~ myblocks ~ generators

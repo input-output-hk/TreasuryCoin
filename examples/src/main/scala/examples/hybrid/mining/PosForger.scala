@@ -1,7 +1,7 @@
 package examples.hybrid.mining
 
 import akka.actor.{Actor, ActorRef}
-import examples.commons.{SimpleBoxTransaction, TreasuryMemPool}
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionMemPool}
 import examples.curvepos.transaction.PublicKey25519NoncedBox
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
@@ -95,10 +95,10 @@ object PosForger extends ScorexLogging {
   val getRequiredData: GetDataFromCurrentViewWithTreasuryState[HybridHistory,
     HBoxStoredState,
     HWallet,
-    TreasuryMemPool,
+    SimpleBoxTransactionMemPool,
     PosForgingInfo] = {
-    val f: CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] => PosForgingInfo = {
-      view: CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] =>
+    val f: CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool] => PosForgingInfo = {
+      view: CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool] =>
 
         val diff = view.history.posDifficulty
         val pairCompleted = view.history.pairCompleted
@@ -121,7 +121,7 @@ object PosForger extends ScorexLogging {
     GetDataFromCurrentViewWithTreasuryState[HybridHistory,
       HBoxStoredState,
       HWallet,
-      TreasuryMemPool,
+      SimpleBoxTransactionMemPool,
       PosForgingInfo](f)
 
   }

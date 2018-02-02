@@ -1,7 +1,7 @@
 package examples.hybrid.mining
 
 import akka.actor.{Actor, ActorRef}
-import examples.commons.TreasuryMemPool
+import examples.commons.SimpleBoxTransactionMemPool
 import examples.hybrid.blocks.{HybridBlock, PowBlock, PowBlockCompanion, PowBlockHeader}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.settings.HybridMiningSettings
@@ -36,10 +36,10 @@ class PowMiner(viewHolderRef: ActorRef, settings: HybridMiningSettings) extends 
   private val getRequiredData: GetDataFromCurrentView[HybridHistory,
     HBoxStoredState,
     HWallet,
-    TreasuryMemPool,
+    SimpleBoxTransactionMemPool,
     PowMiningInfo] = {
-    val f: CurrentView[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] => PowMiningInfo = {
-      view: CurrentView[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] =>
+    val f: CurrentView[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool] => PowMiningInfo = {
+      view: CurrentView[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool] =>
 
         val difficulty = view.history.powDifficulty
         val pairCompleted = view.history.pairCompleted
@@ -55,7 +55,7 @@ class PowMiner(viewHolderRef: ActorRef, settings: HybridMiningSettings) extends 
     GetDataFromCurrentView[HybridHistory,
       HBoxStoredState,
       HWallet,
-      TreasuryMemPool,
+      SimpleBoxTransactionMemPool,
       PowMiningInfo](f)
   }
 

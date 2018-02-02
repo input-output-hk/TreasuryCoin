@@ -1,7 +1,7 @@
 package hybrid
 
 import commons.ExamplesCommonGenerators
-import examples.commons.{SimpleBoxTransaction, TreasuryMemPool}
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionMemPool}
 import examples.curvepos.transaction.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer}
 import examples.curvepos.{Nonce, Value}
 import examples.hybrid.blocks._
@@ -163,7 +163,7 @@ trait HybridGenerators extends ExamplesCommonGenerators
   }.apply(Gen.Parameters.default, Seed.random()).get
 
 
-  def modifierWithTransactions(memoryPoolOpt: Option[TreasuryMemPool],
+  def modifierWithTransactions(memoryPoolOpt: Option[SimpleBoxTransactionMemPool],
                                customTransactionsOpt: Option[Seq[SimpleBoxTransaction]]): PosBlock = {
 
     val (id, timestamp, box, attach, generator) = (for {

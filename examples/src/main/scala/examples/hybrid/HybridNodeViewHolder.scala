@@ -32,7 +32,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
   override type HIS = HybridHistory
   override type MS = HBoxStoredState
   override type VL = HWallet
-  override type MP = TreasuryMemPool
+  override type MP = SimpleBoxTransactionMemPool
 
   type P = PublicKey25519Proposition
   type TX = SimpleBoxTransaction
@@ -89,7 +89,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
 
     assert(gw.boxes().forall(b => gs.closedBox(b.box.id).isDefined))
 
-    (history, gs, gw, TreasuryMemPool.emptyPool)
+    (history, gs, gw, SimpleBoxTransactionMemPool.emptyPool)
   }
 
   /**
@@ -102,7 +102,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
         HybridHistory.readOrGenerate(settings, minerSettings),
         HBoxStoredState.readOrGenerate(settings),
         HWallet.readOrGenerate(settings, 1),
-        TreasuryMemPool.emptyPool))
+        SimpleBoxTransactionMemPool.emptyPool))
     } else None
   }
 
