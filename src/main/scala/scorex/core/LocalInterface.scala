@@ -5,6 +5,7 @@ import scorex.core.LocalInterface.{BetterNeighbourAppeared, LocallyGeneratedModi
 import scorex.core.NodeViewHolder._
 import scorex.core.transaction.Transaction
 import scorex.core.transaction.box.proposition.Proposition
+import scorex.core.transaction.state.StateReader
 import scorex.core.utils.ScorexLogging
 
 /**
@@ -59,11 +60,11 @@ trait LocalInterface[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
     case surf: NewOpenSurface =>
       onNewSurface(surf.newSurface)
 
-    case state: ChangedState =>
-      onChangedState(state.isRollback, state.newVersion)
-
     case RollbackFailed =>
       onRollbackFailed()
+
+    case ChangedState(r) =>
+      onChangedState(r)
   }
 
 
@@ -80,9 +81,8 @@ trait LocalInterface[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
   protected def onSemanticallyFailedModification(mod: PMOD): Unit
 
   protected def onNewSurface(newSurface: Seq[ModifierId]): Unit
-  protected def onChangedState(isRollback: Boolean, newVersion: VersionTag): Unit
   protected def onRollbackFailed(): Unit
-
+  protected def onChangedState(r: StateReader): Unit = {}
 
   protected def onNoBetterNeighbour(): Unit
   protected def onBetterNeighbourAppeared(): Unit

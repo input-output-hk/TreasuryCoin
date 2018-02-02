@@ -1,9 +1,7 @@
 package examples.hybrid.transaction
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
-import examples.curvepos.Value
-import examples.curvepos.transaction.PublicKey25519NoncedBox
+import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion, Value}
 import examples.hybrid.wallet.HWallet
 import io.circe.Json
 import io.circe.syntax._

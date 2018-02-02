@@ -1,9 +1,12 @@
 package examples.commons
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
-import examples.curvepos.{Nonce, Value}
-import examples.curvepos.transaction.PublicKey25519NoncedBox
+import examples.commons.SimpleBoxTransaction._
 import examples.hybrid.transaction._
+import examples.hybrid.wallet.HWallet
+import io.circe.Json
+import io.circe.syntax._
+import io.iohk.iodb.ByteArrayWrapper
 import scorex.core.{ModifierId, ModifierTypeId}
 import scorex.core.serialization.Serializer
 import scorex.core.transaction.{BoxTransaction, Transaction}

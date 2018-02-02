@@ -29,7 +29,7 @@ case class TreasurySettings(isVoter: Boolean,
                             isExpert: Boolean,
                             isCommittee: Boolean)
 
-object HybridSettings extends ScorexLogging {
+object HybridSettings extends ScorexLogging with SettingsReaders {
   def read(userConfigPath: Option[String]): HybridSettings = {
     fromConfig(readConfigFromPath(userConfigPath, "scorex"))
   }

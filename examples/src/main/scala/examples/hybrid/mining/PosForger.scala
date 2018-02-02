@@ -1,8 +1,8 @@
 package examples.hybrid.mining
 
 import akka.actor.{Actor, ActorRef}
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionMemPool}
-import examples.curvepos.transaction.PublicKey25519NoncedBox
+import com.google.common.primitives.Longs
+import examples.commons.{PublicKey25519NoncedBox, SimpleBoxTransaction, SimpleBoxTransactionMemPool}
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
@@ -10,6 +10,7 @@ import examples.hybrid.settings.HybridSettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryTxValidator}
 import examples.hybrid.wallet.HWallet
 import scorex.core.LocalInterface.LocallyGeneratedModifier
+import scorex.core.NodeViewHolder.{CurrentView, GetDataFromCurrentView}
 import scorex.core.transaction.state.PrivateKey25519
 import scorex.core.utils.ScorexLogging
 import scorex.crypto.hash.Blake2b256

@@ -1,7 +1,6 @@
 package examples.commons
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
-import examples.curvepos.{Nonce, Value}
 import examples.hybrid.transaction
 import examples.hybrid.wallet.HWallet
 import io.circe.Json
@@ -26,11 +25,11 @@ case class SimpleBoxTx(override val from: IndexedSeq[(PublicKey25519Proposition,
   override val transactionTypeId: ModifierTypeId = SimpleBoxTx.TransactionTypeId
 
   override type M = SimpleBoxTransaction
-  override val serializer = SimpleBoxTransactionCompanion
+  override lazy val serializer = SimpleBoxTransactionCompanion
 
   override lazy val json: Json = Map(
     "id" -> Base58.encode(id).asJson,
-    "newBoxes" -> newBoxes.map(b => Base58.encode(b.id).asJson).asJson,
+    "newBoxes" -> newBoxes.map(b => Base58.encode(b.id).asJson).toSeq.asJson,
     "boxesToRemove" -> boxIdsToOpen.map(id => Base58.encode(id).asJson).asJson,
     "from" -> from.map { s =>
       Map(
@@ -51,7 +50,7 @@ case class SimpleBoxTx(override val from: IndexedSeq[(PublicKey25519Proposition,
 
   override def toString: String = s"SimpleBoxTx(${json.noSpaces})"
 
-  override lazy val semanticValidity: Try[Unit] = Try {
+  lazy val semanticValidity: Try[Unit] = Try {
     require(from.size == signatures.size)
     require(to.forall(_._2 >= 0))
     require(fee >= 0)

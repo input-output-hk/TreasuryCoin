@@ -12,19 +12,32 @@ import scorex.core.network.message.MessageHandler
 import scorex.core.network.peer.PeerManager
 import scorex.core.network.peer.PeerManager.{AddToBlacklist, Handshaked}
 import scorex.core.settings.NetworkSettings
-import scorex.core.utils.ScorexLogging
+import scorex.core.utils.{NetworkTimeProvider, ScorexLogging}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.util.{Failure, Random, Success}
 
-case class ConnectedPeer(socketAddress: InetSocketAddress, handlerRef: ActorRef) {
+
+sealed trait ConnectionType
+case object Incoming extends ConnectionType
+case object Outgoing extends ConnectionType
+
+
+
+case class ConnectedPeer(socketAddress: InetSocketAddress,
+                         handlerRef: ActorRef,
+                         direction: ConnectionType,
+                         handshake: Handshake) {
 
   import shapeless.syntax.typeable._
 
+  def publicPeer: Boolean = handshake.declaredAddress.contains(socketAddress)
+
   override def hashCode(): Int = socketAddress.hashCode()
+
   override def equals(obj: Any): Boolean =
-    obj.cast[ConnectedPeer].exists(_.socketAddress.getAddress.getHostAddress == this.socketAddress.getAddress.getHostAddress)
+    obj.cast[ConnectedPeer].exists(p => p.socketAddress == this.socketAddress && p.direction == this.direction)
 
   override def toString = s"ConnectedPeer($socketAddress)"
 }
@@ -33,25 +46,38 @@ case class ConnectedPeer(socketAddress: InetSocketAddress, handlerRef: ActorRef)
 case object Ack extends Event
 
 
-//fixme: is there a reason for this class to be a case class?
-case class PeerConnectionHandler(settings: NetworkSettings,
-                                 networkControllerRef: ActorRef,
-                                 peerManager: ActorRef,
-                                 messagesHandler: MessageHandler,
-                                 connection: ActorRef,
-                                 ownSocketAddress: Option[InetSocketAddress],
-                                 remote: InetSocketAddress) extends Actor with Buffering with ScorexLogging {
+class PeerConnectionHandler(val settings: NetworkSettings,
+                            networkControllerRef: ActorRef,
+                            peerManagerRef: ActorRef,
+                            messagesHandler: MessageHandler,
+                            connection: ActorRef,
+                            direction: ConnectionType,
+                            ownSocketAddress: Option[InetSocketAddress],
+                            remote: InetSocketAddress,
+                            timeProvider: NetworkTimeProvider) extends Actor with Buffering with ScorexLogging {
 
   import PeerConnectionHandler._
 
-  private val selfPeer = ConnectedPeer(remote, self)
-
   context watch connection
-
-  override def preStart: Unit = connection ! ResumeReading
 
   // there is no recovery for broken connections
   override val supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
+
+
+  private var receivedHandshake: Option[Handshake] = None
+  private var selfPeer: Option[ConnectedPeer] = None
+
+  //todo: use `become` to handle handshake state instead?
+  private def handshakeGot = receivedHandshake.isDefined
+
+  private var handshakeSent = false
+
+  private var handshakeTimeoutCancellableOpt: Option[Cancellable] = None
+
+  private object HandshakeDone
+
+  private var chunksBuffer: ByteString = CompactByteString()
+
 
   private def processErrors(stateName: String): Receive = {
     case CommandFailed(w: Write) =>
@@ -62,7 +88,7 @@ case class PeerConnectionHandler(settings: NetworkSettings,
       connection ! ResumeWriting
 
     case cc: ConnectionClosed =>
-      peerManager ! PeerManager.Disconnected(remote)
+      peerManagerRef ! PeerManager.Disconnected(remote)
       log.info("Connection closed to : " + remote + ": " + cc.getErrorCause + s" in state $stateName")
       context stop self
 
@@ -75,52 +101,40 @@ case class PeerConnectionHandler(settings: NetworkSettings,
       connection ! ResumeReading
   }
 
-  //todo: use `become` to handle handshake state instead?
-  private var handshakeGot = false
-  private var handshakeSent = false
-
-  private var handshakeTimeoutCancellableOpt: Option[Cancellable] = None
-
-  private object HandshakeDone
-
   private def handshake: Receive = ({
     case StartInteraction =>
-      val hb = Handshake(
-        settings.agentName,
-        Version(settings.appVersion),
-        settings.nodeName,
-        settings.nodeNonce.get,
-        ownSocketAddress,
-        System.currentTimeMillis()
-      ).bytes
+      val hb = Handshake(settings.agentName,
+        Version(settings.appVersion), settings.nodeName,
+        ownSocketAddress, timeProvider.time()).bytes
 
-      connection ! Write(ByteString(hb))
+      connection ! Tcp.Write(ByteString(hb))
       log.info(s"Handshake sent to $remote")
       handshakeSent = true
-      if (handshakeGot && handshakeSent){
-        self ! HandshakeDone
-      } else {
-        handshakeTimeoutCancellableOpt = Some(context.system.scheduler.scheduleOnce(settings.handshakeTimeout)(self ! HandshakeTimeout))
-      }
+      if (handshakeGot && handshakeSent) self ! HandshakeDone
 
     case Received(data) =>
       HandshakeSerializer.parseBytes(data.toArray) match {
         case Success(handshake) =>
-          peerManager ! Handshaked(remote, handshake)
+          receivedHandshake = Some(handshake)
           log.info(s"Got a Handshake from $remote")
           connection ! ResumeReading
-          handshakeGot = true
           if (handshakeGot && handshakeSent) self ! HandshakeDone
         case Failure(t) =>
           log.info(s"Error during parsing a handshake", t)
           //todo: blacklist?
-          connection ! Close
+          self ! CloseConnection
       }
 
     case HandshakeTimeout =>
-      connection ! Close
+      self ! CloseConnection
 
     case HandshakeDone =>
+      require(receivedHandshake.isDefined)
+
+      val peer = ConnectedPeer(remote, self, direction, receivedHandshake.get)
+      selfPeer = Some(peer)
+
+      peerManagerRef ! Handshaked(peer)
       handshakeTimeoutCancellableOpt.map(_.cancel())
       connection ! ResumeReading
       context become workingCycle
@@ -145,11 +159,9 @@ case class PeerConnectionHandler(settings: NetworkSettings,
 
     case Blacklist =>
       log.info(s"Going to blacklist " + remote)
-      peerManager ! AddToBlacklist(remote)
+      peerManagerRef ! AddToBlacklist(remote)
       connection ! Close
   }
-
-  private var chunksBuffer: ByteString = CompactByteString()
 
   def workingCycleRemoteInterface: Receive = {
     case Received(data) =>
@@ -158,7 +170,7 @@ case class PeerConnectionHandler(settings: NetworkSettings,
       chunksBuffer = t._2
 
       t._1.find { packet =>
-        messagesHandler.parseBytes(packet.toByteBuffer, Some(selfPeer)) match {
+        messagesHandler.parseBytes(packet.toByteBuffer, Some(selfPeer.get)) match {   //todo: .get
           case Success(message) =>
             log.info("Received message " + message.spec + " from " + remote)
             networkControllerRef ! message
@@ -182,14 +194,24 @@ case class PeerConnectionHandler(settings: NetworkSettings,
         log.warn(s"Strange input for PeerConnectionHandler: $nonsense")
     }: Receive)
 
+
+  override def preStart: Unit = {
+    peerManagerRef ! PeerManager.DoConnecting(remote, direction)
+    handshakeTimeoutCancellableOpt = Some(context.system.scheduler.scheduleOnce(settings.handshakeTimeout)
+    (self ! HandshakeTimeout))
+    connection ! Register(self, keepOpenOnPeerClosed = false, useResumeWriting = true)
+    connection ! ResumeReading
+  }
+
   override def receive: Receive = handshake
+
+  override def postStop(): Unit = log.info(s"Peer handler to $remote destroyed")
 }
 
 object PeerConnectionHandler {
   case object StartInteraction
 
   private object CommunicationState extends Enumeration {
-
     val AwaitingHandshake = Value("AwaitingHandshake")
     val WorkingCycle = Value("WorkingCycle")
   }

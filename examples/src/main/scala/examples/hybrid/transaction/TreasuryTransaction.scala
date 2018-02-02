@@ -1,9 +1,6 @@
 package examples.hybrid.transaction
 
 import examples.commons.SimpleBoxTransaction
-import examples.curvepos.{Nonce, Value}
-import scorex.core.ModifierTypeId
-import scorex.core.transaction.Transaction
 import scorex.core.transaction.box.proposition.{Proposition, PublicKey25519Proposition}
 import scorex.core.transaction.proof.Signature25519
 

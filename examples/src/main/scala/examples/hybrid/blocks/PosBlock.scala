@@ -1,9 +1,7 @@
 package examples.hybrid.blocks
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion, SimpleBoxTx, SimpleBoxTxCompanion}
-import examples.curvepos.transaction.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer}
-import examples.hybrid.transaction.{ProposalTransaction, ProposalTransactionCompanion, RegisterTransaction, RegisterTransactionCompanion}
+import examples.commons.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer, SimpleBoxTransaction, SimpleBoxTransactionCompanion}
 import io.circe.Json
 import io.circe.syntax._
 import scorex.core.{ModifierId, ModifierTypeId, TransactionsCarryingPersistentNodeViewModifier}
