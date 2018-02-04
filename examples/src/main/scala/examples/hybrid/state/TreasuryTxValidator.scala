@@ -82,11 +82,10 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
         require(id >= 0, "Expert is not registered")
         require(trState.getExpertsBallots.contains(id) == false, "The expert has already voted")
         tx.ballots.foreach(b => require(b.isInstanceOf[ExpertBallot], "Incompatible ballot"))
-        val expertId = trState.getExpertsSigningKeys.indexOf(tx.pubKey)
-        val expert = new Expert(TreasuryManager.cs, expertId, trState.getSharedPubKey.get)
+        val expert = new Expert(TreasuryManager.cs, id, trState.getSharedPubKey.get)
         tx.ballots.foreach { b =>
           require(b.unitVector.length == Voter.VOTER_CHOISES_NUM)
-          require(b.asInstanceOf[ExpertBallot].expertId == expertId, "Wrong expertId in a ballot")
+          require(b.asInstanceOf[ExpertBallot].expertId == id, "Wrong expertId in a ballot")
           require(expert.verifyBallot(b), "Ballot NIZK is not verified")}
     }
 

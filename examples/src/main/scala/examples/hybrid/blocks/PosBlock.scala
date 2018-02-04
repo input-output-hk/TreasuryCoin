@@ -51,7 +51,7 @@ case class PosBlock(override val parentId: BlockId, //PoW block
 
 object PosBlockCompanion extends Serializer[PosBlock] {
   override def toBytes(b: PosBlock): Array[Byte] = {
-    val txsBytes = b.transactions.sortBy(t => Base58.encode(t.id)).foldLeft(Array[Byte]()) { (a, b) =>
+    val txsBytes = b.transactions.foldLeft(Array[Byte]()) { (a, b) =>
       Bytes.concat(Ints.toByteArray(b.bytes.length), b.bytes, a)
     }
     Bytes.concat(b.parentId, Longs.toByteArray(b.timestamp), b.generatorBox.bytes, b.signature.bytes,
