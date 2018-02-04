@@ -71,31 +71,18 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
   }
 
   private def generateRegisterTx(view: NodeView): Seq[TreasuryTransaction] = {
-    def generateRegisterTx(role: Role, view: NodeView): Option[TreasuryTransaction] = {
-      val myStoredKeys = view.vault.treasurySigningPubKeys(role, view.trState.epochNum)
-      val myAlreadyRegistredKeys = view.trState.getSigningKeys(role).filter(k => myStoredKeys.contains(k))
-      val myPendingRegistrationKeys = view.pool.unconfirmed.map(_._2).filter {
-        case tx: RegisterTransaction => tx.role == role && myStoredKeys.contains(tx.pubKey)
-        case tx: CommitteeRegisterTransaction => Role.Committee == role && myStoredKeys.contains(tx.pubKey)
-        case _ => false
-      }
-
-      if (myAlreadyRegistredKeys.isEmpty && myPendingRegistrationKeys.isEmpty)
-        if (role == Role.Expert || role == Role.Voter)
-          RegisterTransaction.create(view.vault, role, view.trState.epochNum).map(Some(_)).getOrElse(None)
-        else if (role == Role.Committee)
-          CommitteeRegisterTransaction.create(view.vault, view.trState.epochNum).map(Some(_)).getOrElse(None)
-        else None
-      else None
-    }
+    // TODO: consider a better way to check if a node has already been registered for the role
+    val isRegisteredAsCommittee = view.vault.treasurySigningPubKeys(Role.Committee, view.trState.epochNum).nonEmpty
+    val isRegisteredAsExpert = view.vault.treasurySigningPubKeys(Role.Expert, view.trState.epochNum).nonEmpty
+    val isRegisteredAsVoter = view.vault.treasurySigningPubKeys(Role.Voter, view.trState.epochNum).nonEmpty
 
     var txs = List[TreasuryTransaction]()
-    if (settings.isCommittee)
-      txs = txs ::: generateRegisterTx(Role.Committee, view).map(List(_)).getOrElse(List())
-    if (settings.isExpert)
-      txs = txs ::: generateRegisterTx(Role.Expert, view).map(List(_)).getOrElse(List())
-    if (settings.isVoter)
-      txs = txs ::: generateRegisterTx(Role.Voter, view).map(List(_)).getOrElse(List())
+    if (settings.isCommittee && !isRegisteredAsCommittee)
+      txs = CommitteeRegisterTransaction.create(view.vault, view.trState.epochNum).get :: txs
+    if (settings.isExpert && !isRegisteredAsExpert)
+      txs = RegisterTransaction.create(view.vault, Role.Expert, view.trState.epochNum).get :: txs
+    if (settings.isVoter && !isRegisteredAsVoter)
+      txs = RegisterTransaction.create(view.vault, Role.Voter, view.trState.epochNum).get :: txs
     txs
   }
 
