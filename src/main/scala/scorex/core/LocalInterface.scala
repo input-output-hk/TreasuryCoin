@@ -1,9 +1,11 @@
 package scorex.core
 
 import akka.actor.{Actor, ActorRef}
+import scorex.core
 import scorex.core.LocalInterface.{BetterNeighbourAppeared, LocallyGeneratedModifier, LocallyGeneratedTransaction, NoBetterNeighbour}
 import scorex.core.NodeViewHolder._
-import scorex.core.transaction.Transaction
+import scorex.core.consensus.{HistoryReader, SyncInfo}
+import scorex.core.transaction.{MempoolReader, Transaction}
 import scorex.core.transaction.box.proposition.Proposition
 import scorex.core.transaction.state.StateReader
 import scorex.core.utils.ScorexLogging
@@ -29,7 +31,12 @@ trait LocalInterface[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
 
       NodeViewHolder.EventType.OpenSurfaceChanged,
       NodeViewHolder.EventType.StateChanged,
-      NodeViewHolder.EventType.FailedRollback
+      NodeViewHolder.EventType.FailedRollback,
+
+      NodeViewHolder.EventType.StateChanged,
+      NodeViewHolder.EventType.HistoryChanged,
+      NodeViewHolder.EventType.MempoolChanged,
+      NodeViewHolder.EventType.VaultChanged
     )
     viewHolderRef ! Subscribe(events)
   }
@@ -65,6 +72,15 @@ trait LocalInterface[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
 
     case ChangedState(r) =>
       onChangedState(r)
+
+    case ChangedHistory(r) =>
+      onChangedHistory(r)
+
+    case ChangedMempool(r) =>
+      onChangedMempool(r)
+
+    case ChangedVault() =>
+      onChangedVault()
   }
 
 
@@ -83,6 +99,9 @@ trait LocalInterface[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
   protected def onNewSurface(newSurface: Seq[ModifierId]): Unit
   protected def onRollbackFailed(): Unit
   protected def onChangedState(r: StateReader): Unit = {}
+  protected def onChangedHistory(r: HistoryReader[_ <: PersistentNodeViewModifier, _ <: SyncInfo]): Unit
+  protected def onChangedMempool(r: MempoolReader[_ <: Transaction[_]]): Unit
+  protected def onChangedVault(): Unit
 
   protected def onNoBetterNeighbour(): Unit
   protected def onBetterNeighbourAppeared(): Unit

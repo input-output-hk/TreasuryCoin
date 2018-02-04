@@ -7,8 +7,11 @@ import examples.hybrid.mining.PosForger.{StartForging, StopForging}
 import examples.hybrid.mining.PowMiner.{MineBlock, StartMining, StopMining}
 import examples.hybrid.settings.HybridMiningSettings
 import examples.hybrid.transaction.TreasuryTxForger.SuccessfullStateModification
-import scorex.core.{LocalInterface, ModifierId, VersionTag}
+import scorex.core.consensus.{HistoryReader, SyncInfo}
+import scorex.core.transaction.{MempoolReader, Transaction}
+import scorex.core.{LocalInterface, ModifierId, PersistentNodeViewModifier, VersionTag}
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
+import scorex.core.transaction.state.StateReader
 
 class HLocalInterface(override val viewHolderRef: ActorRef,
                       powMinerRef: ActorRef,
@@ -37,6 +40,16 @@ class HLocalInterface(override val viewHolderRef: ActorRef,
     log.error("Too deep rollback occurred!")
   }
 
+  override def onChangedState(r: StateReader): Unit = {
+    treasuryTxsForgerRef ! SuccessfullStateModification
+  }
+
+  override def onChangedHistory(r: HistoryReader[_ <: PersistentNodeViewModifier, _ <: SyncInfo]): Unit = {}
+
+  override def onChangedMempool(r: MempoolReader[_ <: Transaction[_]]): Unit = {}
+
+  override def onChangedVault(): Unit = {}
+
   //stop PoW miner and start PoS forger if PoW block comes
   //stop PoW forger and start PoW miner if PoS block comes
   override protected def onSemanticallySuccessfulModification(mod: HybridBlock): Unit = {
@@ -52,8 +65,6 @@ class HLocalInterface(override val viewHolderRef: ActorRef,
             powMinerRef ! StartMining
           }
       }
-
-      treasuryTxsForgerRef ! SuccessfullStateModification
     }
   }
 
