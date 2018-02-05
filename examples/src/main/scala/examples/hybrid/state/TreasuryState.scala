@@ -134,7 +134,7 @@ object TreasuryState {
     val epochNum = currentHeight / TreasuryManager.EPOCH_LEN
     val currentEpochHeight = currentHeight % TreasuryManager.EPOCH_LEN
 
-    val epochBlocksIds = history.lastBlockIds(history.modifierById(history.storage.bestPosId).get, currentEpochHeight)
+    val epochBlocksIds = history.lastBlockIds(history.modifierById(history.storage.bestPosId).get, currentEpochHeight + 1)
 
     val state = TreasuryState(epochNum)
 
