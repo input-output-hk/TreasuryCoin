@@ -60,8 +60,9 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
 
   private def generate(view: NodeView): Seq[TreasuryTransaction] = {
     import examples.hybrid.TreasuryManager._
+    val epochHeight = view.history.height % TreasuryManager.EPOCH_LEN
 
-    view.history.height match {
+    epochHeight match {
       case h if REGISTER_RANGE.contains(h) => generateRegisterTx(view)
       case h if DISTR_KEY_GEN_RANGE.contains(h) => Seq() // generateDKGTx(view)
       case h if VOTING_RANGE.contains(h) => generateBallotTx(view) // Only for testing! Normally a ballot should be created manually by a voter

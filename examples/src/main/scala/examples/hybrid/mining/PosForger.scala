@@ -8,6 +8,7 @@ import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.settings.HybridSettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryTxValidator}
+import examples.hybrid.transaction.TreasuryTransaction
 import examples.hybrid.wallet.HWallet
 import scorex.core.LocalInterface.LocallyGeneratedModifier
 import scorex.core.NodeViewHolder.{CurrentView, GetDataFromCurrentView}
@@ -15,6 +16,8 @@ import scorex.core.transaction.state.PrivateKey25519
 import scorex.core.utils.ScorexLogging
 import scorex.crypto.hash.Blake2b256
 import scorex.utils.Random
+
+import scala.util.{Failure, Success, Try}
 
 
 class PosForger(settings: HybridSettings, viewHolderRef: ActorRef) extends Actor with ScorexLogging {
@@ -107,14 +110,18 @@ object PosForger extends ScorexLogging {
         val boxes = view.vault.boxes().map(_.box).filter(box => view.state.closedBox(box.id).isDefined)
         val boxKeys = boxes.flatMap(b => view.vault.secretByPublicImage(b.proposition).map(s => (b, s)))
 
-        val treasuryTxValidator = new TreasuryTxValidator(view.trState, view.history.storage.heightOf(bestPowBlock.id).get + 1)
+        val treasuryTxValidatorTry = Try(new TreasuryTxValidator(view.trState, view.history.storage.heightOf(bestPowBlock.id).get + 1))
 
-        // TODO: probably here we also need to check that treasury txs from pull are consistent with each other (no duplicates, etc.)
         val txs = view.pool.take(TransactionsPerBlock).foldLeft(Seq[SimpleBoxTransaction]()) { case (collected, tx) =>
-          if (treasuryTxValidator.validate(tx).isSuccess && view.state.validate(tx).isSuccess &&
+          if (view.state.validate(tx).isSuccess &&
             tx.boxIdsToOpen.forall(id => !collected.flatMap(_.boxIdsToOpen)
               .exists(_ sameElements id))) collected :+ tx
           else collected
+        }.filter {_ match {
+            // TODO: probably here we also need to check that treasury txs from pool are consistent with each other (no duplicates, etc.)
+            case t: TreasuryTransaction => treasuryTxValidatorTry.flatMap(_.validate(t)).isSuccess
+            case _ => true
+          }
         }
 
         PosForgingInfo(pairCompleted, bestPowBlock, diff, boxKeys, txs)

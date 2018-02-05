@@ -13,6 +13,9 @@ import scala.util.{Success, Try}
 
 class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
 
+  val epochHeight = height - (trState.epochNum * TreasuryManager.EPOCH_LEN)
+  require(epochHeight >= 0 && epochHeight < TreasuryManager.EPOCH_LEN, "Totally wrong situation. Probably treasury state is corrupted or problems with validation pipeline.")
+
   def validate(tx: SimpleBoxTransaction): Try[Unit] = tx match {
       case t: TreasuryTransaction => validate(t)
       case _: SimpleBoxTx => Success(Unit)
@@ -20,8 +23,6 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
 
   def validate(tx: TreasuryTransaction): Try[Unit] = Try {
     /* Common checks for all treasury txs */
-    val epochHeight = height - (trState.epochNum * TreasuryManager.EPOCH_LEN)
-    require(epochHeight >= 0 && epochHeight < TreasuryManager.EPOCH_LEN, "Totally wrong situation. Probably treasury state is corrupted or problems with validation pipeline.")
     require(tx.epochID == trState.epochNum, "Invalid tx: wrong epoch id")
 
     /* Checks for specific treasury txs */
@@ -34,7 +35,7 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
   }
 
   def validateRegistration(tx: RegisterTransaction): Try[Unit] = Try {
-    require(TreasuryManager.REGISTER_RANGE.contains(height), "Wrong height for register transaction")
+    require(TreasuryManager.REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
 
     tx.role match {
       case Role.Expert => require(!trState.getExpertsSigningKeys.contains(tx.pubKey), "Expert pubkey has been already registered")
@@ -46,7 +47,7 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
   }
 
   def validateCommitteeRegistration(tx: CommitteeRegisterTransaction): Try[Unit] = Try {
-    require(TreasuryManager.REGISTER_RANGE.contains(height), "Wrong height for register transaction")
+    require(TreasuryManager.REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
 
     require(!trState.getCommitteeSigningKeys.contains(tx.pubKey), "Committee signing pubkey has been already registered")
     require(!trState.getCommitteeProxyKeys.contains(tx.proxyPubKey), "Committee proxy pubkey has been already registered")
@@ -56,12 +57,12 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
   }
 
   def validateProposal(tx: ProposalTransaction): Try[Unit] = Try {
-    require(TreasuryManager.PROPOSAL_SUBMISSION_RANGE.contains(height), "Wrong height for proposal transaction")
+    require(TreasuryManager.PROPOSAL_SUBMISSION_RANGE.contains(epochHeight), "Wrong height for proposal transaction")
     // TODO: add validation
   }
 
   def validateBallot(tx: BallotTransaction): Try[Unit] = Try {
-    require(TreasuryManager.VOTING_RANGE.contains(height), "Wrong height for ballot transaction")
+    require(TreasuryManager.VOTING_RANGE.contains(epochHeight), "Wrong height for ballot transaction")
     require(trState.getSharedPubKey.isDefined, "Shared key is not defined in TreasuryState")
     require(trState.getProposals.nonEmpty, "Proposals are not defined")
 
