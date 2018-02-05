@@ -82,8 +82,13 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   }
 
   def apply(block: HybridBlock, history: HybridHistory): Try[TreasuryState] = Try {
+    val blockHeight = history.storage.heightOf(block.id).get
+    validate(block, blockHeight).get
+
     block match {
       case b:PosBlock => {
+        log.info(s"TreasuryState: applying PoS block ${block.encodedId} at height ${history.storage.heightOf(block.id)}")
+
         val trTxs = b.transactions.collect { case t: TreasuryTransaction => t }
         trTxs.foreach(tx => apply(tx).get)
         version = VersionTag @@ block.id
@@ -104,13 +109,12 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     this
   }
 
-  def validate(block: HybridBlock, history: HybridHistory): Try[Unit] = Try {
+  def validate(block: HybridBlock, blockHeight: Long): Try[Unit] = Try {
     block match {
       case _:PowBlock => Unit
       case b:PosBlock => {
-        val height = history.storage.parentHeight(b) + 1      // this block may not be applied yet so derive its height from the parent height
         val trTxs = b.transactions.collect{case t:TreasuryTransaction => t}
-        val validator = new TreasuryTxValidator(this, height)
+        val validator = new TreasuryTxValidator(this, blockHeight)
         trTxs.foreach(validator.validate(_).get)
       }
     }
@@ -118,7 +122,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   def rollback(to: VersionTag): Try[TreasuryState] = Try {
     if (to sameElements version) this
-    else throw new UnsupportedOperationException("Deep rollback is unsupported")
+    else throw new UnsupportedOperationException("Deep rollback is not supported")
   }
 }
 

@@ -8,6 +8,7 @@ import examples.hybrid.settings.HybridMiningSettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryState, TreasuryTxValidator}
 import examples.hybrid.wallet.HWallet
 import scorex.core.NodeViewHolder._
+import scorex.core.consensus.History.ProgressInfo
 import scorex.core.serialization.Serializer
 import scorex.core.settings.ScorexSettings
 import scorex.core.transaction.Transaction
@@ -18,7 +19,7 @@ import scorex.core.{ModifierTypeId, NodeViewHolder, NodeViewModifier, VersionTag
 import scorex.crypto.encode.Base58
 import scorex.crypto.signatures.PublicKey
 
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 
 class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMiningSettings, timeProvider: NetworkTimeProvider) extends NodeViewHolder[PublicKey25519Proposition,
@@ -104,15 +105,6 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
   }
 
   override def pmodModify(pmod: HybridBlock): Unit = {
-
-    treasuryState.validate(pmod, history) match {
-      case Failure(e) =>
-        log.warn(s"Persistent modifier (id: ${pmod.encodedId}, contents: $pmod) is not valid against treasury state", e)
-        notifySubscribers(EventType.SemanticallyFailedPersistentModifier, SemanticallyFailedModification(pmod, e))
-        return
-      case _ =>
-    }
-
     if (!history().contains(pmod.id)) {
       notifySubscribers(EventType.StartingPersistentModifierApplication, StartingPersistentModifierApplication(pmod))
 
@@ -137,19 +129,16 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
                   vault().scanPersistent(progressInfo.toApply)
                 }
 
-                log.info(s"Persistent modifier ${pmod.encodedId} applied successfully")
-                updateNodeView(Some(newHistory), Some(newMinState), Some(newVault), Some(newMemPool))
-
                 /* if everything is ok we can update treasury state */
-                val epochNum = newHistory.storage.heightOf(newHistory.storage.bestPosId).get / TreasuryManager.EPOCH_LEN
-
-                treasuryState = if (treasuryState.epochNum != epochNum) { // new epoch has been started, reset treasury state
-                  TreasuryState.generate(newHistory).get
-                } else if (progressInfo.chainSwitchingNeeded) {
-                  treasuryState.rollback(VersionTag @@ progressInfo.branchPoint.get)
-                    .getOrElse(TreasuryState.generate(newHistory).get) // regenerate it entirely in case of failed rollback
-                } else {
-                  treasuryState.apply(pmod, newHistory).get
+                updateTreasuryState(newHistory, treasuryState, progressInfo) match {
+                  case Success(newTreasuryState) =>
+                    treasuryState = newTreasuryState
+                    updateNodeView(Some(newHistory), Some(newMinState), Some(newVault), Some(newMemPool))
+                    log.info(s"Persistent modifier ${pmod.encodedId} applied successfully")
+                  case Failure(e) =>
+                    log.warn(s"Persistent modifier (id: ${pmod.encodedId}, contents: $pmod) can not be applied to treasury state", e)
+                    updateNodeView(updatedHistory = Some(newHistory))
+                    notifySubscribers(EventType.SemanticallyFailedPersistentModifier, SemanticallyFailedModification(pmod, e))
                 }
 
               case Failure(e) =>
@@ -167,6 +156,21 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
       }
     } else {
       log.warn(s"Trying to apply modifier ${pmod.encodedId} that's already in history")
+    }
+  }
+
+  private def updateTreasuryState(his: HybridHistory,
+                              trState: TreasuryState,
+                              progressInfo: ProgressInfo[HybridBlock]): Try[TreasuryState] = Try {
+    val epochNum = his.storage.heightOf(progressInfo.toApply.get.id).get / TreasuryManager.EPOCH_LEN
+
+    if (trState.epochNum != epochNum) { // new epoch has been started, reset treasury state
+      TreasuryState.generate(his).get
+    } else if (progressInfo.chainSwitchingNeeded) {
+      trState.rollback(VersionTag @@ progressInfo.branchPoint.get)
+        .getOrElse(TreasuryState.generate(his).get) // regenerate it entirely in case of failed rollback
+    } else {
+      trState.apply(progressInfo.toApply.get, his).get
     }
   }
 
