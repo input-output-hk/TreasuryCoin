@@ -66,6 +66,29 @@ components:
             type: string
             example: 127.0.0.1:27272
 
+    Treasury:
+      type: object
+      properties:
+        epoch:
+          type: integer
+          example: 1
+        committeeProxyKeys:
+          type: string
+        committeeSigningKeys:
+          type: string
+        expertsSigningKeys:
+          type: string
+        votersSigningKeys:
+          type: string
+        sharedPubKey:
+          type: string
+        votersBallots:
+          type: string
+        expertsBallots:
+          type: string
+        proposals:
+          type: string
+
 
 paths:
 
@@ -313,3 +336,44 @@ paths:
             application/json:
               schema:
                 type: object
+
+  /treasury/info:
+    get:
+      summary: Info about treasury
+      operationId: infoRoute
+      tags:
+        - treasury
+      responses:
+        200:
+          description: Json with treasury info or error
+          content:
+            application/json:
+              schema:
+                type: object
+                items:
+                  $ref: '#/components/schemas/Treasury'
+
+
+  /treasury/ballot:
+    post:
+      summary: Casting the ballot transaction for all proposals
+      operationId: ballotCast
+      tags:
+        - treasury
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: string
+              example: {"0": "Yes", "1": "No", "2": "Abstain", "3": "0", 4: "1"}
+
+      responses:
+        200:
+          description: Status of the ballot transaction casting
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                type: string

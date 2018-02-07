@@ -43,7 +43,8 @@ class HybridApp(val settingsFilename: String) extends Application {
     StatsApiRoute(settings.restApi, nodeViewHolderRef),
     UtilsApiRoute(settings.restApi),
     NodeViewApiRoute[P, TX](settings.restApi, nodeViewHolderRef),
-    PeersApiRoute(peerManagerRef, networkControllerRef, settings.restApi)
+    PeersApiRoute(peerManagerRef, networkControllerRef, settings.restApi),
+    TreasuryApiRoute(settings.restApi, nodeViewHolderRef),
   )
 
   override val swaggerConfig: String = Source.fromResource("api/testApi.yaml").getLines.mkString("\n")
