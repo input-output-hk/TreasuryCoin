@@ -2,7 +2,7 @@ package examples.hybrid
 
 import akka.actor.{ActorRef, Props}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionMemPool}
-import examples.hybrid.api.http.{DebugApiRoute, StatsApiRoute, WalletApiRoute}
+import examples.hybrid.api.http.{DebugApiRoute, StatsApiRoute, TreasuryApiRoute, WalletApiRoute}
 import examples.hybrid.blocks.HybridBlock
 import examples.hybrid.history.{HybridHistory, HybridSyncInfo, HybridSyncInfoMessageSpec}
 import examples.hybrid.mining.{PosForger, PowMiner}

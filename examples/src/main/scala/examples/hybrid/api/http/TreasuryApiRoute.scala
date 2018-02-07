@@ -2,7 +2,7 @@ package examples.hybrid.api.http
 
 import akka.actor.{ActorRef, ActorRefFactory}
 import akka.http.scaladsl.server.Route
-import examples.commons.TreasuryMemPool
+import examples.commons.SimpleBoxTransactionMemPool
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
@@ -28,17 +28,17 @@ import scala.util.{Failure, Success, Try}
 
 case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHolderRef: ActorRef)
                            (implicit val context: ActorRefFactory)
-  extends ApiRouteWithFullView[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool] {
+  extends ApiRouteWithFullView[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool] {
 
   override val route = pathPrefix("treasury") {
     infoRoute ~ ballotCast
   }
 
-  type NodeView = CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool]
+  type NodeView = CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool]
   type VoteValue = Either[Int, VoteCases.Value]
 
   private def getCurrentView: Try[NodeView] = Try {
-    def f(view: CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, TreasuryMemPool]): NodeView = view
+    def f(view: CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool]): NodeView = view
 
     import akka.pattern.ask
     import scala.concurrent.duration._
@@ -46,7 +46,7 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
     Await.result(nodeViewHolderRef ? GetDataFromCurrentViewWithTreasuryState[HybridHistory,
       HBoxStoredState,
       HWallet,
-      TreasuryMemPool,
+      SimpleBoxTransactionMemPool,
       NodeView](f), 5.seconds).asInstanceOf[NodeView]
   }
 
@@ -101,16 +101,14 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
       if (voteOpt.isDefined) {
 
         voter match {
-
           case v: RegularVoter =>
             voteOpt.get match {
               case Right(vote) => Some(v.produceVote(proposalId, vote))
               case Left(delegateId) => Some(v.produceDelegatedVote(proposalId, delegateId))
             }
-
-          case v: Expert =>
+          case e: Expert =>
             voteOpt.get match {
-              case Right(vote) => Some(v.produceVote(proposalId, vote))
+              case Right(vote) => Some(e.produceVote(proposalId, vote))
               case _ => None
             }
           case _ => None
@@ -127,20 +125,21 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
 
       // TODO: transaction should be signed both with expert and regular voter keys, if both of them have been used during the ballots casting
 
-      val expertBallotTx = expertKey match {
-        case Some(key) =>
-          val privKey = vault.treasurySigningSecretByPubKey(state.epochNum, key).get.privKey
-          BallotTransaction.create(privKey, VoterType.Expert, ballots, state.epochNum)
+      def getBallotTx (voterKey: Option[PublicKey25519Proposition],
+                       voterType: VoterType.VoterType
+      ): Try[BallotTransaction] = {
 
-        case _ => Failure(new Exception("Expert key is absent"))
-      }
-
-      val voterBallotTx = voterKey match {
-        case Some(key) =>
-          val privKey = vault.treasurySigningSecretByPubKey(state.epochNum, key).get.privKey
-          BallotTransaction.create(privKey, VoterType.Voter, ballots, state.epochNum)
-
-        case _ => Failure(new Exception("Voter key is absent"))
+        voterKey match {
+          case Some(key) =>
+            val signingSecret = vault.treasurySigningSecretByPubKey(state.epochNum, key)
+            if (signingSecret.isDefined) {
+              val privKey = signingSecret.get.privKey
+              BallotTransaction.create(privKey, voterType, ballots, state.epochNum)
+            } else {
+              Failure(new Exception("Signing secret is absent"))
+            }
+          case _ => Failure(new Exception("Key is absent"))
+        }
       }
 
       def IsValidBallotTx(txToValidate: BallotTransaction): Boolean = {
@@ -156,13 +155,15 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
       // Temporary protection while the model with a common role for all proposals is used.
       // Here a transaction is issued only with an expert or regular voter signature.
       val ballotTx =
-        if (expertBallotTx.isSuccess) Some(expertBallotTx.get)
-        else if (voterBallotTx.isSuccess) Some(voterBallotTx.get)
-        else None
-
+        if (expertKey.isDefined)
+          getBallotTx(expertKey, VoterType.Expert)
+        else if(voterKey.isDefined)
+          getBallotTx(voterKey,  VoterType.Voter)
+      else
+          Failure(new Exception("Voter keys are undefined"))
 
       ballotTx match {
-        case Some(tx: BallotTransaction) => if (IsValidBallotTx(tx)) Some(tx) else None
+        case Success(tx: BallotTransaction) => if (IsValidBallotTx(tx)) Some(tx) else None
         case _ => None
       }
     }
@@ -183,26 +184,22 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
 
           // TODO: add a check for the role of a voter relatively to the current proposal
           // if(IsExpert(myExpertKey, proposal)) {
-          myExpertKey match {
+          if (myExpertKey.isDefined) {
 
-            case Some(key) =>
-              val expertId = state.getExpertsSigningKeys.indexOf(key)
-              val expert = Expert(TreasuryManager.cs, expertId, sharedPubKey)
-              createBallot(proposal, expert, proposalsVotes)
+            val expertId = state.getExpertsSigningKeys.indexOf(myExpertKey.get)
+            val expert = Expert(TreasuryManager.cs, expertId, sharedPubKey)
+            createBallot(proposal, expert, proposalsVotes)
 
-            case _ => None
-          }
           // } else {
-          myVoterKey match {
+          } else if (myVoterKey.isDefined) {
 
-            case Some(key) =>
-              val numOfExperts = state.getExpertsSigningKeys.size
-              val voter = new RegularVoter(TreasuryManager.cs, numOfExperts, sharedPubKey, One)
-              createBallot(proposal, voter, proposalsVotes)
-
-            case _ => None
+            val numOfExperts = state.getExpertsSigningKeys.size
+            val voter = new RegularVoter(TreasuryManager.cs, numOfExperts, sharedPubKey, One)
+            createBallot(proposal, voter, proposalsVotes)
           }
-          //}
+          else
+            None
+
       }.collect {case Some(ballot) => ballot}
 
       createTx(ballots, myExpertKey, myVoterKey)
