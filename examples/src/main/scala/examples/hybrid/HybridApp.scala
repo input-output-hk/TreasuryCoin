@@ -2,7 +2,7 @@ package examples.hybrid
 
 import akka.actor.{ActorRef, Props}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionMemPool}
-import examples.hybrid.api.http.{DebugApiRoute, StatsApiRoute, WalletApiRoute}
+import examples.hybrid.api.http.{DebugApiRoute, StatsApiRoute, TreasuryApiRoute, WalletApiRoute}
 import examples.hybrid.blocks.HybridBlock
 import examples.hybrid.history.{HybridHistory, HybridSyncInfo, HybridSyncInfoMessageSpec}
 import examples.hybrid.mining.{PosForger, PowMiner}
@@ -43,7 +43,8 @@ class HybridApp(val settingsFilename: String) extends Application {
     StatsApiRoute(settings.restApi, nodeViewHolderRef),
     UtilsApiRoute(settings.restApi),
     NodeViewApiRoute[P, TX](settings.restApi, nodeViewHolderRef),
-    PeersApiRoute(peerManagerRef, networkControllerRef, settings.restApi)
+    PeersApiRoute(peerManagerRef, networkControllerRef, settings.restApi),
+    TreasuryApiRoute(settings.restApi, nodeViewHolderRef),
   )
 
   override val swaggerConfig: String = Source.fromResource("api/testApi.yaml").getLines.mkString("\n")

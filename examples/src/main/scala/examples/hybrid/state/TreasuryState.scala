@@ -16,6 +16,8 @@ import treasury.crypto.voting.ballots.{ExpertBallot, VoterBallot}
 
 import scala.util.Try
 
+case class Proposal(name: String, requestedSum: Value, recipient: PublicKey25519Proposition)
+
 /**
   * Holds the current state of the treasury epoch
   * The idea is the following:
@@ -29,9 +31,7 @@ import scala.util.Try
 
 case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
-  case class Proposal(name: String, requestedSum: Value, recipient: PublicKey25519Proposition)
-
-  private val cs = TreasuryManager.cs
+  val cs = TreasuryManager.cs
 
   private var version: VersionTag = VersionTag @@ (ModifierId @@ Array.fill(32)(0: Byte))
   private var committeePubKeys: List[(PublicKey25519Proposition, PubKey)] = List()
