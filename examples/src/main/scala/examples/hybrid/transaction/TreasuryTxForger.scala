@@ -1,13 +1,14 @@
 package examples.hybrid.transaction
 
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import examples.commons.SimpleBoxTransactionMemPool
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
 import examples.hybrid.TreasuryManager.Role.Role
 import examples.hybrid.history.HybridHistory
-import examples.hybrid.settings.TreasurySettings
+import examples.hybrid.mining.PosForger
+import examples.hybrid.settings.{HybridSettings, TreasurySettings}
 import examples.hybrid.state.{HBoxStoredState, TreasuryTxValidator}
 import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.wallet.HWallet
@@ -136,4 +137,15 @@ object TreasuryTxForger {
   case class GeneratorInfo(txs: Seq[TreasuryTransaction])
 
   case object SuccessfullStateModification
+}
+
+object TreasuryTxForgerRef {
+
+  def props(viewHolderRef: ActorRef, settings: TreasurySettings): Props = Props(new TreasuryTxForger(viewHolderRef, settings))
+
+  def apply(viewHolderRef: ActorRef, settings: TreasurySettings)
+           (implicit system: ActorSystem): ActorRef = system.actorOf(props(viewHolderRef, settings))
+
+  def apply(name: String, viewHolderRef: ActorRef, settings: TreasurySettings)
+           (implicit system: ActorSystem): ActorRef = system.actorOf(props(viewHolderRef, settings), name)
 }

@@ -5,14 +5,14 @@ import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionMemPool}
 import examples.hybrid.api.http.{DebugApiRoute, StatsApiRoute, TreasuryApiRoute, WalletApiRoute}
 import examples.hybrid.blocks.HybridBlock
 import examples.hybrid.history.{HybridHistory, HybridSyncInfo, HybridSyncInfoMessageSpec}
-import examples.hybrid.mining.{PosForger, PowMiner}
+import examples.hybrid.mining.{PosForgerRef, PowMinerRef}
 import examples.hybrid.settings.HybridSettings
-import examples.hybrid.transaction.TreasuryTxForger
-import examples.hybrid.wallet.{SimpleBoxTransactionGenerator, TreasuryTransactionGenerator}
+import examples.hybrid.transaction.{TreasuryTxForger, TreasuryTxForgerRef}
+import examples.hybrid.wallet.{SimpleBoxTransactionGenerator, SimpleBoxTransactionGeneratorRef, TreasuryTransactionGenerator}
 import examples.hybrid.wallet.SimpleBoxTransactionGenerator.StartGeneration
 import scorex.core.api.http.{ApiRoute, NodeViewApiRoute, PeersApiRoute, UtilsApiRoute}
 import scorex.core.app.Application
-import scorex.core.network.NodeViewSynchronizer
+import scorex.core.network.{NodeViewSynchronizer, NodeViewSynchronizerRef}
 import scorex.core.network.message.MessageSpec
 import scorex.core.settings.ScorexSettings
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
@@ -35,7 +35,7 @@ class HybridApp(val settingsFilename: String) extends Application {
 
   override protected lazy val additionalMessageSpecs: Seq[MessageSpec[_]] = Seq(HybridSyncInfoMessageSpec)
 
-  override val nodeViewHolderRef: ActorRef = actorSystem.actorOf(Props(new HybridNodeViewHolder(settings, hybridSettings.mining, timeProvider)))
+  override val nodeViewHolderRef: ActorRef = HybridNodeViewHolderRef(settings, hybridSettings.mining, timeProvider)
 
   override val apiRoutes: Seq[ApiRoute] = Seq(
     DebugApiRoute(settings.restApi, nodeViewHolderRef),
@@ -49,26 +49,27 @@ class HybridApp(val settingsFilename: String) extends Application {
 
   override val swaggerConfig: String = Source.fromResource("api/testApi.yaml").getLines.mkString("\n")
 
-  val miner = actorSystem.actorOf(Props(new PowMiner(nodeViewHolderRef, hybridSettings.mining)))
-  val forger = actorSystem.actorOf(Props(new PosForger(hybridSettings, nodeViewHolderRef)))
-  val treasuryTxsForger: ActorRef = actorSystem.actorOf(Props(new TreasuryTxForger(nodeViewHolderRef, hybridSettings.treasurySettings)))
+  val miner: ActorRef = PowMinerRef(nodeViewHolderRef, hybridSettings.mining)
+  val forger: ActorRef = PosForgerRef(hybridSettings, nodeViewHolderRef)
+  val treasuryTxsForger: ActorRef = TreasuryTxForgerRef(nodeViewHolderRef, hybridSettings.treasurySettings)
 
-  override val localInterface: ActorRef = actorSystem.actorOf(Props(
-    new HLocalInterface(nodeViewHolderRef, miner, forger, treasuryTxsForger, hybridSettings.mining)))
+  override val localInterface: ActorRef = HLocalInterfaceRef(nodeViewHolderRef, miner, forger, treasuryTxsForger, hybridSettings.mining)
 
   override val nodeViewSynchronizer: ActorRef =
-    actorSystem.actorOf(Props(new NodeViewSynchronizer[P, TX, HybridSyncInfo, HybridSyncInfoMessageSpec.type, PMOD, HybridHistory, SimpleBoxTransactionMemPool]
-    (networkControllerRef, nodeViewHolderRef, localInterface, HybridSyncInfoMessageSpec, settings.network, timeProvider)))
+    actorSystem.actorOf(NodeViewSynchronizerRef.props[P, TX, HybridSyncInfo, HybridSyncInfoMessageSpec.type,
+                                                      PMOD, HybridHistory, SimpleBoxTransactionMemPool]
+                                                     (networkControllerRef, nodeViewHolderRef, localInterface,
+                                                      HybridSyncInfoMessageSpec, settings.network, timeProvider))
 
   //touching lazy vals
   miner
   localInterface
   nodeViewSynchronizer
 
-//  if (settings.network.nodeName.startsWith("node1")) {
-//    log.info("Starting simple transactions generation")
-//    val generator: ActorRef = actorSystem.actorOf(Props(new SimpleBoxTransactionGenerator(nodeViewHolderRef)))
-//    generator ! SimpleBoxTransactionGenerator.StartGeneration(10 seconds)
+//  if (settings.network.nodeName.startsWith("generatorNode")) {
+//    log.info("Starting transactions generation")
+//    val generator: ActorRef = SimpleBoxTransactionGeneratorRef(nodeViewHolderRef)
+//    generator ! StartGeneration(10 seconds)
 //  }
 
   if (settings.network.nodeName.startsWith("node1")) {

@@ -1,7 +1,8 @@
 package examples.hybrid
 
-import examples.commons._
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState, log}
+import akka.actor.{ActorRef, ActorSystem, Props}
+import examples.commons._
 import examples.hybrid.blocks._
 import examples.hybrid.history.{HybridHistory, HybridSyncInfo}
 import examples.hybrid.settings.HybridMiningSettings
@@ -227,4 +228,24 @@ object HybridNodeViewHolder extends ScorexLogging {
 
     (history, gs, gw, SimpleBoxTransactionMemPool.emptyPool)
   }
+}
+
+object HybridNodeViewHolderRef {
+  def props(settings: ScorexSettings,
+            minerSettings: HybridMiningSettings,
+            timeProvider: NetworkTimeProvider): Props =
+    Props(new HybridNodeViewHolder(settings, minerSettings, timeProvider))
+
+  def apply(settings: ScorexSettings,
+            minerSettings: HybridMiningSettings,
+            timeProvider: NetworkTimeProvider)
+           (implicit system: ActorSystem): ActorRef =
+    system.actorOf(props(settings, minerSettings, timeProvider))
+
+  def apply(name: String,
+            settings: ScorexSettings,
+            minerSettings: HybridMiningSettings,
+            timeProvider: NetworkTimeProvider)
+           (implicit system: ActorSystem): ActorRef =
+    system.actorOf(props(settings, minerSettings, timeProvider), name)
 }
