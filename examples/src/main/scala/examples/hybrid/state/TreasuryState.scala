@@ -7,6 +7,7 @@ import examples.hybrid.TreasuryManager.Role.Role
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.BallotTransaction.VoterType
+import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
 import examples.hybrid.transaction._
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
@@ -14,7 +15,7 @@ import scorex.core.{ModifierId, VersionTag}
 import treasury.crypto.core.PubKey
 import treasury.crypto.keygen.KeyShares
 import treasury.crypto.keygen.datastructures.C1Share
-import treasury.crypto.voting.ballots.{ExpertBallot, VoterBallot}
+import treasury.crypto.voting.ballots.{Ballot, ExpertBallot, VoterBallot}
 
 import scala.util.Try
 
@@ -68,6 +69,8 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     votersBallots.flatMap(ballots => ballots._2.collect { case b if b.proposalId == proposalId => b }).toSeq
   def getExpertBallotsForProposal(proposalId: Int): Seq[ExpertBallot] =
     expertsBallots.flatMap(ballots => ballots._2.collect { case b if b.proposalId == proposalId => b }).toSeq
+  def getBallotsForProposal(proposalId: Int): Seq[Ballot] =
+    getVoterBallotsForProposal(proposalId) ++ getExpertBallotsForProposal(proposalId)
 
   def getDecryptionSharesR1 = c1SharesR1
   def getKeyRecoverySharesR1 = keyRecoverySharesR1
@@ -96,6 +99,14 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
           require(id >= 0, "Expert isn't found")
           expertsBallots = expertsBallots + (id -> t.ballots.map(_.asInstanceOf[ExpertBallot]))
       }}
+      case t: DecryptionShareTransaction => Try {
+        val id = getCommitteeSigningKeys.indexOf(t.pubKey)
+        require(id >= 0, "Committee member isn't found")
+        t.round match {
+          case DecryptionRound.R1 => c1SharesR1 = c1SharesR1 + (id -> t.c1Shares)
+          case DecryptionRound.R2 => c1SharesR2 = c1SharesR2 + (id -> t.c1Shares)
+        }
+      }
   }
 
   def apply(block: HybridBlock, history: HybridHistory): Try[TreasuryState] = Try {

@@ -4,8 +4,10 @@ import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
 import examples.hybrid.transaction.BallotTransaction.VoterType
+import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
 import examples.hybrid.transaction._
 import treasury.crypto.core.One
+import treasury.crypto.keygen.DecryptionManager
 import treasury.crypto.voting.ballots.{ExpertBallot, VoterBallot}
 import treasury.crypto.voting.{Expert, RegularVoter, Voter}
 
@@ -31,6 +33,7 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
       case t: CommitteeRegisterTransaction => validateCommitteeRegistration(t).get
       case t: ProposalTransaction => validateProposal(t).get
       case t: BallotTransaction => validateBallot(t).get
+      case t: DecryptionShareTransaction => validateDecryptionShare(t).get
     }
   }
 
@@ -93,5 +96,40 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
     require(trState.getProposals.size == tx.ballots.size, "Number of ballots isn't equal to the number of proposals")
     trState.getProposals.indices.foreach(i =>
       require(tx.ballots.find(p => p.proposalId == i).isDefined, s"No ballot for proposal ${i}"))
+  }
+
+  def validateDecryptionShare(tx: DecryptionShareTransaction): Try[Unit] = Try {
+    require(TreasuryManager.VOTING_DECRYPTION_R1_RANGE.contains(epochHeight), "Wrong height for round 1 decryption shares transaction")
+    require(trState.getSharedPubKey.isDefined, "Shared key is not defined in TreasuryState")
+    require(trState.getProposals.nonEmpty, "Proposals are not defined")
+
+    val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
+    require(id >= 0, "Committee member isn't registered")
+    require(!trState.getDecryptionSharesR1.contains(id), "The committee member has already submitted decryption shares")
+
+    require(trState.getProposals.size == tx.c1Shares.size, "Number of decryption shares isn't equal to the number of proposals")
+    trState.getProposals.indices.foreach(i =>
+      require(tx.c1Shares.find(s => s.proposalId == i).isDefined, s"No C1Share for proposal ${i}"))
+
+    tx.round match {
+      case DecryptionRound.R1 => validateDecryptionShareR1(tx).get
+      case DecryptionRound.R2 => validateDecryptionShareR2(tx).get
+    }
+  }
+
+  def validateDecryptionShareR1(tx: DecryptionShareTransaction): Try[Unit] = Try {
+    require(tx.round == DecryptionRound.R1)
+    val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
+    val expertsNum = trState.getExpertsSigningKeys.size
+
+    tx.c1Shares.foreach { s =>
+      require(s.decryptedC1.size == expertsNum, "Invalid decryption share: wrong number of decrypted c1 componenets")
+      val validator = new DecryptionManager(TreasuryManager.cs, trState.getBallotsForProposal(s.proposalId))
+      require(validator.validateDelegationsC1(trState.getCommitteeProxyKeys(id), s).isSuccess, "Invalid decryption share: NIZK is not verified")
+    }
+  }
+
+  def validateDecryptionShareR2(tx: DecryptionShareTransaction): Try[Unit] = Try {
+    require(tx.round == DecryptionRound.R2)
   }
 }
