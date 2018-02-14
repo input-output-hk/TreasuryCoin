@@ -81,7 +81,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
           case Success(_) => treasuryTxValidator.validate(tx) match {
             case Success(_) => None
             case Failure(e) =>
-              log.warn(s"Unconfirmed transactions $tx can not be validated by treasury state. Tx was not added to the memory pool.")
+              log.warn(s"Unconfirmed transactions $tx can not be validated by treasury state. Tx was not added to the memory pool.", e)
               Some(e)
           }
           case Failure(e) => Some(e)

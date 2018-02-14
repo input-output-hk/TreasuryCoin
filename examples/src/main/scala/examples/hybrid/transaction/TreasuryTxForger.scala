@@ -12,6 +12,7 @@ import examples.hybrid.settings.{HybridSettings, TreasurySettings}
 import examples.hybrid.state.{HBoxStoredState, TreasuryTxValidator}
 import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
+import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound.DecryptionRound
 import examples.hybrid.wallet.HWallet
 import scorex.core.LocalInterface.LocallyGeneratedTransaction
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
@@ -70,6 +71,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       case h if DISTR_KEY_GEN_RANGE.contains(h) => Seq() // generateDKGTx(view)
       case h if VOTING_RANGE.contains(h) => generateBallotTx(view) // Only for testing! Normally a ballot should be created manually by a voter
       case h if VOTING_DECRYPTION_R1_RANGE.contains(h) => generateC1ShareR1(view)
+      case h if VOTING_DECRYPTION_R2_RANGE.contains(h) => generateC1ShareR2(view)
       // TODO: other stages
       case _ => Seq()
     }
@@ -140,7 +142,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
         val id = view.trState.getCommitteeSigningKeys.indexOf(signingSecret.privKey.publicImage)
         if (id >= 0) {
           val pending = view.pool.unconfirmed.map(_._2).find {
-            case t: DecryptionShareTransaction => signingSecret.privKey.publicImage == t.pubKey
+            case t: DecryptionShareTransaction => (t.round == DecryptionRound.R1) && (signingSecret.privKey.publicImage == t.pubKey)
             case _ => false
           }.isDefined
           val submitted = view.trState.getDecryptionSharesR1.find(_._1 == id).isDefined
@@ -152,6 +154,32 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
             }
 
             Seq(DecryptionShareTransaction.create(signingSecret.privKey, DecryptionRound.R1, c1Shares, view.trState.epochNum).get)
+          } else Seq()
+        } else Seq()
+      case _ => Seq()
+    }
+  }
+
+  private def generateC1ShareR2(view: NodeView): Seq[DecryptionShareTransaction] = {
+    val myCommitteMemberSigningKey = view.vault.treasurySigningSecrets(Role.Committee, view.trState.epochNum).headOption
+    val myCommitteMemberProxyKey = view.vault.treasuryCommitteeSecrets(view.trState.epochNum).headOption
+    (myCommitteMemberSigningKey, myCommitteMemberProxyKey) match {
+      case (Some(signingSecret), Some(committeeSecret)) =>
+        val id = view.trState.getCommitteeSigningKeys.indexOf(signingSecret.privKey.publicImage)
+        if (id >= 0) {
+          val pending = view.pool.unconfirmed.map(_._2).find {
+            case t: DecryptionShareTransaction => (t.round == DecryptionRound.R2) && (signingSecret.privKey.publicImage == t.pubKey)
+            case _ => false
+          }.isDefined
+          val submitted = view.trState.getDecryptionSharesR2.find(_._1 == id).isDefined
+          if (!pending && !submitted && view.trState.getDelegations.isDefined) {
+            val c1Shares = view.trState.getProposals.indices.map { i =>
+              val ballots = view.trState.getExpertBallotsForProposal(i) ++ view.trState.getVoterBallotsForProposal(i)
+              val manager = new DecryptionManager(TreasuryManager.cs, ballots)
+              manager.decryptC1ForChoices(id, i, committeeSecret.privKey, view.trState.getDelegations.get(i))
+            }
+
+            Seq(DecryptionShareTransaction.create(signingSecret.privKey, DecryptionRound.R2, c1Shares, view.trState.epochNum).get)
           } else Seq()
         } else Seq()
       case _ => Seq()

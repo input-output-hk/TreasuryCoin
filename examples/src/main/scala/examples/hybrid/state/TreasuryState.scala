@@ -17,6 +17,7 @@ import scorex.core.{ModifierId, VersionTag}
 import treasury.crypto.core.PubKey
 import treasury.crypto.keygen.{DecryptionManager, KeyShares}
 import treasury.crypto.keygen.datastructures.C1Share
+import treasury.crypto.voting.Tally
 import treasury.crypto.voting.ballots.{Ballot, ExpertBallot, VoterBallot}
 
 import scala.util.Try
@@ -53,6 +54,8 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   private var c1SharesR2: Map[Int, Seq[C1Share]] = Map() // committeeMemberId -> Seq(C1Share)
   private var keyRecoverySharesR2: Map[Int, KeyShares] = Map() // committeeMemberId -> KeyShares
 
+  private var tallyResult: Map[Int, Tally.Result] = Map() // proposalId -> voting result
+
   def getSigningKeys(role: Role): List[PublicKey25519Proposition] = role match {
     case Role.Committee => getCommitteeSigningKeys
     case Role.Expert => getExpertsSigningKeys
@@ -79,6 +82,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def getKeyRecoverySharesR1 = keyRecoverySharesR1
   def getDecryptionSharesR2 = c1SharesR2
   def getKeyRecoverySharesR2 = keyRecoverySharesR2
+  def getDelegations = delegations
 
   def getDecryptionSharesR1ForProposal(proposalId: Int): Seq[C1Share] =
     c1SharesR1.flatMap(share => share._2.collect { case b if b.proposalId == proposalId => b }).toSeq
@@ -154,6 +158,22 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
             (i -> decryptor.computeDelegations(shares.map(_.decryptedC1.map(_._1))))
           }
           delegations = Some(deleg.toMap)
+        }
+
+      case TreasuryManager.VOTING_DECRYPTION_R2_RECOVERY_RANGE.end =>
+      /* We can decrypt final voting result ONLY IF we have valid decryption shares from ALL committee members
+      *  TODO: recover secret keys (and corresponding decryption shares) of the faulty CMs by KeyShares submissions */
+        if (c1SharesR2.size == committeePubKeys.size && getDelegations.isDefined) {
+          val result = proposals.indices.foreach { i =>
+            val shares = getDecryptionSharesR2ForProposal(i).map(_.decryptedC1.map(_._1))
+            val delegations = getDelegations.get(i)
+            assert(shares.size == committeePubKeys.size)
+            assert(delegations.size == expertsPubKeys.size)
+            val decryptor = new DecryptionManager(TreasuryManager.cs, getBallotsForProposal(i))
+            val tally = decryptor.computeTally(shares, delegations)
+            if (tally.isSuccess)
+              tallyResult = tallyResult + (i -> tally.get)
+          }
         }
 
       case _ =>

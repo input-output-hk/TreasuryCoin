@@ -99,13 +99,11 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
   }
 
   def validateDecryptionShare(tx: DecryptionShareTransaction): Try[Unit] = Try {
-    require(TreasuryManager.VOTING_DECRYPTION_R1_RANGE.contains(epochHeight), "Wrong height for round 1 decryption shares transaction")
     require(trState.getSharedPubKey.isDefined, "Shared key is not defined in TreasuryState")
     require(trState.getProposals.nonEmpty, "Proposals are not defined")
 
     val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
     require(id >= 0, "Committee member isn't registered")
-    require(!trState.getDecryptionSharesR1.contains(id), "The committee member has already submitted decryption shares")
 
     require(trState.getProposals.size == tx.c1Shares.size, "Number of decryption shares isn't equal to the number of proposals")
     trState.getProposals.indices.foreach(i =>
@@ -118,18 +116,33 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
   }
 
   def validateDecryptionShareR1(tx: DecryptionShareTransaction): Try[Unit] = Try {
-    require(tx.round == DecryptionRound.R1)
-    val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
-    val expertsNum = trState.getExpertsSigningKeys.size
+    require(TreasuryManager.VOTING_DECRYPTION_R1_RANGE.contains(epochHeight), "Wrong height for decryption share R1 transaction")
+    require(tx.round == DecryptionRound.R1, "Invalid decryption share R1: wrong round")
 
+    val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
+    require(!trState.getDecryptionSharesR1.contains(id), "The committee member has already submitted decryption shares R1")
+
+    val expertsNum = trState.getExpertsSigningKeys.size
     tx.c1Shares.foreach { s =>
-      require(s.decryptedC1.size == expertsNum, "Invalid decryption share: wrong number of decrypted c1 componenets")
+      require(s.decryptedC1.size == expertsNum, "Invalid decryption share R1: wrong number of decrypted c1 componenets")
       val validator = new DecryptionManager(TreasuryManager.cs, trState.getBallotsForProposal(s.proposalId))
-      require(validator.validateDelegationsC1(trState.getCommitteeProxyKeys(id), s).isSuccess, "Invalid decryption share: NIZK is not verified")
+      require(validator.validateDelegationsC1(trState.getCommitteeProxyKeys(id), s).isSuccess, "Invalid decryption share R1: NIZK is not verified")
     }
   }
 
   def validateDecryptionShareR2(tx: DecryptionShareTransaction): Try[Unit] = Try {
-    require(tx.round == DecryptionRound.R2)
+    require(TreasuryManager.VOTING_DECRYPTION_R2_RANGE.contains(epochHeight), "Wrong height for decryption share R2 transaction")
+    require(tx.round == DecryptionRound.R2, "Invalid decryption share R2: wrong round")
+    require(trState.getDelegations.isDefined, "Delegations are not defined, decryption share R2 can't be validated")
+
+    val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
+    require(!trState.getDecryptionSharesR2.contains(id), "The committee member has already submitted decryption shares R2")
+
+    tx.c1Shares.foreach { s =>
+      require(s.decryptedC1.size == Voter.VOTER_CHOISES_NUM, "Invalid decryption share R2: wrong number of decrypted c1 componenets")
+      val validator = new DecryptionManager(TreasuryManager.cs, trState.getBallotsForProposal(s.proposalId))
+      require(validator.validateChoicesC1(trState.getCommitteeProxyKeys(id), s, trState.getDelegations.get(s.proposalId)).isSuccess,
+        "Invalid decryption share R2: NIZK is not verified")
+    }
   }
 }
