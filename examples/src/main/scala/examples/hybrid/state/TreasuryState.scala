@@ -12,6 +12,8 @@ import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 import scorex.core.{ModifierId, VersionTag}
 import treasury.crypto.core.PubKey
+import treasury.crypto.keygen.KeyShares
+import treasury.crypto.keygen.datastructures.C1Share
 import treasury.crypto.voting.ballots.{ExpertBallot, VoterBallot}
 
 import scala.util.Try
@@ -42,6 +44,11 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   private var votersBallots: Map[Int, Seq[VoterBallot]] = Map() // voterId -> Seq(ballot)
   private var expertsBallots: Map[Int, Seq[ExpertBallot]] = Map() // expertId -> Seq(ballot)
 
+  private var c1SharesR1: Map[Int, Seq[C1Share]] = Map() // committeeMemberId -> Seq(C1Share)
+  private var keyRecoverySharesR1: Map[Int, KeyShares] = Map() // committeeMemberId -> KeyShares
+  private var c1SharesR2: Map[Int, Seq[C1Share]] = Map() // committeeMemberId -> Seq(C1Share)
+  private var keyRecoverySharesR2: Map[Int, KeyShares] = Map() // committeeMemberId -> KeyShares
+
   def getSigningKeys(role: Role): List[PublicKey25519Proposition] = role match {
     case Role.Committee => getCommitteeSigningKeys
     case Role.Expert => getExpertsSigningKeys
@@ -56,6 +63,16 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def getSharedPubKey = sharedPublicKey
   def getVotersBallots = votersBallots
   def getExpertsBallots = expertsBallots
+
+  def getVoterBallotsForProposal(proposalId: Int): Seq[VoterBallot] =
+    votersBallots.flatMap(ballots => ballots._2.collect { case b if b.proposalId == proposalId => b }).toSeq
+  def getExpertBallotsForProposal(proposalId: Int): Seq[ExpertBallot] =
+    expertsBallots.flatMap(ballots => ballots._2.collect { case b if b.proposalId == proposalId => b }).toSeq
+
+  def getDecryptionSharesR1 = c1SharesR1
+  def getKeyRecoverySharesR1 = keyRecoverySharesR1
+  def getDecryptionSharesR2 = c1SharesR2
+  def getKeyRecoverySharesR2 = keyRecoverySharesR2
 
 
   protected def apply(tx: TreasuryTransaction): Try[Unit] = tx match {

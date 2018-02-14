@@ -11,11 +11,13 @@ import examples.hybrid.mining.PosForger
 import examples.hybrid.settings.{HybridSettings, TreasurySettings}
 import examples.hybrid.state.{HBoxStoredState, TreasuryTxValidator}
 import examples.hybrid.transaction.BallotTransaction.VoterType
+import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
 import examples.hybrid.wallet.HWallet
 import scorex.core.LocalInterface.LocallyGeneratedTransaction
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 import treasury.crypto.core.{One, VoteCases}
+import treasury.crypto.keygen.DecryptionManager
 import treasury.crypto.voting.ballots.Ballot
 import treasury.crypto.voting.{Expert, RegularVoter}
 
@@ -66,7 +68,8 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     epochHeight match {
       case h if REGISTER_RANGE.contains(h) => generateRegisterTx(view)
       case h if DISTR_KEY_GEN_RANGE.contains(h) => Seq() // generateDKGTx(view)
-//      case h if VOTING_RANGE.contains(h) => generateBallotTx(view) // Only for testing! Normally a ballot should be created manually by a voter
+      case h if VOTING_RANGE.contains(h) => generateBallotTx(view) // Only for testing! Normally a ballot should be created manually by a voter
+      case h if VOTING_DECRYPTION_R1_RANGE.contains(h) => generateC1ShareR1(view)
       // TODO: other stages
       case _ => Seq()
     }
@@ -126,6 +129,32 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       }.isDefined
       val valid = new TreasuryTxValidator(view.trState, view.history.height).validate(tx).isSuccess
       !pending && valid
+    }
+  }
+
+  private def generateC1ShareR1(view: NodeView): Seq[DecryptionShareTransaction] = {
+    val myCommitteMemberSigningKey = view.vault.treasurySigningSecrets(Role.Committee, view.trState.epochNum).headOption
+    val myCommitteMemberProxyKey = view.vault.treasuryCommitteeSecrets(view.trState.epochNum).headOption
+    (myCommitteMemberSigningKey, myCommitteMemberProxyKey) match {
+      case (Some(signingSecret), Some(committeeSecret)) =>
+        val id = view.trState.getCommitteeSigningKeys.indexOf(signingSecret.privKey.publicImage)
+        if (id >= 0) {
+          val pending = view.pool.unconfirmed.map(_._2).find {
+            case t: DecryptionShareTransaction => signingSecret.privKey.publicImage == t.pubKey
+            case _ => false
+          }.isDefined
+          val submitted = view.trState.getDecryptionSharesR1.find(_._1 == id).isDefined
+          if (!pending && !submitted) {
+            val c1Shares = view.trState.getProposals.indices.map { i =>
+              val ballots = view.trState.getExpertBallotsForProposal(i) ++ view.trState.getVoterBallotsForProposal(i)
+              val manager = new DecryptionManager(TreasuryManager.cs, ballots)
+              manager.decryptC1ForDelegations(id, i, committeeSecret.privKey)
+            }
+
+            Seq(DecryptionShareTransaction.create(signingSecret.privKey, DecryptionRound.R1, c1Shares, view.trState.epochNum).get)
+          } else Seq()
+        } else Seq()
+      case _ => Seq()
     }
   }
 }
