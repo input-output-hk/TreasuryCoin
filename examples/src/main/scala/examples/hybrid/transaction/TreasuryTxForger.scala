@@ -101,7 +101,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       val voter = new RegularVoter(TreasuryManager.cs, numberOfExperts, view.trState.getSharedPubKey.get, One)
       var ballots = List[Ballot]()
       for (i <- view.trState.getProposals.indices)
-        ballots = voter.produceVote(i, VoteCases.Abstain) :: ballots
+        ballots = voter.produceDelegatedVote(i, 0) :: ballots
 
       val privKey = view.vault.treasurySigningSecretByPubKey(view.trState.epochNum, myVoterKeys.head).get.privKey
       Seq(BallotTransaction.create(privKey, VoterType.Voter, ballots, view.trState.epochNum).get)

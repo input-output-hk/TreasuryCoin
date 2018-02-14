@@ -1,5 +1,7 @@
 package examples.hybrid.state
 
+import java.math.BigInteger
+
 import examples.commons.Value
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
@@ -13,7 +15,7 @@ import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 import scorex.core.{ModifierId, VersionTag}
 import treasury.crypto.core.PubKey
-import treasury.crypto.keygen.KeyShares
+import treasury.crypto.keygen.{DecryptionManager, KeyShares}
 import treasury.crypto.keygen.datastructures.C1Share
 import treasury.crypto.voting.ballots.{Ballot, ExpertBallot, VoterBallot}
 
@@ -47,6 +49,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   private var c1SharesR1: Map[Int, Seq[C1Share]] = Map() // committeeMemberId -> Seq(C1Share)
   private var keyRecoverySharesR1: Map[Int, KeyShares] = Map() // committeeMemberId -> KeyShares
+  private var delegations: Option[Map[Int, Seq[BigInteger]]] = None  // delegations for all proposals
   private var c1SharesR2: Map[Int, Seq[C1Share]] = Map() // committeeMemberId -> Seq(C1Share)
   private var keyRecoverySharesR2: Map[Int, KeyShares] = Map() // committeeMemberId -> KeyShares
 
@@ -76,6 +79,11 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def getKeyRecoverySharesR1 = keyRecoverySharesR1
   def getDecryptionSharesR2 = c1SharesR2
   def getKeyRecoverySharesR2 = keyRecoverySharesR2
+
+  def getDecryptionSharesR1ForProposal(proposalId: Int): Seq[C1Share] =
+    c1SharesR1.flatMap(share => share._2.collect { case b if b.proposalId == proposalId => b }).toSeq
+  def getDecryptionSharesR2ForProposal(proposalId: Int): Seq[C1Share] =
+    c1SharesR2.flatMap(share => share._2.collect { case b if b.proposalId == proposalId => b }).toSeq
 
 
   protected def apply(tx: TreasuryTransaction): Try[Unit] = tx match {
@@ -125,12 +133,29 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     }
 
     val epochHeight = history.storage.heightOf(block.id).get.toInt % TreasuryManager.EPOCH_LEN
+    updateState(epochHeight)
+  }
+
+  private def updateState(epochHeight: Int): TreasuryState = {
     epochHeight match {
       case TreasuryManager.DISTR_KEY_GEN_RANGE.end =>
         if (committeePubKeys.nonEmpty)
           sharedPublicKey = Some(committeePubKeys.map(_._2).foldLeft(cs.infinityPoint)((sum,next) => sum.add(next)))
-        else
-          log.warn("No committee members found!")
+        else log.warn("No committee members found!")
+
+      case TreasuryManager.VOTING_DECRYPTION_R1_RECOVERY_RANGE.end =>
+        /* We can calculate delegations ONLY IF we have valid decryption shares from ALL committee members
+        *  TODO: recover secret keys (and corresponding decryption shares) of the faulty CMs by KeyShares submissions */
+        if (c1SharesR1.size == committeePubKeys.size) {
+          val deleg = proposals.indices.map { i =>
+            val shares = getDecryptionSharesR1ForProposal(i)
+            assert(shares.size == committeePubKeys.size)
+            val decryptor = new DecryptionManager(TreasuryManager.cs, getBallotsForProposal(i))
+            (i -> decryptor.computeDelegations(shares.map(_.decryptedC1.map(_._1))))
+          }
+          delegations = Some(deleg.toMap)
+        }
+
       case _ =>
     }
 
