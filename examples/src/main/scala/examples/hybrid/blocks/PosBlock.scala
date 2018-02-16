@@ -60,7 +60,8 @@ object PosBlockCompanion extends Serializer[PosBlock] {
   }
 
   override def parseBytes(bytes: Array[Byte]): Try[PosBlock] = Try {
-    require(bytes.length <= PosBlock.MaxBlockSize)
+    // TODO: reconsider block size requerement taking into account treasury transactions
+    //require(bytes.length <= PosBlock.MaxBlockSize)
 
     val parentId = ModifierId @@ bytes.slice(0, BlockIdLength)
     var position = BlockIdLength
