@@ -22,6 +22,8 @@ import treasury.crypto.keygen.DecryptionManager
 import treasury.crypto.voting.ballots.Ballot
 import treasury.crypto.voting.{Expert, RegularVoter}
 
+import scala.util.Try
+
 
 /**
   * It's an automatic bot that generates necessary transactions for maintaining treasury operation.
@@ -129,7 +131,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
         case t: BallotTransaction => t.pubKey == tx.pubKey
         case _ => false
       }.isDefined
-      val valid = new TreasuryTxValidator(view.trState, view.history.height).validate(tx).isSuccess
+      val valid = Try(new TreasuryTxValidator(view.trState, view.history.height)).flatMap(_.validate(tx)).isSuccess
       !pending && valid
     }
   }

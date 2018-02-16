@@ -148,7 +148,7 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
           case tx: BallotTransaction => tx.pubKey == txToValidate.pubKey
           case _ => false
         }
-        val isValid = new TreasuryTxValidator(state, view.history.height).validate(txToValidate).isSuccess
+        val isValid = Try(new TreasuryTxValidator(state, view.history.height)).flatMap(_.validate(txToValidate)).isSuccess
         !pending && isValid
       }
 

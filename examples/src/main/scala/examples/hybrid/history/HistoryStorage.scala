@@ -30,6 +30,17 @@ class HistoryStorage(storage: LSMStore,
   def bestPosId: ModifierId = storage.get(bestPosIdKey).map(d => ModifierId @@ d.data)
     .getOrElse(settings.GenesisParentId)
 
+  def bestBlock: HybridBlock = {
+    require(height > 0, "History is empty")
+    val bestPosHeight = heightOf(bestPosId).getOrElse(0L)
+    val bestPowHeight = heightOf(bestPowId).getOrElse(0L)
+
+    if (bestPosHeight > bestPowHeight)
+      modifierById(bestPosId).get
+    else
+      modifierById(bestPowId).get
+  }
+
   def bestPowBlock: PowBlock = {
     require(height > 0, "History is empty")
     modifierById(bestPowId).get.asInstanceOf[PowBlock]

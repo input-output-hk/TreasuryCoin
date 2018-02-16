@@ -73,12 +73,12 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
 
   override protected def txModify(tx: SimpleBoxTransaction): Unit = {
     //todo: async validation?
-    val treasuryTxValidator = new TreasuryTxValidator(treasuryState, history().height)
+    val treasuryTxValidatorTry = Try(new TreasuryTxValidator(treasuryState, history().height))
 
     val errorOpt: Option[Throwable] = minimalState() match {
       case txValidator: TransactionValidation[P, TX] =>
         txValidator.validate(tx) match {
-          case Success(_) => treasuryTxValidator.validate(tx) match {
+          case Success(_) => treasuryTxValidatorTry.flatMap(_.validate(tx)) match {
             case Success(_) => None
             case Failure(e) =>
               log.warn(s"Unconfirmed transactions $tx can not be validated by treasury state. Tx was not added to the memory pool.", e)

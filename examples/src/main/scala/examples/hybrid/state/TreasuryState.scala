@@ -203,11 +203,11 @@ object TreasuryState {
 
   def generate(history: HybridHistory): Try[TreasuryState] = Try {
 
-    val currentHeight = history.storage.heightOf(history.storage.bestPosId).get.toInt
+    val currentHeight = history.storage.height.toInt
     val epochNum = currentHeight / TreasuryManager.EPOCH_LEN
     val currentEpochHeight = currentHeight % TreasuryManager.EPOCH_LEN
 
-    val epochBlocksIds = history.lastBlockIds(history.modifierById(history.storage.bestPosId).get, currentEpochHeight + 1)
+    val epochBlocksIds = history.lastBlockIds(history.bestBlock, currentEpochHeight + 1)
 
     val state = TreasuryState(epochNum)
 

@@ -6,17 +6,26 @@ import examples.hybrid.TreasuryManager.Role
 import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
 import examples.hybrid.transaction._
+import scorex.core.utils.ScorexLogging
 import treasury.crypto.core.One
 import treasury.crypto.keygen.DecryptionManager
 import treasury.crypto.voting.ballots.{ExpertBallot, VoterBallot}
 import treasury.crypto.voting.{Expert, RegularVoter, Voter}
 
-import scala.util.{Success, Try}
+import scala.util.{Failure, Success, Try}
 
-class TreasuryTxValidator(val trState: TreasuryState, val height: Long) {
+class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends ScorexLogging {
 
   val epochHeight = height - (trState.epochNum * TreasuryManager.EPOCH_LEN)
-  require(epochHeight >= 0 && epochHeight < TreasuryManager.EPOCH_LEN, "Totally wrong situation. Probably treasury state is corrupted or problems with validation pipeline.")
+
+  Try(require(epochHeight >= 0 && epochHeight < TreasuryManager.EPOCH_LEN,
+    s"Totally wrong situation. Probably treasury state is corrupted or problems with " +
+      s"validation pipeline. Height = $height, epochHeight = $epochHeight")) match {
+    case Failure(e) =>
+      log.error("Inconsistent height in TreasuryTxValidator", e)
+      throw e
+    case Success(_) =>
+  }
 
   def validate(tx: SimpleBoxTransaction): Try[Unit] = tx match {
       case t: TreasuryTransaction => validate(t)
