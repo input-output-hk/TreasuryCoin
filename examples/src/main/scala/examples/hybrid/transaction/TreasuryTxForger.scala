@@ -14,7 +14,7 @@ import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound.DecryptionRound
 import examples.hybrid.wallet.HWallet
-import scorex.core.LocalInterface.LocallyGeneratedTransaction
+import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.LocallyGeneratedTransaction
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 import treasury.crypto.core.{One, VoteCases}

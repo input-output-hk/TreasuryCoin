@@ -10,8 +10,7 @@ import examples.hybrid.settings.HybridSettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryTxValidator}
 import examples.hybrid.transaction.TreasuryTransaction
 import examples.hybrid.wallet.HWallet
-import scorex.core.LocalInterface.LocallyGeneratedModifier
-import scorex.core.NodeViewHolder.{CurrentView, GetDataFromCurrentView}
+import scorex.core.NodeViewHolder.CurrentView
 import scorex.core.transaction.state.PrivateKey25519
 import scorex.core.utils.ScorexLogging
 import scorex.crypto.hash.Blake2b256
@@ -23,6 +22,10 @@ import scala.util.{Failure, Success, Try}
 class PosForger(settings: HybridSettings, viewHolderRef: ActorRef) extends Actor with ScorexLogging {
 
   import PosForger._
+  import PosForger.ReceivableMessages._
+  import scorex.core.NodeViewHolder.ReceivableMessages.GetDataFromCurrentView
+  import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.LocallyGeneratedModifier
+
 
   var forging = false
 
@@ -61,11 +64,20 @@ class PosForger(settings: HybridSettings, viewHolderRef: ActorRef) extends Actor
 }
 
 object PosForger extends ScorexLogging {
+
   val InitialDifficuly = 150000000L
 
-  case object StartForging
+  object ReceivableMessages {
+    case object StartForging
+    case object StopForging
+    case class PosForgingInfo(pairCompleted: Boolean,
+                              bestPowBlock: PowBlock,
+                              diff: BigInt,
+                              boxKeys: Seq[(PublicKey25519NoncedBox, PrivateKey25519)],
+                              txsToInclude: Seq[SimpleBoxTransaction])
+  }
 
-  case object StopForging
+  import ReceivableMessages.PosForgingInfo
 
   def hit(pwb: PowBlock)(box: PublicKey25519NoncedBox): BigInt = {
     val h = Blake2b256(pwb.bytes ++ box.bytes)
@@ -137,12 +149,6 @@ object PosForger extends ScorexLogging {
   val TransactionsPerBlock = 50
 
 }
-
-case class PosForgingInfo(pairCompleted: Boolean,
-                          bestPowBlock: PowBlock,
-                          diff: BigInt,
-                          boxKeys: Seq[(PublicKey25519NoncedBox, PrivateKey25519)],
-                          txsToInclude: Seq[SimpleBoxTransaction])
 
 object PosForgerRef {
   def props(settings: HybridSettings, viewHolderRef: ActorRef): Props = Props(new PosForger(settings, viewHolderRef))

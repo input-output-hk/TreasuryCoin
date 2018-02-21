@@ -5,8 +5,8 @@ import examples.commons.{SimpleBoxTransactionMemPool, Value}
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.{HBoxStoredState, TreasuryState, TreasuryTxValidator}
-import examples.hybrid.transaction.{ProposalTransaction, RegisterTransaction, TreasuryTransaction}
-import scorex.core.LocalInterface.LocallyGeneratedTransaction
+import examples.hybrid.transaction.{ProposalTransaction, TreasuryTransaction}
+import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.LocallyGeneratedTransaction
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 

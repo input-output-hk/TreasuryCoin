@@ -9,7 +9,6 @@ import examples.hybrid.mining.{PosForgerRef, PowMinerRef}
 import examples.hybrid.settings.HybridSettings
 import examples.hybrid.transaction.{TreasuryTxForger, TreasuryTxForgerRef}
 import examples.hybrid.wallet.{SimpleBoxTransactionGenerator, SimpleBoxTransactionGeneratorRef, TreasuryTransactionGenerator}
-import examples.hybrid.wallet.SimpleBoxTransactionGenerator.StartGeneration
 import scorex.core.api.http.{ApiRoute, NodeViewApiRoute, PeersApiRoute, UtilsApiRoute}
 import scorex.core.app.Application
 import scorex.core.network.{NodeViewSynchronizer, NodeViewSynchronizerRef}
@@ -22,6 +21,8 @@ import scala.io.Source
 import scala.language.postfixOps
 
 class HybridApp(val settingsFilename: String) extends Application {
+
+  import examples.hybrid.wallet.SimpleBoxTransactionGenerator.ReceivableMessages.StartGeneration
 
   override type P = PublicKey25519Proposition
   override type TX = SimpleBoxTransaction

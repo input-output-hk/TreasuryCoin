@@ -9,6 +9,7 @@ import examples.hybrid.settings.HybridMiningSettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryState, TreasuryTxValidator}
 import examples.hybrid.wallet.HWallet
 import scorex.core.NodeViewHolder._
+import scorex.core.NodeViewLocalInterfaceSharedMessages.ReceivableMessages._
 import scorex.core.consensus.History.ProgressInfo
 import scorex.core.serialization.Serializer
 import scorex.core.settings.ScorexSettings
