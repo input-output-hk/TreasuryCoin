@@ -75,6 +75,7 @@ object SimpleBoxTransactionCompanion extends Serializer[SimpleBoxTransaction] {
       case t: ProposalTransaction => Bytes.concat(Array(m.transactionTypeId), ProposalTransactionCompanion.toBytes(t))
       case t: BallotTransaction => Bytes.concat(Array(m.transactionTypeId), BallotTransactionCompanion.toBytes(t))
       case t: DecryptionShareTransaction => Bytes.concat(Array(m.transactionTypeId), DecryptionShareTransactionCompanion.toBytes(t))
+      case t: PaymentTransaction => Bytes.concat(Array(m.transactionTypeId), PaymentTransactionCompanion.toBytes(t))
     }
   }
 
@@ -87,6 +88,7 @@ object SimpleBoxTransactionCompanion extends Serializer[SimpleBoxTransaction] {
       case ProposalTransaction.TransactionTypeId => ProposalTransactionCompanion.parseBytes(bytes.drop(1))
       case BallotTransaction.TransactionTypeId => BallotTransactionCompanion.parseBytes(bytes.drop(1))
       case DecryptionShareTransaction.TransactionTypeId => DecryptionShareTransactionCompanion.parseBytes(bytes.drop(1))
+      case PaymentTransaction.TransactionTypeId => PaymentTransactionCompanion.parseBytes(bytes.drop(1))
       case _ => Failure(new MatchError("Unknown transaction type id"))
     }
   }

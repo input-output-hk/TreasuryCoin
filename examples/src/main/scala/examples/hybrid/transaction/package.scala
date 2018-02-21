@@ -10,4 +10,5 @@ package object transaction {
   val BallotTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 61.toByte
   val ProposalTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 62.toByte
   val DecryptionShareTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 63.toByte
+  val PaymentTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 64.toByte
 }
