@@ -83,6 +83,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def getDecryptionSharesR2 = c1SharesR2
   def getKeyRecoverySharesR2 = keyRecoverySharesR2
   def getDelegations = delegations
+  def getTally = tallyResult
 
   def getDecryptionSharesR1ForProposal(proposalId: Int): Seq[C1Share] =
     c1SharesR1.flatMap(share => share._2.collect { case b if b.proposalId == proposalId => b }).toSeq
@@ -212,6 +213,37 @@ object TreasuryState {
     val state = TreasuryState(epochNum)
 
     /* parse all blocks in the current epoch and extract all treasury transactions */
+    epochBlocksIds.foreach(blockId => state.apply(history.modifierById(blockId).get, history).get)
+    state
+  }
+
+  /**
+    * Generate TreasuryState for the specific epoch. Usefull for testing purposes to see past treasury epochs.
+    *
+    * @param history
+    * @param epochId
+    * @return Success(TreasuryState) or Failure(e) in case it can't be derived for provided epochId
+    */
+  def generate(history: HybridHistory, epochId: Int): Try[TreasuryState] = Try {
+    val currentHeight = history.storage.height.toInt
+    val currentEpochNum = currentHeight / TreasuryManager.EPOCH_LEN
+    val currentEpochHeight = currentHeight % TreasuryManager.EPOCH_LEN
+    require(epochId >= 0 && epochId <= currentEpochNum, "Wrong epoch id")
+
+    val epochBlocksIds =
+      if (epochId == currentEpochNum) {
+        history.lastBlockIds(history.bestBlock, currentEpochHeight + 1)
+      } else if (epochId == 0) {
+        val count = (currentEpochNum - epochId) * TreasuryManager.EPOCH_LEN + currentEpochHeight + 1
+        history.lastBlockIds(history.bestBlock, count).take(TreasuryManager.EPOCH_LEN - 2) // -2 cause history don't give genesis blocks
+      } else {
+        val count = (currentEpochNum - epochId) * TreasuryManager.EPOCH_LEN + currentEpochHeight + 1
+        history.lastBlockIds(history.bestBlock, count).take(TreasuryManager.EPOCH_LEN)
+      }
+
+    val state = TreasuryState(epochId)
+
+    /* parse all blocks in the epoch and extract all treasury transactions */
     epochBlocksIds.foreach(blockId => state.apply(history.modifierById(blockId).get, history).get)
     state
   }

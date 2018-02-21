@@ -7,13 +7,15 @@ import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDa
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
 import examples.hybrid.history.HybridHistory
-import examples.hybrid.state.{HBoxStoredState, Proposal, TreasuryTxValidator}
+import examples.hybrid.state.{HBoxStoredState, Proposal, TreasuryState, TreasuryTxValidator}
 import examples.hybrid.transaction.{BallotTransaction, TreasuryTransaction}
 import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.wallet.HWallet
+import io.circe.Json
 import io.circe.parser.parse
 import io.circe.syntax._
 import scorex.core.LocalInterface.LocallyGeneratedTransaction
+import scorex.core.ModifierId
 import scorex.core.api.http.{ApiException, ApiRouteWithFullView, SuccessApiResponse}
 import scorex.core.settings.RESTApiSettings
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
@@ -31,7 +33,7 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
   extends ApiRouteWithFullView[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool] {
 
   override val route = pathPrefix("treasury") {
-    infoRoute ~ ballotCast
+    infoRoute ~ epochIdInfoRoute ~ ballotCast
   }
 
   type NodeView = CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool]
@@ -50,23 +52,37 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
       NodeView](f), 5.seconds).asInstanceOf[NodeView]
   }
 
+  def getTreasuryInfo(state: TreasuryState): Json = {
+    Map(
+      "epoch"                 -> state.epochNum.asJson,
+      "committeeProxyKeys"    -> state.getCommitteeProxyKeys.map(pk => Base58.encode(pk.getEncoded(true))).asJson,
+      "committeeSigningKeys"  -> state.getCommitteeSigningKeys.map(pk => pk.toString).asJson,
+      "expertsSigningKeys"    -> state.getExpertsSigningKeys.map(pk => pk.toString).asJson,
+      "votersSigningKeys"     -> state.getVotersSigningKeys.map(pk => pk.toString).asJson,
+      "sharedPubKey"          -> Base58.encode(state.getSharedPubKey.getOrElse(state.cs.infinityPoint).getEncoded(true)).asJson,
+      "votersBallots"         -> state.getVotersBallots.map(voter => (s"Voter id: ${voter._1}", voter._2.map(ballot => s"Ballot for proposal id ${ballot.proposalId}").asJson)).asJson,
+      "expertsBallots"        -> state.getExpertsBallots.map(expert => (s"Expert id ${expert._1}", expert._2.map(ballot => s"Ballot for proposal id ${ballot.proposalId}").asJson)).asJson,
+      "proposals"             -> state.getProposals.map(p => Map(s"${state.getProposals.indexOf(p)} ${p.name}" -> s"${p.requestedSum} -> ${p.recipient}")).asJson,
+      "decryption shares R1"  -> state.getDecryptionSharesR1.map(member => s"Committee id ${member._1}. Number of submitted shares: ${member._2.size}").asJson,
+      "decryption shares R2"  -> state.getDecryptionSharesR2.map(member => s"Committee id ${member._1}. Number of submitted shares: ${member._2.size}").asJson,
+      "voting result"         -> state.getTally.map(p => s"Proposal ${p._1}: {yes: ${p._2.yes}, no: ${p._2.no}, abstain ${p._2.abstain}}").asJson
+    ).asJson
+  }
+
+  def epochIdInfoRoute: Route = path("info" / IntNumber) { epochId =>
+      val trState = TreasuryState.generate(getCurrentView.get.history, epochId)
+      getJsonRoute {
+        trState match {
+          case Success(s) => SuccessApiResponse(getTreasuryInfo(s))
+          case Failure(e) => ApiException(e)
+        }
+      }
+  }
+
   def infoRoute: Route = path("info") {
-
     val trState = getCurrentView.get.trState
-
     getJsonRoute {
-      SuccessApiResponse(Map(
-        "epoch"                 -> trState.epochNum.asJson,
-        "committeeProxyKeys"    -> trState.getCommitteeProxyKeys.map(pk => Base58.encode(pk.getEncoded(true))).asJson,
-        "committeeSigningKeys"  -> trState.getCommitteeSigningKeys.map(pk => pk.toString).asJson,
-        "expertsSigningKeys"    -> trState.getExpertsSigningKeys.map(pk => pk.toString).asJson,
-        "votersSigningKeys"     -> trState.getVotersSigningKeys.map(pk => pk.toString).asJson,
-        "sharedPubKey"          -> Base58.encode(trState.getSharedPubKey.getOrElse(trState.cs.infinityPoint).getEncoded(true)).asJson,
-        "votersBallots"         -> trState.getVotersBallots.map(voter => (voter._1, voter._2.map(ballot => Base58.encode(ballot.bytes)).asJson)).asJson,
-        "expertsBallots"        -> trState.getExpertsBallots.map(expert => (expert._1, expert._2.map(ballot => Base58.encode(ballot.bytes)).asJson)).asJson,
-        "proposals"             -> trState.getProposals.map(p => Map(s"${trState.getProposals.indexOf(p)} ${p.name}" -> s"${p.requestedSum} -> ${p.recipient}")).asJson
-//        "proposals"         -> trState.getProposals.map(p => p.name -> s"${p.requestedSum} -> ${p.recipient}").toMap.asJson // merges equally named proposals
-      ).asJson)
+      SuccessApiResponse(getTreasuryInfo(trState))
     }
   }
 
