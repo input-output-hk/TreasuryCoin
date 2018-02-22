@@ -6,10 +6,12 @@ import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.mining.PosForger.{StartForging, StopForging}
 import examples.hybrid.mining.PowMiner.{MineBlock, StartMining, StopMining}
 import examples.hybrid.settings.HybridMiningSettings
+import examples.hybrid.state.CommitteeMember.HistoryModified
+import examples.hybrid.state.CommitteeMember
 import examples.hybrid.transaction.TreasuryTxForger.SuccessfullStateModification
 import scorex.core.consensus.{HistoryReader, SyncInfo}
 import scorex.core.transaction.{MempoolReader, Transaction}
-import scorex.core.{LocalInterface, ModifierId, PersistentNodeViewModifier, VersionTag}
+import scorex.core.{LocalInterface, ModifierId, PersistentNodeViewModifier}
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.transaction.state.StateReader
 
@@ -44,7 +46,13 @@ class HLocalInterface(override val viewHolderRef: ActorRef,
     treasuryTxsForgerRef ! SuccessfullStateModification
   }
 
-  override def onChangedHistory(r: HistoryReader[_ <: PersistentNodeViewModifier, _ <: SyncInfo]): Unit = {}
+  override def onChangedHistory(r: HistoryReader[_ <: PersistentNodeViewModifier, _ <: SyncInfo]): Unit = {
+
+    CommitteeMember.manage(viewHolderRef) match {
+      case Some(cm) => cm ! HistoryModified
+      case None =>
+    }
+  }
 
   override def onChangedMempool(r: MempoolReader[_ <: Transaction[_]]): Unit = {}
 

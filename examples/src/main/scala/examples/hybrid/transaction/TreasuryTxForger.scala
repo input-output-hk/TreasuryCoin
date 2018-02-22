@@ -70,7 +70,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
 
     epochHeight match {
       case h if REGISTER_RANGE.contains(h) => generateRegisterTx(view)
-      case h if DISTR_KEY_GEN_RANGE.contains(h) => Seq() // generateDKGTx(view)
+//      case h if DISTR_KEY_GEN_RANGE.contains(h) => Seq() // generateDKGTx(view)
       case h if VOTING_RANGE.contains(h) => generateBallotTx(view) // Only for testing! Normally a ballot should be created manually by a voter
       case h if VOTING_DECRYPTION_R1_RANGE.contains(h) => generateC1ShareR1(view)
       case h if VOTING_DECRYPTION_R2_RANGE.contains(h) => generateC1ShareR2(view)

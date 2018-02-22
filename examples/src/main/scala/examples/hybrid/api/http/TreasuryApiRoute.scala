@@ -38,7 +38,7 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
   type VoteValue = Either[Int, VoteCases.Value]
 
   private def getCurrentView: Try[NodeView] = Try {
-    def f(view: CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool]): NodeView = view
+    def f(view: NodeView): NodeView = view
 
     import akka.pattern.ask
     import scala.concurrent.duration._
@@ -64,8 +64,9 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
         "sharedPubKey"          -> Base58.encode(trState.getSharedPubKey.getOrElse(trState.cs.infinityPoint).getEncoded(true)).asJson,
         "votersBallots"         -> trState.getVotersBallots.map(voter => (voter._1, voter._2.map(ballot => Base58.encode(ballot.bytes)).asJson)).asJson,
         "expertsBallots"        -> trState.getExpertsBallots.map(expert => (expert._1, expert._2.map(ballot => Base58.encode(ballot.bytes)).asJson)).asJson,
-        "proposals"             -> trState.getProposals.map(p => Map(s"${trState.getProposals.indexOf(p)} ${p.name}" -> s"${p.requestedSum} -> ${p.recipient}")).asJson
+        "proposals"             -> trState.getProposals.map(p => Map(s"${trState.getProposals.indexOf(p)} ${p.name}" -> s"${p.requestedSum} -> ${p.recipient}")).asJson,
 //        "proposals"         -> trState.getProposals.map(p => p.name -> s"${p.requestedSum} -> ${p.recipient}").toMap.asJson // merges equally named proposals
+        "R1Data"                -> trState.getDKGr1Data.values.map(r1 => Base58.encode(r1.bytes)).asJson
       ).asJson)
     }
   }

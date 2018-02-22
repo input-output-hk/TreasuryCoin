@@ -7,12 +7,11 @@ import examples.hybrid.blocks.HybridBlock
 import examples.hybrid.history.{HybridHistory, HybridSyncInfo, HybridSyncInfoMessageSpec}
 import examples.hybrid.mining.{PosForgerRef, PowMinerRef}
 import examples.hybrid.settings.HybridSettings
-import examples.hybrid.transaction.{TreasuryTxForger, TreasuryTxForgerRef}
-import examples.hybrid.wallet.{SimpleBoxTransactionGenerator, SimpleBoxTransactionGeneratorRef, TreasuryTransactionGenerator}
-import examples.hybrid.wallet.SimpleBoxTransactionGenerator.StartGeneration
+import examples.hybrid.transaction.TreasuryTxForgerRef
+import examples.hybrid.wallet.TreasuryTransactionGenerator
 import scorex.core.api.http.{ApiRoute, NodeViewApiRoute, PeersApiRoute, UtilsApiRoute}
 import scorex.core.app.Application
-import scorex.core.network.{NodeViewSynchronizer, NodeViewSynchronizerRef}
+import scorex.core.network.NodeViewSynchronizerRef
 import scorex.core.network.message.MessageSpec
 import scorex.core.settings.ScorexSettings
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition

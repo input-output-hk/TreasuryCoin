@@ -15,7 +15,7 @@ import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 import scorex.core.{ModifierId, VersionTag}
 import treasury.crypto.core.PubKey
-import treasury.crypto.keygen.{DecryptionManager, KeyShares}
+import treasury.crypto.keygen.{DecryptionManager, KeyShares, R1Data}
 import treasury.crypto.keygen.datastructures.C1Share
 import treasury.crypto.voting.Tally
 import treasury.crypto.voting.ballots.{Ballot, ExpertBallot, VoterBallot}
@@ -56,6 +56,10 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   private var tallyResult: Map[Int, Tally.Result] = Map() // proposalId -> voting result
 
+  private var DKGr1Data: Map[Int, R1Data] = Map()
+
+  def getDKGr1Data = DKGr1Data
+
   def getSigningKeys(role: Role): List[PublicKey25519Proposition] = role match {
     case Role.Committee => getCommitteeSigningKeys
     case Role.Expert => getExpertsSigningKeys
@@ -90,7 +94,8 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     c1SharesR2.flatMap(share => share._2.collect { case b if b.proposalId == proposalId => b }).toSeq
 
 
-  protected def apply(tx: TreasuryTransaction): Try[Unit] = tx match {
+  protected def apply(tx: TreasuryTransaction): Try[Unit] =
+    tx match {
       case t: RegisterTransaction => Try { t.role match {
         case Role.Expert => expertsPubKeys = expertsPubKeys :+ t.pubKey
         case Role.Voter => votersPubKeys = votersPubKeys :+ t.pubKey
@@ -119,6 +124,13 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
           case DecryptionRound.R2 => c1SharesR2 = c1SharesR2 + (id -> t.c1Shares)
         }
       }
+
+      case t: DKGr1Transaction => Try {
+        val id = getCommitteeSigningKeys.indexOf(t.pubKey)
+        require(id >= 0, "Committee member isn't found")
+        require(t.semanticValidity.isSuccess, "Transaction isn't semantically valid!")
+        DKGr1Data += (id -> t.r1Data)
+      }
   }
 
   def apply(block: HybridBlock, history: HybridHistory): Try[TreasuryState] = Try {
@@ -142,7 +154,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   private def updateState(epochHeight: Int): TreasuryState = {
     epochHeight match {
-      case TreasuryManager.DISTR_KEY_GEN_RANGE.end =>
+      case TreasuryManager.DISTR_KEY_GEN_R2_RANGE.end =>
         if (committeePubKeys.nonEmpty)
           sharedPublicKey = Some(committeePubKeys.map(_._2).foldLeft(cs.infinityPoint)((sum,next) => sum.add(next)))
         else log.warn("No committee members found!")

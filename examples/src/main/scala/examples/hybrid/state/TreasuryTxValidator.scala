@@ -43,6 +43,7 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
       case t: ProposalTransaction => validateProposal(t).get
       case t: BallotTransaction => validateBallot(t).get
       case t: DecryptionShareTransaction => validateDecryptionShare(t).get
+      case t: DKGr1Transaction => validateDKGr1Transaction(t).get
     }
   }
 
@@ -153,5 +154,13 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
       require(validator.validateChoicesC1(trState.getCommitteeProxyKeys(id), s, trState.getDelegations.get(s.proposalId)).isSuccess,
         "Invalid decryption share R2: NIZK is not verified")
     }
+  }
+
+  def validateDKGr1Transaction(tx: DKGr1Transaction): Try[Unit] = Try {
+    require(TreasuryManager.DISTR_KEY_GEN_R1_RANGE.contains(epochHeight), "Wrong height for DKG R1 transaction")
+
+    val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
+    require(id >= 0, "Committee member isn't found")
+    require(!trState.getDKGr1Data.contains(id), "The committee member has already submitted DKG R1Data")
   }
 }
