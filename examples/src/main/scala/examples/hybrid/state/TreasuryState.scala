@@ -120,6 +120,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
           case DecryptionRound.R2 => c1SharesR2 = c1SharesR2 + (id -> t.c1Shares)
         }
       }
+      case t: PaymentTransaction => Try(log.info(s"Payment tx was applied ${tx.json}"))
   }
 
   def apply(block: HybridBlock, history: HybridHistory): Try[TreasuryState] = Try {
@@ -188,6 +189,10 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       case _:PowBlock => Unit
       case b:PosBlock => {
         val trTxs = b.transactions.collect{case t:TreasuryTransaction => t}
+
+        if ((blockHeight % TreasuryManager.PAYMENT_BLOCK_HEIGHT) == 0)
+          require(trTxs.exists(t => t.isInstanceOf[PaymentTransaction]), "Invalid block: PaymentTransaction is absent")
+
         val validator = new TreasuryTxValidator(this, blockHeight)
         trTxs.foreach(validator.validate(_).get)
       }

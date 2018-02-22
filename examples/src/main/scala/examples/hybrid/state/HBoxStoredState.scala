@@ -3,9 +3,9 @@ package examples.hybrid.state
 import java.io.File
 
 import com.google.common.primitives.Longs
-import examples.commons.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer, SimpleBoxTransaction}
-import examples.commons.{Nonce, Value}
+import examples.commons._
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
+import examples.hybrid.transaction.PaymentTransaction
 import io.iohk.iodb.{ByteArrayWrapper, LSMStore}
 import scorex.core.VersionTag
 import scorex.core.settings.ScorexSettings
@@ -63,6 +63,17 @@ case class HBoxStoredState(store: LSMStore, override val version: VersionTag) ex
         psb.transactions.foreach(tx => validate(tx).get)
     }
   }.recoverWith{case t => log.warn(s"Not valid modifier ${mod.encodedId}", t); Failure(t)}
+
+  override def validate(tx: SimpleBoxTransaction): Try[Unit] = {
+    tx match {
+      case t: PaymentTransaction => validatePaymentTx(t)
+      case _ => super.validate(tx)
+    }
+  }
+
+  def validatePaymentTx(transaction: PaymentTransaction): Try[Unit] = Try {
+    // TODO: add implementation
+  }
 
   override def applyChanges(changes: BoxStateChanges[PublicKey25519Proposition, PublicKey25519NoncedBox],
                             newVersion: VersionTag): Try[HBoxStoredState] = Try {

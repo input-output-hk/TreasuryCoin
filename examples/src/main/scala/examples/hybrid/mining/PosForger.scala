@@ -4,11 +4,12 @@ import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import com.google.common.primitives.Longs
 import examples.commons.{PublicKey25519NoncedBox, SimpleBoxTransaction, SimpleBoxTransactionMemPool}
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
+import examples.hybrid.TreasuryManager
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.settings.HybridSettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryTxValidator}
-import examples.hybrid.transaction.TreasuryTransaction
+import examples.hybrid.transaction.{PaymentTransaction, TreasuryTransaction}
 import examples.hybrid.wallet.HWallet
 import scorex.core.NodeViewHolder.CurrentView
 import scorex.core.transaction.state.PrivateKey25519
@@ -122,7 +123,14 @@ object PosForger extends ScorexLogging {
         val boxes = view.vault.boxes().map(_.box).filter(box => view.state.closedBox(box.id).isDefined)
         val boxKeys = boxes.flatMap(b => view.vault.secretByPublicImage(b.proposition).map(s => (b, s)))
 
-        val treasuryTxValidatorTry = Try(new TreasuryTxValidator(view.trState, view.history.storage.heightOf(bestPowBlock.id).get + 1))
+        val blockHeight = view.history.storage.heightOf(bestPowBlock.id).get + 1
+        val treasuryTxValidatorTry = Try(new TreasuryTxValidator(view.trState, blockHeight))
+
+        val paymentTx =
+          if ((blockHeight % TreasuryManager.PAYMENT_BLOCK_HEIGHT) == 0) {
+            // Mandatory PaymentTransaction at the particular height
+            PaymentTransaction.create(view.trState).toOption
+          } else None
 
         val txs = view.pool.take(TransactionsPerBlock).foldLeft(Seq[SimpleBoxTransaction]()) { case (collected, tx) =>
           if (view.state.validate(tx).isSuccess &&
@@ -136,7 +144,9 @@ object PosForger extends ScorexLogging {
           }
         }
 
-        PosForgingInfo(pairCompleted, bestPowBlock, diff, boxKeys, txs)
+        val allTxs = paymentTx.map(t => Seq(t) ++ txs).getOrElse(txs)
+
+        PosForgingInfo(pairCompleted, bestPowBlock, diff, boxKeys, allTxs)
     }
     GetDataFromCurrentViewWithTreasuryState[HybridHistory,
       HBoxStoredState,

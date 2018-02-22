@@ -43,6 +43,7 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
       case t: ProposalTransaction => validateProposal(t).get
       case t: BallotTransaction => validateBallot(t).get
       case t: DecryptionShareTransaction => validateDecryptionShare(t).get
+      case t: PaymentTransaction => validatePayment(t).get
     }
   }
 
@@ -153,5 +154,9 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
       require(validator.validateChoicesC1(trState.getCommitteeProxyKeys(id), s, trState.getDelegations.get(s.proposalId)).isSuccess,
         "Invalid decryption share R2: NIZK is not verified")
     }
+  }
+
+  def validatePayment(tx: PaymentTransaction): Try[Unit] = Try {
+    // TODO: add actual checks for payments
   }
 }

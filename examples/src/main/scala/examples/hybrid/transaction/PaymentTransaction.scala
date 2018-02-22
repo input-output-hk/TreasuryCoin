@@ -70,8 +70,13 @@ object PaymentTransaction {
 
   def create(state: TreasuryState): Try[PaymentTransaction] = Try {
     val timestamp = System.currentTimeMillis()
-    
-    PaymentTransaction(state.epochNum, IndexedSeq(), timestamp)
+
+    val to = state.getTally.filter(p => p._2.yes.compareTo(p._2.no) > 0).toIndexedSeq.map { p =>
+      val proposal = state.getProposals(p._1)
+      (proposal.recipient, proposal.requestedSum)
+    }
+
+    PaymentTransaction(state.epochNum, to, timestamp)
   }
 }
 
