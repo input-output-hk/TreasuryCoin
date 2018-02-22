@@ -19,7 +19,13 @@ object TreasuryManager {
   val TALLY_SIGNING_RANGE =                   80 until 82
   val PAYMENT_BLOCK_HEIGHT =                  82
 
-  val BUDGET =                                1000
+  /* Constants related to reward distribution */
+  val BUDGET =               1000
+  val PROPOSALS_BUDGET =     0.7 * BUDGET
+  val VOTERS_BUDGET =        0.1 * BUDGET
+  val COMMITTE_BUDGET =      0.1 * BUDGET
+  val EXPERTS_BUDGET =       0.1 * BUDGET
+
 
   object Role extends Enumeration {
     type Role = Value

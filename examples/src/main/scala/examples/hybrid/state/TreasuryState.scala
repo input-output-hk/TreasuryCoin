@@ -191,7 +191,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         val trTxs = b.transactions.collect{case t:TreasuryTransaction => t}
 
         if ((blockHeight % TreasuryManager.PAYMENT_BLOCK_HEIGHT) == 0)
-          require(trTxs.exists(t => t.isInstanceOf[PaymentTransaction]), "Invalid block: PaymentTransaction is absent")
+          require(trTxs.count(t => t.isInstanceOf[PaymentTransaction]) == 1, "Invalid block: PaymentTransaction is absent")
 
         val validator = new TreasuryTxValidator(this, blockHeight)
         trTxs.foreach(validator.validate(_).get)
@@ -202,6 +202,42 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def rollback(to: VersionTag): Try[TreasuryState] = Try {
     if (to sameElements version) this
     else throw new UnsupportedOperationException("Deep rollback is not supported")
+  }
+
+  def getPayments: Try[Seq[(PublicKey25519Proposition, Value)]] = Try {
+    val approvedProposals = getTally.filter(p => p._2.yes.compareTo(p._2.no) > 0).toSeq.sortBy(_._1).map(p => getProposals(p._1))
+    var proposalsBudget = TreasuryManager.PROPOSALS_BUDGET
+    var payments = Seq[(PublicKey25519Proposition, Value)]()
+    approvedProposals.foreach { p =>
+      if (p.requestedSum <= proposalsBudget) {
+        payments = payments :+ (p.recipient, p.requestedSum)
+      }
+    }
+
+    // TODO: payment per voter should be based on deposit amount
+    val voters = getVotersBallots.toSeq.sortBy(_._1).map(v => getVotersSigningKeys(v._1))
+    if (voters.size > 0) {
+      val paymentPerVoter = Value @@ (TreasuryManager.VOTERS_BUDGET / voters.size).round
+      if (paymentPerVoter > 0)
+        payments = payments ++ voters.map(v => (v, paymentPerVoter))
+    }
+
+    // TODO: payment per expert should be based on the number of delegations
+    val experts = getExpertsBallots.toSeq.sortBy(_._1).map(v => getExpertsSigningKeys(v._1))
+    if (experts.size > 0) {
+      val paymentPerExpert = Value @@ (TreasuryManager.EXPERTS_BUDGET / experts.size).round
+      if (paymentPerExpert > 0)
+        payments = payments ++ experts.map(v => (v, paymentPerExpert))
+    }
+
+    val committee = getDecryptionSharesR2.toSeq.sortBy(_._1).map(v => getCommitteeSigningKeys(v._1))
+    if (committee.size > 0) {
+      val paymentPerCommittee = Value @@ (TreasuryManager.COMMITTE_BUDGET / committee.size).round
+      if (paymentPerCommittee > 0)
+        payments = payments ++ committee.map(v => (v, paymentPerCommittee))
+    }
+
+    payments
   }
 }
 

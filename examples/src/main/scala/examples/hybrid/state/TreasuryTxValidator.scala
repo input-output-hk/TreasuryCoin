@@ -17,15 +17,7 @@ import scala.util.{Failure, Success, Try}
 class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends ScorexLogging {
 
   val epochHeight = height - (trState.epochNum * TreasuryManager.EPOCH_LEN)
-
-  Try(require(epochHeight >= 0 && epochHeight < TreasuryManager.EPOCH_LEN,
-    s"Totally wrong situation. Probably treasury state is corrupted or problems with " +
-      s"validation pipeline. Height = $height, epochHeight = $epochHeight")) match {
-    case Failure(e) =>
-      log.error("Inconsistent height in TreasuryTxValidator", e)
-      throw e
-    case Success(_) =>
-  }
+  require(epochHeight >= 0 && epochHeight < TreasuryManager.EPOCH_LEN)
 
   def validate(tx: SimpleBoxTransaction): Try[Unit] = tx match {
       case t: TreasuryTransaction => validate(t)
@@ -157,6 +149,8 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
   }
 
   def validatePayment(tx: PaymentTransaction): Try[Unit] = Try {
-    // TODO: add actual checks for payments
+    require(TreasuryManager.PAYMENT_BLOCK_HEIGHT == epochHeight, "Wrong height for payment transaction")
+    val payments = trState.getPayments.getOrElse(Seq())
+    require(payments.equals(tx.to), "Payments are invalid")
   }
 }
