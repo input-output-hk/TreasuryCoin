@@ -53,9 +53,16 @@ case class HWallet(seed: ByteStr, store: LSMStore, treasuryStore: LSMStore)
 
   override def publicKeys: Set[PublicKey25519Proposition] = secrets.map(_.publicImage)
 
-  override def secrets: Set[PrivateKey25519] = store.get(SecretsKey)
-    .map(_.data.grouped(64).map(b => PrivateKey25519Serializer.parseBytes(b).get).toSet)
-    .getOrElse(Set.empty[PrivateKey25519])
+  override def secrets: Set[PrivateKey25519] = {
+    val keys = store.get(SecretsKey)
+      .map(_.data.grouped(64).map(b => PrivateKey25519Serializer.parseBytes(b).get).toSet)
+      .getOrElse(Set.empty[PrivateKey25519])
+
+    // treasury signing keys receive reward payments, so add them to regular keys set
+    // TODO: consider a better way of handling treasury payment addresses
+    val treasuryKeys = treasurySecrets.flatMap(_._2).collect{case s:TreasurySigningSecret => s}.map(_.privKey)
+    keys ++ treasuryKeys
+  }
 
   override def secretByPublicImage(publicImage: PublicKey25519Proposition): Option[PrivateKey25519] =
     secrets.find(s => s.publicImage == publicImage)
