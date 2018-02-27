@@ -40,11 +40,13 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
   }
 
   def validateRegistration(tx: RegisterTransaction): Try[Unit] = Try {
-    require(TreasuryManager.REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
-
     tx.role match {
-      case Role.Expert => require(!trState.getExpertsSigningKeys.contains(tx.pubKey), "Expert pubkey has been already registered")
-      case Role.Voter => require(!trState.getVotersSigningKeys.contains(tx.pubKey), "Voter pubkey has been already registered")
+      case Role.Expert =>
+        require(TreasuryManager.EXPERT_REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
+        require(!trState.getExpertsSigningKeys.contains(tx.pubKey), "Expert pubkey has been already registered")
+      case Role.Voter =>
+        require(TreasuryManager.VOTER_REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
+        require(!trState.getVotersSigningKeys.contains(tx.pubKey), "Voter pubkey has been already registered")
     }
 
     // TODO: check that transaction makes a necessary deposit. Probably there should be some special type of time-locked box.
@@ -52,7 +54,7 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
   }
 
   def validateCommitteeRegistration(tx: CommitteeRegisterTransaction): Try[Unit] = Try {
-    require(TreasuryManager.REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
+    require(TreasuryManager.COMMITTEE_REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
 
     require(!trState.getCommitteeSigningKeys.contains(tx.pubKey), "Committee signing pubkey has been already registered")
     require(!trState.getCommitteeProxyKeys.contains(tx.proxyPubKey), "Committee proxy pubkey has been already registered")

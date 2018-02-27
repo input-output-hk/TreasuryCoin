@@ -1,7 +1,8 @@
 package examples.hybrid.transaction
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
-import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
+import examples.commons.{Nonce, SimpleBoxTransaction, SimpleBoxTransactionCompanion, Value}
+import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
 import examples.hybrid.TreasuryManager.Role.Role
 import examples.hybrid.wallet.HWallet
@@ -11,7 +12,7 @@ import scorex.core.ModifierTypeId
 import scorex.core.serialization.Serializer
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.transaction.proof.Signature25519
-import scorex.core.transaction.state.PrivateKey25519Companion
+import scorex.core.transaction.state.{PrivateKey25519, PrivateKey25519Companion}
 import scorex.crypto.encode.Base58
 import scorex.crypto.signatures.{Curve25519, PublicKey, Signature}
 
@@ -19,6 +20,10 @@ import scala.util.Try
 
 case class RegisterTransaction(role: Role,
                                override val epochID: Long,
+                               override val from: IndexedSeq[(PublicKey25519Proposition, Nonce)],
+                               override val to: IndexedSeq[(PublicKey25519Proposition, Value)],
+                               override val signatures: IndexedSeq[Signature25519],
+                               override val fee: Long,
                                override val pubKey: PublicKey25519Proposition,
                                override val signature: Signature25519,
                                override val timestamp: Long) extends SignedTreasuryTransaction(timestamp) {
@@ -55,18 +60,61 @@ case class RegisterTransaction(role: Role,
 object RegisterTransaction {
   val TransactionTypeId: scorex.core.ModifierTypeId = RegisterTxTypeId
 
+  def apply(role: Role,
+            epochId: Long,
+            from: IndexedSeq[(PrivateKey25519, Nonce)],
+            to: IndexedSeq[(PublicKey25519Proposition, Value)],
+            fee: Long,
+            signingKey: PrivateKey25519,
+            timestamp: Long): RegisterTransaction = {
+    val fromPub = from.map { case (pr, n) => pr.publicImage -> n }
+    val fakeSig = Signature25519(Signature @@ Array[Byte]())
+    val fakeSigs = from.map(_ => fakeSig)
+
+    val unsigned = RegisterTransaction(role, epochId, fromPub, to, fakeSigs, fee, signingKey.publicImage, fakeSig, timestamp)
+
+    val msg = unsigned.messageToSign
+    val sigs = from.map { case (priv, _) => PrivateKey25519Companion.sign(priv, msg) }
+    val sig = PrivateKey25519Companion.sign(signingKey, unsigned.messageToSign)
+
+    RegisterTransaction(role, epochId, fromPub, to, sigs, fee, signingKey.publicImage, sig, timestamp)
+  }
+
   def create(w: HWallet,
              role: Role,
-             epochID: Long): Try[RegisterTransaction] = Try {
+             depositAmount: Value,
+             fee: Long,
+             epochID: Long,
+             boxesIdsToExclude: Seq[Array[Byte]] = Seq()): Try[RegisterTransaction] = Try {
+
+    var s = 0L
+    val to = Seq((TreasuryManager.DEPOSIT_ADDR, depositAmount))
+
+    val from: IndexedSeq[(PrivateKey25519, Nonce, Value)] = w.boxes()
+      .filter(b => !boxesIdsToExclude.exists(_ sameElements b.box.id)).sortBy(_.createdAt).takeWhile { b =>
+      s = s + b.box.value
+      s < depositAmount + b.box.value
+    }.flatMap { b =>
+      w.secretByPublicImage(b.box.proposition).map(s => (s, b.box.nonce, b.box.value))
+    }.toIndexedSeq
+    val canSend = from.map(_._3.toLong).sum
+    require(canSend >= (depositAmount + fee))
+
+    val charge: Seq[(PublicKey25519Proposition, Value)] =
+      if (canSend > depositAmount + fee)
+        Seq((w.publicKeys.head, Value @@ (canSend - depositAmount - fee)))
+      else Seq()
+
+    val inputs = from.map(t => t._1 -> t._2)
+    val outputs: IndexedSeq[(PublicKey25519Proposition, Value)] = (to ++ charge).toIndexedSeq
+
+    require(from.map(_._3.toLong).sum - outputs.map(_._2.toLong).sum == fee)
+
     val pubKey = w.generateNewTreasurySigningSecret(role, epochID)
     val privKey = w.treasurySigningSecretByPubKey(epochID, pubKey).get.privKey
     val timestamp = System.currentTimeMillis()
 
-    val fakeSig = Signature25519(Signature @@ Array[Byte]())
-    val unsigned = RegisterTransaction(role, epochID, pubKey, fakeSig, timestamp)
-    val sig = PrivateKey25519Companion.sign(privKey, unsigned.messageToSign)
-
-    RegisterTransaction(role, epochID, pubKey, sig, timestamp)
+    RegisterTransaction(role, epochID, inputs, outputs, fee, privKey, timestamp)
   }
 }
 
@@ -78,8 +126,7 @@ object RegisterTransactionCompanion extends Serializer[RegisterTransaction] {
       Longs.toByteArray(t.epochID),
       t.pubKey.bytes,
       t.signature.bytes,
-      Longs.toByteArray(t.timestamp)
-    )
+      SimpleBoxTransactionCompanion.toBytesCommonArgs(t))
   }
 
   def parseBytes(bytes: Array[Byte]): Try[RegisterTransaction] = Try {
@@ -89,8 +136,8 @@ object RegisterTransactionCompanion extends Serializer[RegisterTransaction] {
     var s = 9+Curve25519.KeyLength
     val sig = Signature25519(Signature @@ bytes.slice(s, s+Curve25519.SignatureLength))
     s = s + Curve25519.SignatureLength
-    val timestamp = Longs.fromByteArray(bytes.slice(s,s+8))
+    val (from, to, signatures, fee, timestamp) = SimpleBoxTransactionCompanion.parseBytesCommonArgs(bytes.drop(s)).get
 
-    RegisterTransaction(role, epochID, pubKey, sig, timestamp)
+    RegisterTransaction(role, epochID, from, to, signatures, fee, pubKey, sig, timestamp)
   }
 }

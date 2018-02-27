@@ -1,7 +1,7 @@
 package examples.hybrid.transaction
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
-import examples.commons.SimpleBoxTransactionMemPool
+import examples.commons.{SimpleBoxTransactionMemPool, Value}
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
@@ -69,7 +69,9 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     val epochHeight = view.history.height % TreasuryManager.EPOCH_LEN
 
     epochHeight match {
-      case h if REGISTER_RANGE.contains(h) => generateRegisterTx(view)
+      case h if VOTER_REGISTER_RANGE.contains(h) => generateRegisterTx(Role.Voter, view)
+      case h if EXPERT_REGISTER_RANGE.contains(h) => generateRegisterTx(Role.Expert, view)
+      case h if COMMITTEE_REGISTER_RANGE.contains(h) => generateRegisterTx(Role.Committee, view)
       case h if DISTR_KEY_GEN_RANGE.contains(h) => Seq() // generateDKGTx(view)
       case h if VOTING_RANGE.contains(h) => generateBallotTx(view) // Only for testing! Normally a ballot should be created manually by a voter
       case h if VOTING_DECRYPTION_R1_RANGE.contains(h) => generateC1ShareR1(view)
@@ -79,20 +81,27 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     }
   }
 
-  private def generateRegisterTx(view: NodeView): Seq[TreasuryTransaction] = {
+  private def generateRegisterTx(role: Role, view: NodeView): Seq[TreasuryTransaction] = {
     // TODO: consider a better way to check if a node has already been registered for the role
-    val isRegisteredAsCommittee = view.vault.treasurySigningPubKeys(Role.Committee, view.trState.epochNum).nonEmpty
-    val isRegisteredAsExpert = view.vault.treasurySigningPubKeys(Role.Expert, view.trState.epochNum).nonEmpty
-    val isRegisteredAsVoter = view.vault.treasurySigningPubKeys(Role.Voter, view.trState.epochNum).nonEmpty
+    val tx = role match {
+      case Role.Expert =>
+        val isRegisteredAsExpert = view.vault.treasurySigningPubKeys(Role.Expert, view.trState.epochNum).nonEmpty
+        if (settings.isExpert && !isRegisteredAsExpert)
+          RegisterTransaction.create(view.vault, Role.Expert, Value @@ 1L, 0, view.trState.epochNum).toOption
+        else None
+      case Role.Voter =>
+        val isRegisteredAsVoter = view.vault.treasurySigningPubKeys(Role.Voter, view.trState.epochNum).nonEmpty
+        if (settings.isVoter && !isRegisteredAsVoter)
+          RegisterTransaction.create(view.vault, Role.Voter, Value @@ 1L, 0, view.trState.epochNum).toOption
+        else None
+      case Role.Committee =>
+        val isRegisteredAsCommittee = view.vault.treasurySigningPubKeys(Role.Committee, view.trState.epochNum).nonEmpty
+        if (settings.isCommittee && !isRegisteredAsCommittee)
+          CommitteeRegisterTransaction.create(view.vault, view.trState.epochNum).toOption
+        else None
+    }
 
-    var txs = List[TreasuryTransaction]()
-    if (settings.isCommittee && !isRegisteredAsCommittee)
-      txs = CommitteeRegisterTransaction.create(view.vault, view.trState.epochNum).get :: txs
-    if (settings.isExpert && !isRegisteredAsExpert)
-      txs = RegisterTransaction.create(view.vault, Role.Expert, view.trState.epochNum).get :: txs
-    if (settings.isVoter && !isRegisteredAsVoter)
-      txs = RegisterTransaction.create(view.vault, Role.Voter, view.trState.epochNum).get :: txs
-    txs
+    tx.map(Seq(_)).getOrElse(Seq())
   }
 
   /* It is only for testing purposes. Normally Ballot transactions should be created manually by a voter */

@@ -15,6 +15,7 @@ import scorex.core.transaction.box.BoxUnlocker
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.transaction.proof.{Proof, Signature25519}
 import scorex.crypto.hash.Blake2b256
+import scorex.crypto.signatures.{Curve25519, PublicKey, Signature}
 
 import scala.util.{Failure, Try}
 
@@ -62,6 +63,13 @@ abstract class SimpleBoxTransaction(val from: IndexedSeq[(PublicKey25519Proposit
 
 object SimpleBoxTransaction {
 
+  type Arguments = (
+      IndexedSeq[(PublicKey25519Proposition, Nonce)], // from
+      IndexedSeq[(PublicKey25519Proposition, Value)], // to
+      IndexedSeq[Signature25519], // signatures
+      Long, // fee
+      Long) // timestamp
+
   def nonceFromDigest(digest: Array[Byte]): Nonce = Nonce @@ Longs.fromByteArray(digest.take(8))
 }
 
@@ -91,5 +99,43 @@ object SimpleBoxTransactionCompanion extends Serializer[SimpleBoxTransaction] {
       case PaymentTransaction.TransactionTypeId => PaymentTransactionCompanion.parseBytes(bytes.drop(1))
       case _ => Failure(new MatchError("Unknown transaction type id"))
     }
+  }
+
+  def toBytesCommonArgs(m: SimpleBoxTransaction): Array[Byte] = {
+    Bytes.concat(Longs.toByteArray(m.fee),
+      Longs.toByteArray(m.timestamp),
+      Ints.toByteArray(m.signatures.length),
+      Ints.toByteArray(m.from.length),
+      Ints.toByteArray(m.to.length),
+      m.signatures.foldLeft(Array[Byte]())((a, b) => Bytes.concat(a, b.bytes)),
+      m.from.foldLeft(Array[Byte]())((a, b) => Bytes.concat(a, b._1.bytes, Longs.toByteArray(b._2))),
+      m.to.foldLeft(Array[Byte]())((a, b) => Bytes.concat(a, b._1.bytes, Longs.toByteArray(b._2)))
+    )
+  }
+
+  def parseBytesCommonArgs(bytes: Array[Byte]): Try[Arguments] = Try {
+    val fee = Longs.fromByteArray(bytes.slice(0, 8))
+    val timestamp = Longs.fromByteArray(bytes.slice(8, 16))
+    val sigLength = Ints.fromByteArray(bytes.slice(16, 20))
+    val fromLength = Ints.fromByteArray(bytes.slice(20, 24))
+    val toLength = Ints.fromByteArray(bytes.slice(24, 28))
+    val signatures = (0 until sigLength) map { i =>
+      Signature25519(Signature @@ bytes.slice(28 + i * Curve25519.SignatureLength, 28 + (i + 1) * Curve25519.SignatureLength))
+    }
+    val s = 28 + sigLength * Curve25519.SignatureLength
+    val elementLength = 8 + Curve25519.KeyLength
+    val from = (0 until fromLength) map { i =>
+      val pk = PublicKey @@ bytes.slice(s + i * elementLength, s + (i + 1) * elementLength - 8)
+      val v = Longs.fromByteArray(bytes.slice(s + (i + 1) * elementLength - 8, s + (i + 1) * elementLength))
+      (PublicKey25519Proposition(pk), Nonce @@ v)
+    }
+    val s2 = s + fromLength * elementLength
+    val to = (0 until toLength) map { i =>
+      val pk = PublicKey @@ bytes.slice(s2 + i * elementLength, s2 + (i + 1) * elementLength - 8)
+      val v = Longs.fromByteArray(bytes.slice(s2 + (i + 1) * elementLength - 8, s2 + (i + 1) * elementLength))
+      (PublicKey25519Proposition(pk), Value @@ v)
+    }
+
+    (from, to, signatures, fee, timestamp)
   }
 }
