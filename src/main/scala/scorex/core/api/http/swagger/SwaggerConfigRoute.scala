@@ -1,6 +1,7 @@
 package scorex.core.api.http.swagger
 
 import akka.actor.ActorRefFactory
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity}
 import akka.http.scaladsl.server.Route
 import io.circe.Json
 import scorex.core.api.http.{ApiRoute, SuccessApiResponse}
@@ -11,7 +12,11 @@ class SwaggerConfigRoute(swaggerConf: String, override val settings: RESTApiSett
 
   override val route: Route = {
     path("api-docs" / "swagger.conf") {
-      jsonRoute(SuccessApiResponse(Json.fromString(swaggerConf)), get)
+      //jsonRoute(SuccessApiResponse(Json.fromString(swaggerConf)), get)
+      get {
+        //TODO correct content type?
+        complete(HttpEntity(ContentTypes.`application/json`, swaggerConf))
+      }
     }
   }
 }
