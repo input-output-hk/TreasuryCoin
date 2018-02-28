@@ -15,14 +15,12 @@ import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 import scorex.core.{ModifierId, VersionTag}
 import treasury.crypto.core.PubKey
-import treasury.crypto.keygen.{DecryptionManager, KeyShares}
 import treasury.crypto.keygen.datastructures.C1Share
+import treasury.crypto.keygen.{DecryptionManager, KeyShares}
 import treasury.crypto.voting.Tally
 import treasury.crypto.voting.ballots.{Ballot, ExpertBallot, VoterBallot}
 
 import scala.util.Try
-
-case class Proposal(name: String, requestedSum: Value, recipient: PublicKey25519Proposition)
 
 /**
   * Holds the current state of the treasury epoch
@@ -40,9 +38,9 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   val cs = TreasuryManager.cs
 
   private var version: VersionTag = VersionTag @@ (ModifierId @@ Array.fill(32)(0: Byte))
-  private var committeePubKeys: List[(PublicKey25519Proposition, PubKey)] = List()
-  private var expertsPubKeys: List[PublicKey25519Proposition] = List()
-  private var votersPubKeys: List[PublicKey25519Proposition] = List()
+  private var committeePubKeys: List[CommitteeInfo] = List()
+  private var expertsPubKeys: List[ExpertInfo] = List()
+  private var votersPubKeys: List[VoterInfo] = List()
   private var proposals: List[Proposal] = List()
   private var sharedPublicKey: Option[PubKey] = None
   private var votersBallots: Map[Int, Seq[VoterBallot]] = Map() // voterId -> Seq(ballot)
@@ -61,10 +59,10 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     case Role.Expert => getExpertsSigningKeys
     case Role.Voter => getVotersSigningKeys
   }
-  def getCommitteeSigningKeys = committeePubKeys.map(_._1)
-  def getCommitteeProxyKeys = committeePubKeys.map(_._2)
-  def getExpertsSigningKeys = expertsPubKeys
-  def getVotersSigningKeys = votersPubKeys
+  def getCommitteeSigningKeys = committeePubKeys.map(_.signingKey)
+  def getCommitteeProxyKeys = committeePubKeys.map(_.proxyKey)
+  def getExpertsSigningKeys = expertsPubKeys.map(_.signingKey)
+  def getVotersSigningKeys = votersPubKeys.map(_.signingKey)
 
   def getProposals = proposals
   def getSharedPubKey = sharedPublicKey
@@ -92,12 +90,16 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
 
   protected def apply(tx: TreasuryTransaction): Try[Unit] = tx match {
-      case t: RegisterTransaction => Try { t.role match {
-        case Role.Expert => expertsPubKeys = expertsPubKeys :+ t.pubKey
-        case Role.Voter => votersPubKeys = votersPubKeys :+ t.pubKey
-      }}
+      case t: RegisterTransaction => Try {
+        val deposit = Value @@ t.to.filter(_._1 == TreasuryManager.DEPOSIT_ADDR).map(_._2.toLong).sum
+        t.role match {
+          case Role.Expert => expertsPubKeys = expertsPubKeys :+ ExpertInfo(t.pubKey, deposit, t.from.head._1)
+          case Role.Voter => votersPubKeys = votersPubKeys :+ VoterInfo(t.pubKey, deposit, t.from.head._1)
+        }
+      }
       case t: CommitteeRegisterTransaction => Try {
-        committeePubKeys = committeePubKeys :+ (t.pubKey, t.proxyPubKey)
+        val deposit = Value @@ t.to.filter(_._1 == TreasuryManager.DEPOSIT_ADDR).map(_._2.toLong).sum
+        committeePubKeys = committeePubKeys :+ CommitteeInfo(t.proxyPubKey, t.pubKey, deposit, t.from.head._1)
       }
       case t: ProposalTransaction => Try {
         proposals = proposals :+ Proposal(t.name, t.requestedSum, t.recipient)
@@ -146,7 +148,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     epochHeight match {
       case TreasuryManager.DISTR_KEY_GEN_RANGE.end =>
         if (committeePubKeys.nonEmpty)
-          sharedPublicKey = Some(committeePubKeys.map(_._2).foldLeft(cs.infinityPoint)((sum,next) => sum.add(next)))
+          sharedPublicKey = Some(committeePubKeys.map(_.proxyKey).foldLeft(cs.infinityPoint)((sum,next) => sum.add(next)))
         else log.warn("No committee members found!")
 
       case TreasuryManager.VOTING_DECRYPTION_R1_RECOVERY_RANGE.end =>
@@ -289,3 +291,24 @@ object TreasuryState {
     state
   }
 }
+
+case class Proposal(name: String, requestedSum: Value, recipient: PublicKey25519Proposition)
+
+abstract class PartyInfo {
+  val signingKey: PublicKey25519Proposition
+  val deposit: Value
+  val paybackAddr: PublicKey25519Proposition
+}
+
+case class CommitteeInfo(proxyKey: PubKey,
+                         signingKey: PublicKey25519Proposition,
+                         deposit: Value,
+                         paybackAddr: PublicKey25519Proposition) extends PartyInfo
+
+case class VoterInfo(signingKey: PublicKey25519Proposition,
+                     deposit: Value,
+                     paybackAddr: PublicKey25519Proposition) extends PartyInfo
+
+case class ExpertInfo(signingKey: PublicKey25519Proposition,
+                      deposit: Value,
+                      paybackAddr: PublicKey25519Proposition) extends PartyInfo
