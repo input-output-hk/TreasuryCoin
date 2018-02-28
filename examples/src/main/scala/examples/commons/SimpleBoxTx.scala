@@ -85,25 +85,10 @@ object SimpleBoxTx {
              to: Seq[(PublicKey25519Proposition, Value)],
              fee: Long,
              boxesIdsToExclude: Seq[Array[Byte]] = Seq()): Try[SimpleBoxTx] = Try {
-    var s = 0L
-    val amount = to.map(_._2.toLong).sum
 
-    val from: IndexedSeq[(PrivateKey25519, Nonce, Value)] = w.boxes()
-      .filter(b => !boxesIdsToExclude.exists(_ sameElements b.box.id)).sortBy(_.createdAt).takeWhile { b =>
-      s = s + b.box.value
-      s < amount + b.box.value
-    }.flatMap { b =>
-      w.secretByPublicImage(b.box.proposition).map(s => (s, b.box.nonce, b.box.value))
-    }.toIndexedSeq
-    val canSend = from.map(_._3.toLong).sum
-    val charge: (PublicKey25519Proposition, Value) = (w.publicKeys.head, Value @@ (canSend - amount - fee))
-
-    val outputs: IndexedSeq[(PublicKey25519Proposition, Value)] = (to :+ charge).toIndexedSeq
-
-    require(from.map(_._3.toLong).sum - outputs.map(_._2.toLong).sum == fee)
-
+    val (inputs, outputs) = w.prepareOutputs(to, fee, boxesIdsToExclude).get
     val timestamp = System.currentTimeMillis()
-    SimpleBoxTx(from.map(t => t._1 -> t._2), outputs, fee, timestamp)
+    SimpleBoxTx(inputs, outputs, fee, timestamp)
   }
 }
 

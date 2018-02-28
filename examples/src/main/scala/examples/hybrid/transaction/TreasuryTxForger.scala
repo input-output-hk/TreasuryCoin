@@ -87,12 +87,14 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       case Role.Expert =>
         val isRegisteredAsExpert = view.vault.treasurySigningPubKeys(Role.Expert, view.trState.epochNum).nonEmpty
         if (settings.isExpert && !isRegisteredAsExpert)
-          RegisterTransaction.create(view.vault, Role.Expert, Value @@ 1L, 0, view.trState.epochNum).toOption
+          RegisterTransaction.create(view.vault, Role.Expert,
+            Value @@ TreasuryManager.EXPERT_DEPOSIT_RANGE.start.toLong, 1, view.trState.epochNum).toOption
         else None
       case Role.Voter =>
         val isRegisteredAsVoter = view.vault.treasurySigningPubKeys(Role.Voter, view.trState.epochNum).nonEmpty
         if (settings.isVoter && !isRegisteredAsVoter)
-          RegisterTransaction.create(view.vault, Role.Voter, Value @@ 1L, 0, view.trState.epochNum).toOption
+          RegisterTransaction.create(view.vault, Role.Voter,
+            Value @@ TreasuryManager.VOTER_DEPOSIT_RANGE.start.toLong, 1, view.trState.epochNum).toOption
         else None
       case Role.Committee =>
         val isRegisteredAsCommittee = view.vault.treasurySigningPubKeys(Role.Committee, view.trState.epochNum).nonEmpty

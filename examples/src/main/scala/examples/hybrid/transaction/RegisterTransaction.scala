@@ -86,29 +86,9 @@ object RegisterTransaction {
              fee: Long,
              epochID: Long,
              boxesIdsToExclude: Seq[Array[Byte]] = Seq()): Try[RegisterTransaction] = Try {
-
-    var s = 0L
     val to = Seq((TreasuryManager.DEPOSIT_ADDR, depositAmount))
 
-    val from: IndexedSeq[(PrivateKey25519, Nonce, Value)] = w.boxes()
-      .filter(b => !boxesIdsToExclude.exists(_ sameElements b.box.id)).sortBy(_.createdAt).takeWhile { b =>
-      s = s + b.box.value
-      s < depositAmount + b.box.value
-    }.flatMap { b =>
-      w.secretByPublicImage(b.box.proposition).map(s => (s, b.box.nonce, b.box.value))
-    }.toIndexedSeq
-    val canSend = from.map(_._3.toLong).sum
-    require(canSend >= (depositAmount + fee))
-
-    val charge: Seq[(PublicKey25519Proposition, Value)] =
-      if (canSend > depositAmount + fee)
-        Seq((w.publicKeys.head, Value @@ (canSend - depositAmount - fee)))
-      else Seq()
-
-    val inputs = from.map(t => t._1 -> t._2)
-    val outputs: IndexedSeq[(PublicKey25519Proposition, Value)] = (to ++ charge).toIndexedSeq
-
-    require(from.map(_._3.toLong).sum - outputs.map(_._2.toLong).sum == fee)
+    val (inputs, outputs) = w.prepareOutputs(to, fee, boxesIdsToExclude).get
 
     val pubKey = w.generateNewTreasurySigningSecret(role, epochID)
     val privKey = w.treasurySigningSecretByPubKey(epochID, pubKey).get.privKey

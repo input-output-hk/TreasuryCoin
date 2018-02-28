@@ -3,7 +3,7 @@ package examples.hybrid.wallet
 import java.io.File
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
-import examples.commons.{PublicKey25519NoncedBox, PublicKey25519NoncedBoxSerializer, SimpleBoxTransaction}
+import examples.commons._
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role.Role
 import examples.hybrid.blocks.HybridBlock
@@ -77,6 +77,36 @@ case class HWallet(seed: ByteStr, store: LSMStore, treasuryStore: LSMStore)
       Seq(),
       Seq(SecretsKey -> ByteArrayWrapper(allSecrets.toArray.flatMap(p => PrivateKey25519Serializer.toBytes(p)))))
     HWallet(seed, store, treasuryStore)
+  }
+
+  def prepareOutputs(to: Seq[(PublicKey25519Proposition, Value)],
+                     fee: Long, boxesIdsToExclude: Seq[Array[Byte]] = Seq()):
+    Try[(IndexedSeq[(PrivateKey25519, Nonce)], IndexedSeq[(PublicKey25519Proposition, Value)])] = Try {
+
+    var s = 0L
+    val amount = to.map(_._2.toLong).sum
+
+    val from: IndexedSeq[(PrivateKey25519, Nonce, Value)] = boxes()
+      .filter(b => !boxesIdsToExclude.exists(_ sameElements b.box.id)).sortBy(_.createdAt).takeWhile { b =>
+      s = s + b.box.value
+      s < amount + b.box.value
+    }.flatMap { b =>
+      secretByPublicImage(b.box.proposition).map(s => (s, b.box.nonce, b.box.value))
+    }.toIndexedSeq
+    val canSend = from.map(_._3.toLong).sum
+    require(canSend >= (amount + fee))
+
+    val charge: Seq[(PublicKey25519Proposition, Value)] =
+      if (canSend > amount + fee)
+        Seq((publicKeys.head, Value @@ (canSend - amount - fee)))
+      else Seq()
+
+    val inputs = from.map(t => t._1 -> t._2)
+    val outputs: IndexedSeq[(PublicKey25519Proposition, Value)] = (to ++ charge).toIndexedSeq
+
+    require(from.map(_._3.toLong).sum - outputs.map(_._2.toLong).sum == fee)
+
+    (inputs, outputs)
   }
 
   /**

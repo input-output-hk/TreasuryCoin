@@ -40,17 +40,18 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
   }
 
   def validateRegistration(tx: RegisterTransaction): Try[Unit] = Try {
+    val depositAmount = tx.to.filter(_._1 == TreasuryManager.DEPOSIT_ADDR).map(_._2.toLong).sum
+
     tx.role match {
       case Role.Expert =>
         require(TreasuryManager.EXPERT_REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
         require(!trState.getExpertsSigningKeys.contains(tx.pubKey), "Expert pubkey has been already registered")
+        require(TreasuryManager.EXPERT_DEPOSIT_RANGE.contains(depositAmount), "Insufficient deposit")
       case Role.Voter =>
         require(TreasuryManager.VOTER_REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
         require(!trState.getVotersSigningKeys.contains(tx.pubKey), "Voter pubkey has been already registered")
+        require(TreasuryManager.VOTER_DEPOSIT_RANGE.contains(depositAmount), "Insufficient deposit")
     }
-
-    // TODO: check that transaction makes a necessary deposit. Probably there should be some special type of time-locked box.
-    // tx.to.foreach()
   }
 
   def validateCommitteeRegistration(tx: CommitteeRegisterTransaction): Try[Unit] = Try {
