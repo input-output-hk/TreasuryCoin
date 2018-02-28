@@ -60,8 +60,8 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
     require(!trState.getCommitteeSigningKeys.contains(tx.pubKey), "Committee signing pubkey has been already registered")
     require(!trState.getCommitteeProxyKeys.contains(tx.proxyPubKey), "Committee proxy pubkey has been already registered")
 
-    // TODO: check that transaction makes a necessary deposit. Probably there should be some special type of time-locked box.
-    // tx.to.foreach()
+    val depositAmount = tx.to.filter(_._1 == TreasuryManager.DEPOSIT_ADDR).map(_._2.toLong).sum
+    require(TreasuryManager.COMMITTEE_DEPOSIT_RANGE.contains(depositAmount), "Insufficient deposit")
   }
 
   def validateProposal(tx: ProposalTransaction): Try[Unit] = Try {

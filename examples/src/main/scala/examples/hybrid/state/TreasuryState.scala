@@ -232,7 +232,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
     val committee = getDecryptionSharesR2.toSeq.sortBy(_._1).map(v => getCommitteeSigningKeys(v._1))
     if (committee.size > 0) {
-      val paymentPerCommittee = Value @@ (TreasuryManager.COMMITTE_BUDGET / committee.size).round
+      val paymentPerCommittee = Value @@ (TreasuryManager.COMMITTEE_BUDGET / committee.size).round
       if (paymentPerCommittee > 0)
         payments = payments ++ committee.map(v => (v, paymentPerCommittee))
     }

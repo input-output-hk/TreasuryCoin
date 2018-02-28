@@ -99,7 +99,8 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       case Role.Committee =>
         val isRegisteredAsCommittee = view.vault.treasurySigningPubKeys(Role.Committee, view.trState.epochNum).nonEmpty
         if (settings.isCommittee && !isRegisteredAsCommittee)
-          CommitteeRegisterTransaction.create(view.vault, view.trState.epochNum).toOption
+          CommitteeRegisterTransaction.create(view.vault,
+            Value @@ TreasuryManager.COMMITTEE_DEPOSIT_RANGE.start.toLong, 1, view.trState.epochNum).toOption
         else None
     }
 
