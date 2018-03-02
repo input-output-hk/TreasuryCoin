@@ -124,12 +124,12 @@ object PosForger extends ScorexLogging {
         val boxKeys = boxes.flatMap(b => view.vault.secretByPublicImage(b.proposition).map(s => (b, s)))
 
         val blockHeight = view.history.storage.heightOf(bestPowBlock.id).get + 1
-        val treasuryTxValidatorTry = Try(new TreasuryTxValidator(view.trState, blockHeight))
+        val treasuryTxValidatorTry = Try(new TreasuryTxValidator(view.trState, blockHeight, Some(view.history), Some(view.state)))
 
         val paymentTx =
           if ((blockHeight % TreasuryManager.PAYMENT_BLOCK_HEIGHT) == 0) {
             // Mandatory PaymentTransaction at the particular height
-            PaymentTransaction.create(view.trState).toOption
+            PaymentTransaction.create(view.trState, view.history, view.state).toOption
           } else None
 
         val txs = view.pool.take(TransactionsPerBlock).foldLeft(Seq[SimpleBoxTransaction]()) { case (collected, tx) =>

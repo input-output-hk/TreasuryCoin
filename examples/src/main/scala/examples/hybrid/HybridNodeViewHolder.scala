@@ -74,7 +74,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
 
   override protected def txModify(tx: SimpleBoxTransaction): Unit = {
     //todo: async validation?
-    val treasuryTxValidatorTry = Try(new TreasuryTxValidator(treasuryState, history().height))
+    val treasuryTxValidatorTry = Try(new TreasuryTxValidator(treasuryState, history().height, Some(history), Some(minimalState)))
 
     val errorOpt: Option[Throwable] = minimalState() match {
       case txValidator: TransactionValidation[P, TX] =>
@@ -134,14 +134,14 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
                 }
 
                 /* if everything is ok we can update treasury state */
-                updateTreasuryState(newHistory, treasuryState, progressInfo) match {
+                updateTreasuryState(newHistory, minimalState, treasuryState, progressInfo) match {
                   case Success(newTreasuryState) =>
                     treasuryState = newTreasuryState
                     updateNodeView(Some(newHistory), Some(newMinState), Some(newVault), Some(newMemPool))
                     log.info(s"Persistent modifier ${pmod.encodedId} applied successfully")
                   case Failure(e) =>
-                    log.warn(s"Persistent modifier (id: ${pmod.encodedId}, contents: $pmod) can not be applied to treasury state", e)
-                    updateNodeView(updatedHistory = Some(newHistory))
+                    log.warn(s"Persistent modifier (id: ${pmod.encodedId}) can not be applied to treasury state", e)
+                    //updateNodeView(updatedHistory = Some(newHistory))
                     notifySubscribers(EventType.SemanticallyFailedPersistentModifier, SemanticallyFailedModification(pmod, e))
                 }
 
@@ -164,8 +164,9 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
   }
 
   private def updateTreasuryState(his: HybridHistory,
-                              trState: TreasuryState,
-                              progressInfo: ProgressInfo[HybridBlock]): Try[TreasuryState] = Try {
+                                  state: HBoxStoredState,
+                                  trState: TreasuryState,
+                                  progressInfo: ProgressInfo[HybridBlock]): Try[TreasuryState] = Try {
     val epochNum = his.storage.heightOf(progressInfo.toApply.get.id).get / TreasuryManager.EPOCH_LEN
 
     if (trState.epochNum != epochNum) { // new epoch has been started, reset treasury state
@@ -174,7 +175,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
       trState.rollback(VersionTag @@ progressInfo.branchPoint.get)
         .getOrElse(TreasuryState.generate(his).get) // regenerate it entirely in case of failed rollback
     } else {
-      trState.apply(progressInfo.toApply.get, his).get
+      trState.apply(progressInfo.toApply.get, his, Some(state)).get
     }
   }
 

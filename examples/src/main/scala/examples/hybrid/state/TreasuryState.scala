@@ -2,7 +2,7 @@ package examples.hybrid.state
 
 import java.math.BigInteger
 
-import examples.commons.Value
+import examples.commons.{PublicKey25519NoncedBox, Value}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
 import examples.hybrid.TreasuryManager.Role.Role
@@ -38,9 +38,9 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   val cs = TreasuryManager.cs
 
   private var version: VersionTag = VersionTag @@ (ModifierId @@ Array.fill(32)(0: Byte))
-  private var committeePubKeys: List[CommitteeInfo] = List()
-  private var expertsPubKeys: List[ExpertInfo] = List()
-  private var votersPubKeys: List[VoterInfo] = List()
+  private var committeeInfo: List[CommitteeInfo] = List()
+  private var expertsInfo: List[ExpertInfo] = List()
+  private var votersInfo: List[VoterInfo] = List()
   private var proposals: List[Proposal] = List()
   private var sharedPublicKey: Option[PubKey] = None
   private var votersBallots: Map[Int, Seq[VoterBallot]] = Map() // voterId -> Seq(ballot)
@@ -54,15 +54,19 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   private var tallyResult: Map[Int, Tally.Result] = Map() // proposalId -> voting result
 
+  def getVotersInfo = votersInfo
+  def getExpertsInfo = expertsInfo
+  def getCommitteeInfo = committeeInfo
+
   def getSigningKeys(role: Role): List[PublicKey25519Proposition] = role match {
     case Role.Committee => getCommitteeSigningKeys
     case Role.Expert => getExpertsSigningKeys
     case Role.Voter => getVotersSigningKeys
   }
-  def getCommitteeSigningKeys = committeePubKeys.map(_.signingKey)
-  def getCommitteeProxyKeys = committeePubKeys.map(_.proxyKey)
-  def getExpertsSigningKeys = expertsPubKeys.map(_.signingKey)
-  def getVotersSigningKeys = votersPubKeys.map(_.signingKey)
+  def getCommitteeSigningKeys = committeeInfo.map(_.signingKey)
+  def getCommitteeProxyKeys = committeeInfo.map(_.proxyKey)
+  def getExpertsSigningKeys = expertsInfo.map(_.signingKey)
+  def getVotersSigningKeys = votersInfo.map(_.signingKey)
 
   def getProposals = proposals
   def getSharedPubKey = sharedPublicKey
@@ -91,26 +95,26 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   protected def apply(tx: TreasuryTransaction): Try[Unit] = tx match {
       case t: RegisterTransaction => Try {
-        val deposit = Value @@ t.to.filter(_._1 == TreasuryManager.DEPOSIT_ADDR).map(_._2.toLong).sum
+        val deposit = t.newBoxes.find(_.proposition == TreasuryManager.DEPOSIT_ADDR).get
         t.role match {
-          case Role.Expert => expertsPubKeys = expertsPubKeys :+ ExpertInfo(t.pubKey, deposit, t.from.head._1)
-          case Role.Voter => votersPubKeys = votersPubKeys :+ VoterInfo(t.pubKey, deposit, t.from.head._1)
+          case Role.Expert => expertsInfo = expertsInfo :+ ExpertInfo(t.pubKey, deposit, t.from.head._1)
+          case Role.Voter => votersInfo = votersInfo :+ VoterInfo(t.pubKey, deposit, t.from.head._1)
         }
       }
       case t: CommitteeRegisterTransaction => Try {
-        val deposit = Value @@ t.to.filter(_._1 == TreasuryManager.DEPOSIT_ADDR).map(_._2.toLong).sum
-        committeePubKeys = committeePubKeys :+ CommitteeInfo(t.proxyPubKey, t.pubKey, deposit, t.from.head._1)
+        val deposit = t.newBoxes.find(_.proposition == TreasuryManager.DEPOSIT_ADDR).get
+        committeeInfo = committeeInfo :+ CommitteeInfo(t.proxyPubKey, t.pubKey, deposit, t.from.head._1)
       }
       case t: ProposalTransaction => Try {
         proposals = proposals :+ Proposal(t.name, t.requestedSum, t.recipient)
       }
       case t: BallotTransaction => Try { t.voterType match {
         case VoterType.Voter =>
-          val id = votersPubKeys.indexOf(t.pubKey)
+          val id = getVotersSigningKeys.indexOf(t.pubKey)
           require(id >= 0, "Voter isn't found")
           votersBallots = votersBallots + (id -> t.ballots.map(_.asInstanceOf[VoterBallot]))
         case VoterType.Expert =>
-          val id = expertsPubKeys.indexOf(t.pubKey)
+          val id = getExpertsSigningKeys.indexOf(t.pubKey)
           require(id >= 0, "Expert isn't found")
           expertsBallots = expertsBallots + (id -> t.ballots.map(_.asInstanceOf[ExpertBallot]))
       }}
@@ -125,9 +129,8 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       case t: PaymentTransaction => Try(log.info(s"Payment tx was applied ${tx.json}"))
   }
 
-  def apply(block: HybridBlock, history: HybridHistory): Try[TreasuryState] = Try {
-    val blockHeight = history.storage.heightOf(block.id).get
-    validate(block, blockHeight).get
+  def apply(block: HybridBlock, history: HybridHistory, state: Option[HBoxStoredState] = None): Try[TreasuryState] = Try {
+    validate(block, history, state).get
 
     block match {
       case b:PosBlock => {
@@ -147,17 +150,17 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   private def updateState(epochHeight: Int): TreasuryState = {
     epochHeight match {
       case TreasuryManager.DISTR_KEY_GEN_RANGE.end =>
-        if (committeePubKeys.nonEmpty)
-          sharedPublicKey = Some(committeePubKeys.map(_.proxyKey).foldLeft(cs.infinityPoint)((sum,next) => sum.add(next)))
+        if (committeeInfo.nonEmpty)
+          sharedPublicKey = Some(getCommitteeProxyKeys.foldLeft(cs.infinityPoint)((sum,next) => sum.add(next)))
         else log.warn("No committee members found!")
 
       case TreasuryManager.VOTING_DECRYPTION_R1_RECOVERY_RANGE.end =>
         /* We can calculate delegations ONLY IF we have valid decryption shares from ALL committee members
         *  TODO: recover secret keys (and corresponding decryption shares) of the faulty CMs by KeyShares submissions */
-        if (c1SharesR1.size == committeePubKeys.size) {
+        if (c1SharesR1.size == committeeInfo.size) {
           val deleg = proposals.indices.map { i =>
             val shares = getDecryptionSharesR1ForProposal(i)
-            assert(shares.size == committeePubKeys.size)
+            assert(shares.size == committeeInfo.size)
             val decryptor = new DecryptionManager(TreasuryManager.cs, getBallotsForProposal(i))
             (i -> decryptor.computeDelegations(shares.map(_.decryptedC1.map(_._1))))
           }
@@ -167,12 +170,12 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       case TreasuryManager.VOTING_DECRYPTION_R2_RECOVERY_RANGE.end =>
       /* We can decrypt final voting result ONLY IF we have valid decryption shares from ALL committee members
       *  TODO: recover secret keys (and corresponding decryption shares) of the faulty CMs by KeyShares submissions */
-        if (c1SharesR2.size == committeePubKeys.size && getDelegations.isDefined) {
+        if (c1SharesR2.size == committeeInfo.size && getDelegations.isDefined) {
           val result = proposals.indices.foreach { i =>
             val shares = getDecryptionSharesR2ForProposal(i).map(_.decryptedC1.map(_._1))
             val delegations = getDelegations.get(i)
-            assert(shares.size == committeePubKeys.size)
-            assert(delegations.size == expertsPubKeys.size)
+            assert(shares.size == committeeInfo.size)
+            assert(delegations.size == expertsInfo.size)
             val decryptor = new DecryptionManager(TreasuryManager.cs, getBallotsForProposal(i))
             val tally = decryptor.computeTally(shares, delegations)
             if (tally.isSuccess)
@@ -186,7 +189,9 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     this
   }
 
-  def validate(block: HybridBlock, blockHeight: Long): Try[Unit] = Try {
+  def validate(block: HybridBlock, history: HybridHistory, state: Option[HBoxStoredState]): Try[Unit] = Try {
+    val blockHeight = history.storage.heightOf(block.id).get
+
     block match {
       case _:PowBlock => Unit
       case b:PosBlock => {
@@ -195,7 +200,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         if ((blockHeight % TreasuryManager.PAYMENT_BLOCK_HEIGHT) == 0)
           require(trTxs.count(t => t.isInstanceOf[PaymentTransaction]) == 1, "Invalid block: PaymentTransaction is absent")
 
-        val validator = new TreasuryTxValidator(this, blockHeight)
+        val validator = new TreasuryTxValidator(this, blockHeight, Some(history), state)
         trTxs.foreach(validator.validate(_).get)
       }
     }
@@ -241,9 +246,60 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
     payments
   }
+
+  def getDepositPaybacks(history: HybridHistory, state: HBoxStoredState):
+    Try[Seq[(PublicKey25519NoncedBox, PublicKey25519Proposition)]] = Try {
+
+    val consistentState = state.rollbackTo(version)
+
+    // since we are going to pay back to parties that participated in the previous epochs,
+    // first define the number of an epoch which parties will be reimbursed
+    val paybackEpoch = epochNum - TreasuryManager.DEPOSIT_LOCK_PERIOD
+    require(paybackEpoch >= 0, "Payback isn't allowed")
+
+    val (voters, experts, committee) =
+      if (paybackEpoch == epochNum)
+        (getVotersInfo, getExpertsInfo, getCommitteeInfo)
+      else
+        TreasuryState.generatePartiesInfo(history, paybackEpoch).get
+
+    val partiesInfo = voters ++ experts ++ committee
+
+    // Filter those parties whose deposits are not accessible. It can be because of the punishement or deposit renewal
+    val paybackParties = partiesInfo.filter(box => state.closedBox(box.depositBox.id).isDefined)
+    paybackParties.map(p => (p.depositBox, p.paybackAddr))
+  }
 }
 
 object TreasuryState {
+
+  /**
+    * Recovers info about voters/experts/committies for old epochs.
+    * It is done by partial reconstruction of the TreasuryState for the required epoch.
+    *
+    * @param history history
+    * @param epochId epochid
+    * @return Success(seq) where seq is a sequence of triplets with parties info
+    */
+  def generatePartiesInfo(history: HybridHistory, epochId: Int):
+    Try[(Seq[VoterInfo], Seq[ExpertInfo], Seq[CommitteeInfo])] = Try {
+
+    val currentHeight = history.storage.height.toInt
+    val currentEpochNum = currentHeight / TreasuryManager.EPOCH_LEN
+    val currentEpochHeight = currentHeight % TreasuryManager.EPOCH_LEN
+    require(epochId >= 0 && epochId < currentEpochNum, "Parties info can be requested only for past epochs. Use getInfo methods directly for the current epoch.")
+
+    val count = (currentEpochNum - epochId) * TreasuryManager.EPOCH_LEN + currentEpochHeight + 1
+    // we should take all registration blocks
+    val epochBlocksIds = history.lastBlockIds(history.bestBlock, count).take(TreasuryManager.COMMITTEE_REGISTER_RANGE.end)
+
+    val trState = TreasuryState(epochId)
+
+    /* reconstruct necessary part of the TreasuryState */
+    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history).get)
+
+    (trState.getVotersInfo, trState.getExpertsInfo, trState.getCommitteeInfo)
+  }
 
   def generate(history: HybridHistory): Try[TreasuryState] = Try {
 
@@ -253,11 +309,11 @@ object TreasuryState {
 
     val epochBlocksIds = history.lastBlockIds(history.bestBlock, currentEpochHeight + 1)
 
-    val state = TreasuryState(epochNum)
+    val trState = TreasuryState(epochNum)
 
     /* parse all blocks in the current epoch and extract all treasury transactions */
-    epochBlocksIds.foreach(blockId => state.apply(history.modifierById(blockId).get, history).get)
-    state
+    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history).get)
+    trState
   }
 
   /**
@@ -284,11 +340,11 @@ object TreasuryState {
         history.lastBlockIds(history.bestBlock, count).take(TreasuryManager.EPOCH_LEN)
       }
 
-    val state = TreasuryState(epochId)
+    val trState = TreasuryState(epochId)
 
     /* parse all blocks in the epoch and extract all treasury transactions */
-    epochBlocksIds.foreach(blockId => state.apply(history.modifierById(blockId).get, history).get)
-    state
+    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history).get)
+    trState
   }
 }
 
@@ -296,19 +352,19 @@ case class Proposal(name: String, requestedSum: Value, recipient: PublicKey25519
 
 abstract class PartyInfo {
   val signingKey: PublicKey25519Proposition
-  val deposit: Value
+  val depositBox: PublicKey25519NoncedBox
   val paybackAddr: PublicKey25519Proposition
 }
 
 case class CommitteeInfo(proxyKey: PubKey,
                          signingKey: PublicKey25519Proposition,
-                         deposit: Value,
+                         depositBox: PublicKey25519NoncedBox,
                          paybackAddr: PublicKey25519Proposition) extends PartyInfo
 
 case class VoterInfo(signingKey: PublicKey25519Proposition,
-                     deposit: Value,
+                     depositBox: PublicKey25519NoncedBox,
                      paybackAddr: PublicKey25519Proposition) extends PartyInfo
 
 case class ExpertInfo(signingKey: PublicKey25519Proposition,
-                      deposit: Value,
+                      depositBox: PublicKey25519NoncedBox,
                       paybackAddr: PublicKey25519Proposition) extends PartyInfo

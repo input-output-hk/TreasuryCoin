@@ -3,6 +3,7 @@ package examples.hybrid.state
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
+import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
 import examples.hybrid.transaction._
@@ -14,7 +15,23 @@ import treasury.crypto.voting.{Expert, RegularVoter, Voter}
 
 import scala.util.{Failure, Success, Try}
 
-class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends ScorexLogging {
+/**
+  * Validates treasury transactions against current node view. Note that it is critical to pass consistent
+  * TreasuryState, HybridHistory and HBoxStoredState. Inconsistent version of TreasuryState and HBoxStoredState (which
+  * actually may happens during TreasuryState regeneration) will lead to failures during the PaymentTransaction verification.
+  * Thus HybridHistory and HBoxStoredState are optional arguments and could be skipped. In this case deposits paybacks in
+  * PaymentTransaction will not be verified, but it should be suitable in some cases (for instance, during TreasuryState
+  * regeneration, but not updating)
+  *
+  * @param trState TreasuryState
+  * @param history History
+  * @param state HBoxStoredState consistent to the trState (namely having the same version)
+  * @param height height
+  */
+class TreasuryTxValidator(val trState: TreasuryState,
+                          val height: Long,
+                          val history: Option[HybridHistory] = None,
+                          val state: Option[HBoxStoredState] = None) extends ScorexLogging {
 
   val epochHeight = height - (trState.epochNum * TreasuryManager.EPOCH_LEN)
   require(epochHeight >= 0 && epochHeight < TreasuryManager.EPOCH_LEN)
@@ -40,7 +57,9 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
   }
 
   def validateRegistration(tx: RegisterTransaction): Try[Unit] = Try {
-    val depositAmount = tx.to.filter(_._1 == TreasuryManager.DEPOSIT_ADDR).map(_._2.toLong).sum
+    val deposit = tx.to.filter(_._1 == TreasuryManager.DEPOSIT_ADDR)
+    require(deposit.size == 1, "Deposit should be as a single box payment")
+    val depositAmount = deposit.head._2
 
     tx.role match {
       case Role.Expert =>
@@ -60,8 +79,10 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
     require(!trState.getCommitteeSigningKeys.contains(tx.pubKey), "Committee signing pubkey has been already registered")
     require(!trState.getCommitteeProxyKeys.contains(tx.proxyPubKey), "Committee proxy pubkey has been already registered")
 
-    val depositAmount = tx.to.filter(_._1 == TreasuryManager.DEPOSIT_ADDR).map(_._2.toLong).sum
-    require(TreasuryManager.COMMITTEE_DEPOSIT_RANGE.contains(depositAmount), "Insufficient deposit")
+    val deposit = tx.to.filter(_._1 == TreasuryManager.DEPOSIT_ADDR)
+    require(deposit.size == 1, "Deposit should be as a single box payment")
+    val depositAmount = deposit.head._2
+    require(TreasuryManager.COMMITTEE_DEPOSIT_RANGE.contains(depositAmount), "Insufficient deposit amount")
   }
 
   def validateProposal(tx: ProposalTransaction): Try[Unit] = Try {
@@ -153,7 +174,14 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
 
   def validatePayment(tx: PaymentTransaction): Try[Unit] = Try {
     require(TreasuryManager.PAYMENT_BLOCK_HEIGHT == epochHeight, "Wrong height for payment transaction")
-    val payments = trState.getPayments.getOrElse(Seq())
-    require(payments.equals(tx.to), "Payments are invalid")
+
+    val coinbasePayments = trState.getPayments.getOrElse(Seq())
+    require(coinbasePayments.equals(tx.coinbasePayments), "Coinbase payments are invalid")
+
+    if (history.isDefined && state.isDefined) {
+      log.info("Validating deposit paybacks ...")
+      val depositPaybacks = trState.getDepositPaybacks(history.get, state.get).getOrElse(Seq())
+      require(depositPaybacks.equals(tx.depositPayback), "Deposit paybacks are invalid")
+    }
   }
 }

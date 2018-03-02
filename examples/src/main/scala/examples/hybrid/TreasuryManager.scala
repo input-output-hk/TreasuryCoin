@@ -34,6 +34,7 @@ object TreasuryManager {
   val VOTER_DEPOSIT_RANGE = 10 to 1000
   val EXPERT_DEPOSIT_RANGE = 100 to 100 // fixed deposit
   val COMMITTEE_DEPOSIT_RANGE = 100 to 100
+  val DEPOSIT_LOCK_PERIOD = 0 // in epochs
   val DEPOSIT_ADDR = PublicKey25519Proposition(PublicKey @@ Array.fill[Byte](Curve25519.KeyLength)(0.toByte)) // actually it's a proof of burn address
 
 
