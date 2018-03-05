@@ -97,13 +97,13 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       case t: RegisterTransaction => Try {
         val deposit = t.newBoxes.find(_.proposition == TreasuryManager.DEPOSIT_ADDR).get
         t.role match {
-          case Role.Expert => expertsInfo = expertsInfo :+ ExpertInfo(t.pubKey, deposit, t.from.head._1)
-          case Role.Voter => votersInfo = votersInfo :+ VoterInfo(t.pubKey, deposit, t.from.head._1)
+          case Role.Expert => expertsInfo = expertsInfo :+ ExpertInfo(t.pubKey, deposit, t.paybackAddr)
+          case Role.Voter => votersInfo = votersInfo :+ VoterInfo(t.pubKey, deposit, t.paybackAddr)
         }
       }
       case t: CommitteeRegisterTransaction => Try {
         val deposit = t.newBoxes.find(_.proposition == TreasuryManager.DEPOSIT_ADDR).get
-        committeeInfo = committeeInfo :+ CommitteeInfo(t.proxyPubKey, t.pubKey, deposit, t.from.head._1)
+        committeeInfo = committeeInfo :+ CommitteeInfo(t.proxyPubKey, t.pubKey, deposit, t.paybackAddr)
       }
       case t: ProposalTransaction => Try {
         proposals = proposals :+ Proposal(t.name, t.requestedSum, t.recipient)
@@ -222,7 +222,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     }
 
     // TODO: payment per voter should be based on deposit amount
-    val voters = getVotersBallots.toSeq.sortBy(_._1).map(v => getVotersSigningKeys(v._1))
+    val voters = getVotersBallots.toSeq.sortBy(_._1).map(v => getVotersInfo(v._1).paybackAddr)
     if (voters.size > 0) {
       val paymentPerVoter = Value @@ (TreasuryManager.VOTERS_BUDGET / voters.size).round
       if (paymentPerVoter > 0)
@@ -230,14 +230,14 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     }
 
     // TODO: payment per expert should be based on the number of delegations
-    val experts = getExpertsBallots.toSeq.sortBy(_._1).map(v => getExpertsSigningKeys(v._1))
+    val experts = getExpertsBallots.toSeq.sortBy(_._1).map(v => getExpertsInfo(v._1).paybackAddr)
     if (experts.size > 0) {
       val paymentPerExpert = Value @@ (TreasuryManager.EXPERTS_BUDGET / experts.size).round
       if (paymentPerExpert > 0)
         payments = payments ++ experts.map(v => (v, paymentPerExpert))
     }
 
-    val committee = getDecryptionSharesR2.toSeq.sortBy(_._1).map(v => getCommitteeSigningKeys(v._1))
+    val committee = getDecryptionSharesR2.toSeq.sortBy(_._1).map(v => getCommitteeInfo(v._1).paybackAddr)
     if (committee.size > 0) {
       val paymentPerCommittee = Value @@ (TreasuryManager.COMMITTEE_BUDGET / committee.size).round
       if (paymentPerCommittee > 0)

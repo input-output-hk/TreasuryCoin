@@ -20,6 +20,7 @@ import treasury.crypto.core.PubKey
 import scala.util.Try
 
 case class CommitteeRegisterTransaction(proxyPubKey: PubKey,
+                                        paybackAddr: PublicKey25519Proposition,
                                         override val epochID: Long,
                                         override val from: IndexedSeq[(PublicKey25519Proposition, Nonce)],
                                         override val to: IndexedSeq[(PublicKey25519Proposition, Value)],
@@ -41,7 +42,8 @@ case class CommitteeRegisterTransaction(proxyPubKey: PubKey,
       Longs.toByteArray(timestamp),
       Longs.toByteArray(fee))
 
-    Bytes.concat(pubKey.bytes,
+    Bytes.concat(paybackAddr.bytes,
+      pubKey.bytes,
       proxyPubKey.getEncoded(true),
       Longs.toByteArray(epochID),
       superBytes)
@@ -61,6 +63,7 @@ object CommitteeRegisterTransaction {
   val TransactionTypeId: scorex.core.ModifierTypeId = CommitteeRegisterTxTypeId
 
   def apply(proxyPubKey: PubKey,
+            paybackAddr: PublicKey25519Proposition,
             epochId: Long,
             from: IndexedSeq[(PrivateKey25519, Nonce)],
             to: IndexedSeq[(PublicKey25519Proposition, Value)],
@@ -71,13 +74,13 @@ object CommitteeRegisterTransaction {
     val fakeSig = Signature25519(Signature @@ Array[Byte]())
     val fakeSigs = from.map(_ => fakeSig)
 
-    val unsigned = CommitteeRegisterTransaction(proxyPubKey, epochId, fromPub, to, fakeSigs, fee, signingKey.publicImage, fakeSig, timestamp)
+    val unsigned = CommitteeRegisterTransaction(proxyPubKey, paybackAddr, epochId, fromPub, to, fakeSigs, fee, signingKey.publicImage, fakeSig, timestamp)
 
     val msg = unsigned.messageToSign
     val sigs = from.map { case (priv, _) => PrivateKey25519Companion.sign(priv, msg) }
     val sig = PrivateKey25519Companion.sign(signingKey, unsigned.messageToSign)
 
-    CommitteeRegisterTransaction(proxyPubKey, epochId, fromPub, to, sigs, fee, signingKey.publicImage, sig, timestamp)
+    CommitteeRegisterTransaction(proxyPubKey, paybackAddr, epochId, fromPub, to, sigs, fee, signingKey.publicImage, sig, timestamp)
   }
 
   def create(w: HWallet,
@@ -88,13 +91,14 @@ object CommitteeRegisterTransaction {
     val to = Seq((TreasuryManager.DEPOSIT_ADDR, depositAmount))
 
     val (inputs, outputs) = w.prepareOutputs(to, fee, boxesIdsToExclude).get
+    val paybackAddr = w.publicKeys.head
 
     val proxyPubKey = w.generateNewTreasuryCommitteeSecret(epochID)
     val signingPubKey = w.generateNewTreasurySigningSecret(Role.Committee, epochID)
     val signingPrivKey = w.treasurySigningSecretByPubKey(epochID, signingPubKey).get.privKey
     val timestamp = System.currentTimeMillis()
 
-    CommitteeRegisterTransaction(proxyPubKey, epochID, inputs, outputs, fee, signingPrivKey, timestamp)
+    CommitteeRegisterTransaction(proxyPubKey, paybackAddr, epochID, inputs, outputs, fee, signingPrivKey, timestamp)
   }
 }
 
@@ -105,6 +109,7 @@ object CommitteeRegisterTransactionCompanion extends Serializer[CommitteeRegiste
     Bytes.concat(
       Ints.toByteArray(keyBytes.length),
       keyBytes,
+      t.paybackAddr.bytes,
       Longs.toByteArray(t.epochID),
       t.pubKey.bytes,
       t.signature.bytes,
@@ -116,6 +121,8 @@ object CommitteeRegisterTransactionCompanion extends Serializer[CommitteeRegiste
     val keySize = Ints.fromByteArray(bytes.slice(0,4))
     val pubKey = TreasuryManager.cs.decodePoint(bytes.slice(4,keySize+4))
     var s = 4+keySize
+    val paybackAddr = PublicKey25519Proposition(PublicKey @@ bytes.slice(s, s+Curve25519.KeyLength))
+    s += Curve25519.KeyLength
     val epochID = Longs.fromByteArray(bytes.slice(s,s+8))
     val signingPubKey = PublicKey25519Proposition(PublicKey @@ bytes.slice(s+8, s+8+Curve25519.KeyLength))
     s = s+8+Curve25519.KeyLength
@@ -123,7 +130,7 @@ object CommitteeRegisterTransactionCompanion extends Serializer[CommitteeRegiste
     s = s+Curve25519.SignatureLength
     val (from, to, signatures, fee, timestamp) = SimpleBoxTransactionCompanion.parseBytesCommonArgs(bytes.drop(s)).get
 
-    CommitteeRegisterTransaction(pubKey, epochID, from, to, signatures, fee, signingPubKey, sig, timestamp)
+    CommitteeRegisterTransaction(pubKey, paybackAddr, epochID, from, to, signatures, fee, signingPubKey, sig, timestamp)
   }
 }
 
