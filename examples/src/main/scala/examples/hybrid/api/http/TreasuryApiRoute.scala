@@ -64,7 +64,8 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
       "proposals"             -> state.getProposals.map(p => Map(s"${state.getProposals.indexOf(p)} ${p.name}" -> s"${p.requestedSum} -> ${p.recipient}")).asJson,
       "decryption shares R1"  -> state.getDecryptionSharesR1.map(member => s"Committee id ${member._1}. Number of submitted shares: ${member._2.size}").asJson,
       "decryption shares R2"  -> state.getDecryptionSharesR2.map(member => s"Committee id ${member._1}. Number of submitted shares: ${member._2.size}").asJson,
-      "voting result"         -> state.getTally.map(p => s"Proposal ${p._1}: {yes: ${p._2.yes}, no: ${p._2.no}, abstain ${p._2.abstain}}").asJson
+      "voting result"         -> state.getTally.map(p => s"Proposal ${p._1}: {yes: ${p._2.yes}, no: ${p._2.no}, abstain ${p._2.abstain}}").asJson,
+      "coinbase payments"     -> state.getPayments.getOrElse(Seq()).map(p => s"Address: ${p._1.address}, value: ${p._2}").asJson
     ).asJson
   }
 
