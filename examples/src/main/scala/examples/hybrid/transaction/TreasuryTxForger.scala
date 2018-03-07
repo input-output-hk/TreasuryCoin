@@ -75,7 +75,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       case h if EXPERT_REGISTER_RANGE.contains(h) => generateRegisterTx(Role.Expert, view)
       case h if COMMITTEE_REGISTER_RANGE.contains(h) => generateRegisterTx(Role.Committee, view)
       case h if DISTR_KEY_GEN_RANGE.contains(h) => Seq() // generateDKGTx(view)
-      case h if VOTING_RANGE.contains(h) => generateBallotTx(view) // Only for testing! Normally a ballot should be created manually by a voter
+      case h if VOTING_RANGE.contains(h) && settings.automaticBallotGeneration => generateBallotTx(view) // Only for testing! Normally a ballot should be created manually by a voter
       case h if VOTING_DECRYPTION_R1_RANGE.contains(h) => generateC1ShareR1(view)
       case h if VOTING_DECRYPTION_R2_RANGE.contains(h) => generateC1ShareR2(view)
       // TODO: other stages
