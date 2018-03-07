@@ -221,20 +221,27 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       }
     }
 
-    // TODO: payment per voter should be based on deposit amount
-    val voters = getVotersBallots.toSeq.sortBy(_._1).map(v => getVotersInfo(v._1).paybackAddr)
-    if (voters.size > 0) {
-      val paymentPerVoter = Value @@ (TreasuryManager.VOTERS_BUDGET / voters.size).round
-      if (paymentPerVoter > 0)
-        payments = payments ++ voters.map(v => (v, paymentPerVoter))
+    val payedVoters = getVotersBallots.map(v => getVotersInfo(v._1))
+    if (payedVoters.size > 0) {
+      val totalVotedStake = payedVoters.map(_.depositBox.value.toDouble).sum
+      for (v <- payedVoters) {
+        val amount = (v.depositBox.value / totalVotedStake) * TreasuryManager.VOTERS_BUDGET
+        if (amount >= 1.0)
+          payments = payments :+ (v.paybackAddr, Value @@ amount.toLong)
+      }
     }
 
-    // TODO: payment per expert should be based on the number of delegations
-    val experts = getExpertsBallots.toSeq.sortBy(_._1).map(v => getExpertsInfo(v._1).paybackAddr)
-    if (experts.size > 0) {
-      val paymentPerExpert = Value @@ (TreasuryManager.EXPERTS_BUDGET / experts.size).round
-      if (paymentPerExpert > 0)
-        payments = payments ++ experts.map(v => (v, paymentPerExpert))
+    val payedExperts = getExpertsBallots.map(v => getExpertsInfo(v._1))
+    val delegations = getDelegations.getOrElse(Map())
+    val totalDelegations = delegations.map(_._2.map(_.longValue).sum).toSeq.sum
+    if (payedExperts.size > 0 && totalDelegations > 0) {
+      for (v <- payedExperts) {
+        val expertId = getExpertsInfo.indexOf(v)
+        val delegatedToExpert = delegations.map(_._2(expertId).longValue).sum.toDouble
+        val amount = (delegatedToExpert / totalDelegations) * TreasuryManager.EXPERTS_BUDGET
+        if (amount >= 1.0)
+          payments = payments :+ (v.paybackAddr, Value @@ amount.toLong)
+      }
     }
 
     val committee = getDecryptionSharesR2.toSeq.sortBy(_._1).map(v => getCommitteeInfo(v._1).paybackAddr)
