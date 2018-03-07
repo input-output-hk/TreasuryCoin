@@ -1,5 +1,7 @@
 package examples.hybrid.api.http
 
+import java.math.BigInteger
+
 import akka.actor.{ActorRef, ActorRefFactory}
 import akka.http.scaladsl.server.Route
 import examples.commons.SimpleBoxTransactionMemPool
@@ -210,7 +212,8 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
           } else if (myVoterKey.isDefined) {
 
             val numOfExperts = state.getExpertsSigningKeys.size
-            val voter = new RegularVoter(TreasuryManager.cs, numOfExperts, sharedPubKey, One)
+            val stake = state.getVotersInfo.find(_.signingKey == myVoterKey.get).get.depositBox.value
+            val voter = new RegularVoter(TreasuryManager.cs, numOfExperts, sharedPubKey, BigInteger.valueOf(stake))
             createBallot(proposal, voter, proposalsVotes)
           }
           else

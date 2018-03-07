@@ -1,5 +1,7 @@
 package examples.hybrid.transaction
 
+import java.math.BigInteger
+
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import examples.commons.{SimpleBoxTransactionMemPool, Value}
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
@@ -109,31 +111,32 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
 
   /* It is only for testing purposes. Normally Ballot transactions should be created manually by a voter */
   private def generateBallotTx(view: NodeView): Seq[BallotTransaction] = {
-    val myVoterKeys = view.vault.treasurySigningPubKeys(Role.Voter, view.trState.epochNum)
-    val voterBallot = if (myVoterKeys.nonEmpty &&
+    val myVoterKey = view.vault.treasurySigningPubKeys(Role.Voter, view.trState.epochNum).headOption
+    val voterBallot = if (myVoterKey.isDefined &&
         view.trState.getSharedPubKey.isDefined &&
-        view.trState.getVotersSigningKeys.contains(myVoterKeys.head)) {
+        view.trState.getVotersSigningKeys.contains(myVoterKey.get)) {
       val numberOfExperts = view.trState.getExpertsSigningKeys.size
-      val voter = new RegularVoter(TreasuryManager.cs, numberOfExperts, view.trState.getSharedPubKey.get, One)
+      val stake = view.trState.getVotersInfo.find(_.signingKey == myVoterKey.get).get.depositBox.value
+      val voter = new RegularVoter(TreasuryManager.cs, numberOfExperts, view.trState.getSharedPubKey.get, BigInteger.valueOf(stake))
       var ballots = List[Ballot]()
       for (i <- view.trState.getProposals.indices)
         ballots = voter.produceDelegatedVote(i, 0) :: ballots
 
-      val privKey = view.vault.treasurySigningSecretByPubKey(view.trState.epochNum, myVoterKeys.head).get.privKey
+      val privKey = view.vault.treasurySigningSecretByPubKey(view.trState.epochNum, myVoterKey.get).get.privKey
       Seq(BallotTransaction.create(privKey, VoterType.Voter, ballots, view.trState.epochNum).get)
     } else Seq()
 
-    val myExpertKeys = view.vault.treasurySigningPubKeys(Role.Expert, view.trState.epochNum)
-    val expertBallot = if (myExpertKeys.nonEmpty &&
+    val myExpertKey = view.vault.treasurySigningPubKeys(Role.Expert, view.trState.epochNum).headOption
+    val expertBallot = if (myExpertKey.isDefined &&
         view.trState.getSharedPubKey.isDefined &&
-        view.trState.getExpertsSigningKeys.contains(myExpertKeys.head)) {
-      val expertId = view.trState.getExpertsSigningKeys.indexOf(myExpertKeys.head)
+        view.trState.getExpertsSigningKeys.contains(myExpertKey.get)) {
+      val expertId = view.trState.getExpertsSigningKeys.indexOf(myExpertKey.get)
       val expert = new Expert(TreasuryManager.cs, expertId, view.trState.getSharedPubKey.get)
       var ballots = List[Ballot]()
       for (i <- view.trState.getProposals.indices)
         ballots = expert.produceVote(i, VoteCases.Yes) :: ballots
 
-      val privKey = view.vault.treasurySigningSecretByPubKey(view.trState.epochNum, myExpertKeys.head).get.privKey
+      val privKey = view.vault.treasurySigningSecretByPubKey(view.trState.epochNum, myExpertKey.get).get.privKey
       Seq(BallotTransaction.create(privKey, VoterType.Expert, ballots, view.trState.epochNum).get)
     } else Seq()
 

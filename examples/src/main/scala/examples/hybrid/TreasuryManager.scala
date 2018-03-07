@@ -27,7 +27,7 @@ object TreasuryManager {
   val BUDGET =               1000
   val PROPOSALS_BUDGET =     0.7 * BUDGET
   val VOTERS_BUDGET =        0.1 * BUDGET
-  val COMMITTEE_BUDGET =      0.1 * BUDGET
+  val COMMITTEE_BUDGET =     0.1 * BUDGET
   val EXPERTS_BUDGET =       0.1 * BUDGET
 
   /* Constants related to deposits */

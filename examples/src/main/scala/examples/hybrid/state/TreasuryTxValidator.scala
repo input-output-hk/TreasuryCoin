@@ -1,5 +1,7 @@
 package examples.hybrid.state
 
+import java.math.BigInteger
+
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
@@ -102,9 +104,12 @@ class TreasuryTxValidator(val trState: TreasuryState,
         require(trState.getVotersBallots.contains(id) == false, "The voter has already voted")
         tx.ballots.foreach(b => require(b.isInstanceOf[VoterBallot], "Incompatible ballot"))
         val expertsNum = trState.getExpertsSigningKeys.size
-        val voter = new RegularVoter(TreasuryManager.cs, expertsNum, trState.getSharedPubKey.get, One)
-        tx.ballots.foreach { b =>
-          require(b.unitVector.length == expertsNum + Voter.VOTER_CHOISES_NUM)
+        val stake = BigInteger.valueOf(trState.getVotersInfo(id).depositBox.value)
+        val voter = new RegularVoter(TreasuryManager.cs, expertsNum, trState.getSharedPubKey.get, stake)
+        tx.ballots.foreach { case b: VoterBallot =>
+          require(b.uvChoice.length == Voter.VOTER_CHOISES_NUM)
+          require(b.uvDelegations.length == expertsNum)
+          require(b.stake.equals(stake))
           require(voter.verifyBallot(b), "Ballot NIZK is not verified")}
 
       case VoterType.Expert =>
