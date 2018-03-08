@@ -127,7 +127,7 @@ object PosForger extends ScorexLogging {
         val treasuryTxValidatorTry = Try(new TreasuryTxValidator(view.trState, blockHeight, Some(view.history), Some(view.state)))
 
         val paymentTx =
-          if ((blockHeight % TreasuryManager.PAYMENT_BLOCK_HEIGHT) == 0) {
+          if ((blockHeight % TreasuryManager.EPOCH_LEN) == TreasuryManager.PAYMENT_BLOCK_HEIGHT) {
             // Mandatory PaymentTransaction at the particular height
             PaymentTransaction.create(view.trState, view.history, view.state).toOption
           } else None

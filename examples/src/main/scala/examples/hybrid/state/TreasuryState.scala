@@ -195,7 +195,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       case b:PosBlock => {
         val trTxs = b.transactions.collect{case t:TreasuryTransaction => t}
 
-        if ((blockHeight % TreasuryManager.PAYMENT_BLOCK_HEIGHT) == 0)
+        if ((blockHeight % TreasuryManager.EPOCH_LEN) == TreasuryManager.PAYMENT_BLOCK_HEIGHT)
           require(trTxs.count(t => t.isInstanceOf[PaymentTransaction]) == 1, "Invalid block: PaymentTransaction is absent")
 
         val validator = new TreasuryTxValidator(this, blockHeight, Some(history), Some(state))
