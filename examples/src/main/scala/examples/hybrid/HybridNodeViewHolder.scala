@@ -116,43 +116,52 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
 
       history().append(pmod) match {
         case Success((historyBeforeStUpdate, progressInfo)) =>
-          log.debug(s"Going to apply modifications to the state: $progressInfo")
-          notifySubscribers(EventType.SuccessfulSyntacticallyValidModifier, SyntacticallySuccessfulModifier(pmod))
-          notifySubscribers(EventType.OpenSurfaceChanged, NewOpenSurface(historyBeforeStUpdate.openSurfaceIds()))
 
-          if (progressInfo.toApply.nonEmpty) {
-            val (newHistory, newStateTry) = updateState(historyBeforeStUpdate, minimalState(), progressInfo)
-            newStateTry match {
-              case Success(newMinState) =>
-                val newMemPool = updateMemPool(progressInfo, memoryPool(), newMinState)
+          treasuryState.validate(pmod, history, minimalState) match {
+            case Success(_) =>
+              log.debug(s"Going to apply modifications to the state: $progressInfo")
+              notifySubscribers(EventType.SuccessfulSyntacticallyValidModifier, SyntacticallySuccessfulModifier(pmod))
+              notifySubscribers(EventType.OpenSurfaceChanged, NewOpenSurface(historyBeforeStUpdate.openSurfaceIds()))
 
-                //we consider that vault always able to perform a rollback needed
-                val newVault = if (progressInfo.chainSwitchingNeeded) {
-                  vault().rollback(VersionTag @@ progressInfo.branchPoint.get).get.scanPersistent(progressInfo.toApply)
-                } else {
-                  vault().scanPersistent(progressInfo.toApply)
-                }
+              if (progressInfo.toApply.nonEmpty) {
+                val (newHistory, newStateTry) = updateState(historyBeforeStUpdate, minimalState(), progressInfo)
+                newStateTry match {
+                  case Success(newMinState) =>
+                    val newMemPool = updateMemPool(progressInfo, memoryPool(), newMinState)
 
-                /* if everything is ok we can update treasury state */
-                updateTreasuryState(newHistory, minimalState, treasuryState, progressInfo) match {
-                  case Success(newTreasuryState) =>
-                    treasuryState = newTreasuryState
-                    updateNodeView(Some(newHistory), Some(newMinState), Some(newVault), Some(newMemPool))
-                    log.info(s"Persistent modifier ${pmod.encodedId} applied successfully")
+                    //we consider that vault always able to perform a rollback needed
+                    val newVault = if (progressInfo.chainSwitchingNeeded) {
+                      vault().rollback(VersionTag @@ progressInfo.branchPoint.get).get.scanPersistent(progressInfo.toApply)
+                    } else {
+                      vault().scanPersistent(progressInfo.toApply)
+                    }
+
+                    /* if everything is ok we can update treasury state */
+                    updateTreasuryState(newHistory, treasuryState, progressInfo) match {
+                      case Success(newTreasuryState) =>
+                        treasuryState = newTreasuryState
+                        updateNodeView(Some(newHistory), Some(newMinState), Some(newVault), Some(newMemPool))
+                        log.info(s"Persistent modifier ${pmod.encodedId} applied successfully")
+                      case Failure(e) =>
+                        log.warn(s"Persistent modifier (id: ${pmod.encodedId}) can not be applied to treasury state", e)
+                        //updateNodeView(updatedHistory = Some(newHistory))
+                        notifySubscribers(EventType.SemanticallyFailedPersistentModifier, SemanticallyFailedModification(pmod, e))
+                    }
+
                   case Failure(e) =>
-                    log.warn(s"Persistent modifier (id: ${pmod.encodedId}) can not be applied to treasury state", e)
-                    //updateNodeView(updatedHistory = Some(newHistory))
+                    log.warn(s"Can`t apply persistent modifier (id: ${pmod.encodedId}, contents: $pmod) to minimal state", e)
+                    updateNodeView(updatedHistory = Some(newHistory))
                     notifySubscribers(EventType.SemanticallyFailedPersistentModifier, SemanticallyFailedModification(pmod, e))
                 }
+              } else {
+                requestDownloads(progressInfo)
+                updateNodeView(updatedHistory = Some(historyBeforeStUpdate))
+              }
 
-              case Failure(e) =>
-                log.warn(s"Can`t apply persistent modifier (id: ${pmod.encodedId}, contents: $pmod) to minimal state", e)
-                updateNodeView(updatedHistory = Some(newHistory))
-                notifySubscribers(EventType.SemanticallyFailedPersistentModifier, SemanticallyFailedModification(pmod, e))
-            }
-          } else {
-            requestDownloads(progressInfo)
-            updateNodeView(updatedHistory = Some(historyBeforeStUpdate))
+            case Failure(e) =>
+              log.warn(s"Persistent modifier (id: ${pmod.encodedId}) is not valid against the treasury state", e)
+              //updateNodeView(updatedHistory = Some(newHistory))
+              notifySubscribers(EventType.SemanticallyFailedPersistentModifier, SemanticallyFailedModification(pmod, e))
           }
         case Failure(e) =>
           log.warn(s"Can`t apply persistent modifier (id: ${pmod.encodedId}, contents: $pmod) to history", e)
@@ -164,7 +173,6 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
   }
 
   private def updateTreasuryState(his: HybridHistory,
-                                  state: HBoxStoredState,
                                   trState: TreasuryState,
                                   progressInfo: ProgressInfo[HybridBlock]): Try[TreasuryState] = Try {
     val epochNum = his.storage.heightOf(progressInfo.toApply.get.id).get / TreasuryManager.EPOCH_LEN
@@ -175,7 +183,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
       trState.rollback(VersionTag @@ progressInfo.branchPoint.get)
         .getOrElse(TreasuryState.generate(his).get) // regenerate it entirely in case of failed rollback
     } else {
-      trState.apply(progressInfo.toApply.get, his, Some(state)).get
+      trState.apply(progressInfo.toApply.get, his).get
     }
   }
 

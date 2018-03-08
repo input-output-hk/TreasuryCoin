@@ -129,9 +129,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       case t: PaymentTransaction => Try(log.info(s"Payment tx was applied ${tx.json}"))
   }
 
-  def apply(block: HybridBlock, history: HybridHistory, state: Option[HBoxStoredState] = None): Try[TreasuryState] = Try {
-    validate(block, history, state).get
-
+  def apply(block: HybridBlock, history: HybridHistory): Try[TreasuryState] = Try {
     block match {
       case b:PosBlock => {
         log.info(s"TreasuryState: applying PoS block ${block.encodedId} at height ${history.storage.heightOf(block.id)}")
@@ -189,7 +187,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     this
   }
 
-  def validate(block: HybridBlock, history: HybridHistory, state: Option[HBoxStoredState]): Try[Unit] = Try {
+  def validate(block: HybridBlock, history: HybridHistory, state: HBoxStoredState): Try[Unit] = Try {
     val blockHeight = history.storage.heightOf(block.id).get
 
     block match {
@@ -200,7 +198,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         if ((blockHeight % TreasuryManager.PAYMENT_BLOCK_HEIGHT) == 0)
           require(trTxs.count(t => t.isInstanceOf[PaymentTransaction]) == 1, "Invalid block: PaymentTransaction is absent")
 
-        val validator = new TreasuryTxValidator(this, blockHeight, Some(history), state)
+        val validator = new TreasuryTxValidator(this, blockHeight, Some(history), Some(state))
         trTxs.foreach(validator.validate(_).get)
       }
     }
@@ -256,8 +254,6 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   def getDepositPaybacks(history: HybridHistory, state: HBoxStoredState):
     Try[Seq[(PublicKey25519NoncedBox, PublicKey25519Proposition)]] = Try {
-
-    val consistentState = state.rollbackTo(version)
 
     // since we are going to pay back to parties that participated in the previous epochs,
     // first define the number of an epoch which parties will be reimbursed

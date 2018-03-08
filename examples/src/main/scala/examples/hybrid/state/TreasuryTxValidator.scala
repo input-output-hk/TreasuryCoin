@@ -35,8 +35,10 @@ class TreasuryTxValidator(val trState: TreasuryState,
                           val history: Option[HybridHistory] = None,
                           val state: Option[HBoxStoredState] = None) extends ScorexLogging {
 
-  val epochHeight = height - (trState.epochNum * TreasuryManager.EPOCH_LEN)
-  require(epochHeight >= 0 && epochHeight < TreasuryManager.EPOCH_LEN)
+//  val epochHeight = height - (trState.epochNum * TreasuryManager.EPOCH_LEN)
+//  require(epochHeight >= 0 && epochHeight < TreasuryManager.EPOCH_LEN)
+  // TODO: epochHeight and trState height may be inconsistent, consider this situation. At least it will happen for each first block in the epoch
+  val epochHeight = height % TreasuryManager.EPOCH_LEN
 
   def validate(tx: SimpleBoxTransaction): Try[Unit] = tx match {
       case t: TreasuryTransaction => validate(t)
