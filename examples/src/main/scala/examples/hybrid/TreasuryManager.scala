@@ -13,8 +13,7 @@ object TreasuryManager {
   val PROPOSAL_SUBMISSION_RANGE =             0 until 20
   val VOTER_REGISTER_RANGE =                  0 until 10
   val EXPERT_REGISTER_RANGE =                 10 until 20
-  val COMMITTEE_REGISTER_RANGE =              20 until 30
-  val DISTR_KEY_GEN_RANGE =                   30 until 34
+  val DISTR_KEY_GEN_RANGE =                   20 until 34
   val VOTING_RANGE =                          34 until 50
   val VOTING_DECRYPTION_R1_RANGE =            50 until 60
   val VOTING_DECRYPTION_R1_RECOVERY_RANGE =   60 until 70
@@ -35,7 +34,8 @@ object TreasuryManager {
   val EXPERT_DEPOSIT_RANGE = 100 to 100 // fixed deposit
   val COMMITTEE_DEPOSIT_RANGE = 100 to 100
   val DEPOSIT_LOCK_PERIOD = 0 // in epochs
-  val DEPOSIT_ADDR = PublicKey25519Proposition(PublicKey @@ Array.fill[Byte](Curve25519.KeyLength)(0.toByte)) // actually it's a proof of burn address
+  val VOTER_DEPOSIT_ADDR = PublicKey25519Proposition(PublicKey @@ Array.fill[Byte](Curve25519.KeyLength)(0.toByte)) // actually it's a proof of burn address
+  val COMMITTEE_DEPOSIT_ADDR = PublicKey25519Proposition(PublicKey @@ Array.fill[Byte](Curve25519.KeyLength)(1.toByte)) // actually it's a proof of burn address
 
 
   object Role extends Enumeration {

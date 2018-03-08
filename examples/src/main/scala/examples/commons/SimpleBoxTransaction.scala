@@ -79,7 +79,6 @@ object SimpleBoxTransactionCompanion extends Serializer[SimpleBoxTransaction] {
     m match {
       case t: SimpleBoxTx => Bytes.concat(Array(m.transactionTypeId), SimpleBoxTxCompanion.toBytes(t))
       case t: RegisterTransaction => Bytes.concat(Array(m.transactionTypeId), RegisterTransactionCompanion.toBytes(t))
-      case t: CommitteeRegisterTransaction => Bytes.concat(Array(m.transactionTypeId), CommitteeRegisterTransactionCompanion.toBytes(t))
       case t: ProposalTransaction => Bytes.concat(Array(m.transactionTypeId), ProposalTransactionCompanion.toBytes(t))
       case t: BallotTransaction => Bytes.concat(Array(m.transactionTypeId), BallotTransactionCompanion.toBytes(t))
       case t: DecryptionShareTransaction => Bytes.concat(Array(m.transactionTypeId), DecryptionShareTransactionCompanion.toBytes(t))
@@ -92,7 +91,6 @@ object SimpleBoxTransactionCompanion extends Serializer[SimpleBoxTransaction] {
     transactionTypeId match {
       case SimpleBoxTx.TransactionTypeId => SimpleBoxTxCompanion.parseBytes(bytes.drop(1))
       case RegisterTransaction.TransactionTypeId => RegisterTransactionCompanion.parseBytes(bytes.drop(1))
-      case CommitteeRegisterTransaction.TransactionTypeId => CommitteeRegisterTransactionCompanion.parseBytes(bytes.drop(1))
       case ProposalTransaction.TransactionTypeId => ProposalTransactionCompanion.parseBytes(bytes.drop(1))
       case BallotTransaction.TransactionTypeId => BallotTransactionCompanion.parseBytes(bytes.drop(1))
       case DecryptionShareTransaction.TransactionTypeId => DecryptionShareTransactionCompanion.parseBytes(bytes.drop(1))

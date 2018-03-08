@@ -95,15 +95,15 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   protected def apply(tx: TreasuryTransaction): Try[Unit] = tx match {
       case t: RegisterTransaction => Try {
-        val deposit = t.newBoxes.find(_.proposition == TreasuryManager.DEPOSIT_ADDR).get
+        val deposit = t.newBoxes.find(_.proposition == TreasuryManager.VOTER_DEPOSIT_ADDR).get
         t.role match {
           case Role.Expert => expertsInfo = expertsInfo :+ ExpertInfo(t.pubKey, deposit, t.paybackAddr)
           case Role.Voter => votersInfo = votersInfo :+ VoterInfo(t.pubKey, deposit, t.paybackAddr)
         }
-      }
-      case t: CommitteeRegisterTransaction => Try {
-        val deposit = t.newBoxes.find(_.proposition == TreasuryManager.DEPOSIT_ADDR).get
-        committeeInfo = committeeInfo :+ CommitteeInfo(t.proxyPubKey, t.pubKey, deposit, t.paybackAddr)
+        if (t.committeeProxyPubKey.isDefined) {
+          val committeeDeposit = t.newBoxes.find(_.proposition == TreasuryManager.COMMITTEE_DEPOSIT_ADDR).get
+          committeeInfo = committeeInfo :+ CommitteeInfo(t.committeeProxyPubKey.get, t.pubKey, committeeDeposit, t.paybackAddr)
+        }
       }
       case t: ProposalTransaction => Try {
         proposals = proposals :+ Proposal(t.name, t.requestedSum, t.recipient)
@@ -298,7 +298,7 @@ object TreasuryState {
 
     val count = (currentEpochNum - epochId) * TreasuryManager.EPOCH_LEN + currentEpochHeight + 1
     // we should take all registration blocks
-    val epochBlocksIds = history.lastBlockIds(history.bestBlock, count).take(TreasuryManager.COMMITTEE_REGISTER_RANGE.end)
+    val epochBlocksIds = history.lastBlockIds(history.bestBlock, count).take(TreasuryManager.EXPERT_REGISTER_RANGE.end)
 
     val trState = TreasuryState(epochId)
 

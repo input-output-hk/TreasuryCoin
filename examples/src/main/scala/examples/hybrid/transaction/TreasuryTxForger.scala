@@ -73,7 +73,6 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     epochHeight match {
       case h if VOTER_REGISTER_RANGE.contains(h) => generateRegisterTx(Role.Voter, view)
       case h if EXPERT_REGISTER_RANGE.contains(h) => generateRegisterTx(Role.Expert, view)
-      case h if COMMITTEE_REGISTER_RANGE.contains(h) => generateRegisterTx(Role.Committee, view)
       case h if DISTR_KEY_GEN_RANGE.contains(h) => Seq() // generateDKGTx(view)
       case h if VOTING_RANGE.contains(h) && settings.automaticBallotGeneration => generateBallotTx(view) // Only for testing! Normally a ballot should be created manually by a voter
       case h if VOTING_DECRYPTION_R1_RANGE.contains(h) => generateC1ShareR1(view)
@@ -90,19 +89,13 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
         val isRegisteredAsExpert = view.vault.treasurySigningPubKeys(Role.Expert, view.trState.epochNum).nonEmpty
         if (settings.isExpert && !isRegisteredAsExpert)
           RegisterTransaction.create(view.vault, Role.Expert,
-            Value @@ TreasuryManager.EXPERT_DEPOSIT_RANGE.start.toLong, 1, view.trState.epochNum).toOption
+            Value @@ TreasuryManager.EXPERT_DEPOSIT_RANGE.start.toLong, settings.isCommittee, 1, view.trState.epochNum).toOption
         else None
       case Role.Voter =>
         val isRegisteredAsVoter = view.vault.treasurySigningPubKeys(Role.Voter, view.trState.epochNum).nonEmpty
         if (settings.isVoter && !isRegisteredAsVoter)
           RegisterTransaction.create(view.vault, Role.Voter,
-            Value @@ TreasuryManager.VOTER_DEPOSIT_RANGE.start.toLong, 1, view.trState.epochNum).toOption
-        else None
-      case Role.Committee =>
-        val isRegisteredAsCommittee = view.vault.treasurySigningPubKeys(Role.Committee, view.trState.epochNum).nonEmpty
-        if (settings.isCommittee && !isRegisteredAsCommittee)
-          CommitteeRegisterTransaction.create(view.vault,
-            Value @@ TreasuryManager.COMMITTEE_DEPOSIT_RANGE.start.toLong, 1, view.trState.epochNum).toOption
+            Value @@ TreasuryManager.VOTER_DEPOSIT_RANGE.start.toLong, settings.isCommittee, 1, view.trState.epochNum).toOption
         else None
     }
 

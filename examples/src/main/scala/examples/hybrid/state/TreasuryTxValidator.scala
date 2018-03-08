@@ -50,7 +50,6 @@ class TreasuryTxValidator(val trState: TreasuryState,
     /* Checks for specific treasury txs */
     tx match {
       case t: RegisterTransaction => validateRegistration(t).get
-      case t: CommitteeRegisterTransaction => validateCommitteeRegistration(t).get
       case t: ProposalTransaction => validateProposal(t).get
       case t: BallotTransaction => validateBallot(t).get
       case t: DecryptionShareTransaction => validateDecryptionShare(t).get
@@ -59,7 +58,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
   }
 
   def validateRegistration(tx: RegisterTransaction): Try[Unit] = Try {
-    val deposit = tx.to.filter(_._1 == TreasuryManager.DEPOSIT_ADDR)
+    val deposit = tx.to.filter(_._1 == TreasuryManager.VOTER_DEPOSIT_ADDR)
     require(deposit.size == 1, "Deposit should be as a single box payment")
     val depositAmount = deposit.head._2
 
@@ -73,18 +72,15 @@ class TreasuryTxValidator(val trState: TreasuryState,
         require(!trState.getVotersSigningKeys.contains(tx.pubKey), "Voter pubkey has been already registered")
         require(TreasuryManager.VOTER_DEPOSIT_RANGE.contains(depositAmount), "Insufficient deposit")
     }
-  }
 
-  def validateCommitteeRegistration(tx: CommitteeRegisterTransaction): Try[Unit] = Try {
-    require(TreasuryManager.COMMITTEE_REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
+    if (tx.committeeProxyPubKey.isDefined) {
+      require(!trState.getCommitteeSigningKeys.contains(tx.pubKey), "Committee signing pubkey has been already registered")
+      require(!trState.getCommitteeProxyKeys.contains(tx.committeeProxyPubKey.get), "Committee proxy pubkey has been already registered")
 
-    require(!trState.getCommitteeSigningKeys.contains(tx.pubKey), "Committee signing pubkey has been already registered")
-    require(!trState.getCommitteeProxyKeys.contains(tx.proxyPubKey), "Committee proxy pubkey has been already registered")
-
-    val deposit = tx.to.filter(_._1 == TreasuryManager.DEPOSIT_ADDR)
-    require(deposit.size == 1, "Deposit should be as a single box payment")
-    val depositAmount = deposit.head._2
-    require(TreasuryManager.COMMITTEE_DEPOSIT_RANGE.contains(depositAmount), "Insufficient deposit amount")
+      val committeeDeposit = tx.to.filter(_._1 == TreasuryManager.COMMITTEE_DEPOSIT_ADDR)
+      require(committeeDeposit.size == 1, "Committee deposit should be as a single box payment")
+      require(TreasuryManager.COMMITTEE_DEPOSIT_RANGE.contains(committeeDeposit.head._2), "Insufficient deposit amount")
+    }
   }
 
   def validateProposal(tx: ProposalTransaction): Try[Unit] = Try {
