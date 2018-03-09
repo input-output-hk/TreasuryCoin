@@ -129,7 +129,9 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       case t: PaymentTransaction => Try(log.info(s"Payment tx was applied ${tx.json}"))
   }
 
-  def apply(block: HybridBlock, history: HybridHistory): Try[TreasuryState] = Try {
+  def apply(block: HybridBlock, history: HybridHistory, state: Option[HBoxStoredState] = None): Try[TreasuryState] = Try {
+    validate(block, history, state).get
+
     block match {
       case b:PosBlock => {
         log.info(s"TreasuryState: applying PoS block ${block.encodedId} at height ${history.storage.heightOf(block.id)}")
@@ -187,7 +189,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     this
   }
 
-  def validate(block: HybridBlock, history: HybridHistory, state: HBoxStoredState): Try[Unit] = Try {
+  def validate(block: HybridBlock, history: HybridHistory, state: Option[HBoxStoredState]): Try[Unit] = Try {
     val blockHeight = history.storage.heightOf(block.id).get
 
     block match {
@@ -198,7 +200,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         if ((blockHeight % TreasuryManager.EPOCH_LEN) == TreasuryManager.PAYMENT_BLOCK_HEIGHT)
           require(trTxs.count(t => t.isInstanceOf[PaymentTransaction]) == 1, "Invalid block: PaymentTransaction is absent")
 
-        val validator = new TreasuryTxValidator(this, blockHeight, Some(history), Some(state))
+        val validator = new TreasuryTxValidator(this, blockHeight, Some(history), state)
         trTxs.foreach(validator.validate(_).get)
       }
     }
@@ -304,7 +306,15 @@ object TreasuryState {
     (trState.getVotersInfo, trState.getExpertsInfo, trState.getCommitteeInfo)
   }
 
-  def generate(history: HybridHistory): Try[TreasuryState] = Try {
+  /**
+    * Generate TreasuryState for the current epoch. Note that state is optional because it is needed only to validate
+    * PaymentTransaction. In cases when it is not needed state can be None.
+    *
+    * @param history history
+    * @param state minimal state
+    * @return
+    */
+  def generate(history: HybridHistory, state: Option[HBoxStoredState] = None): Try[TreasuryState] = Try {
 
     val currentHeight = history.storage.height.toInt
     val epochNum = currentHeight / TreasuryManager.EPOCH_LEN
@@ -315,7 +325,7 @@ object TreasuryState {
     val trState = TreasuryState(epochNum)
 
     /* parse all blocks in the current epoch and extract all treasury transactions */
-    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history).get)
+    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history, state).get)
     trState
   }
 

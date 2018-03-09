@@ -10,10 +10,10 @@ object TreasuryManager {
 
   /* Intervals of an epoch stages in blocks (both Pos/Pow). All numbers should be even. */
   val EPOCH_LEN =                             94
-  val PROPOSAL_SUBMISSION_RANGE =             0 until 20
-  val VOTER_REGISTER_RANGE =                  0 until 10
-  val EXPERT_REGISTER_RANGE =                 10 until 20
-  val DISTR_KEY_GEN_RANGE =                   20 until 34
+  val PROPOSAL_SUBMISSION_RANGE =             4 until 20
+  val VOTER_REGISTER_RANGE =                  4 until 14
+  val EXPERT_REGISTER_RANGE =                 14 until 24
+  val DISTR_KEY_GEN_RANGE =                   24 until 34
   val VOTING_RANGE =                          34 until 50
   val VOTING_DECRYPTION_R1_RANGE =            50 until 60
   val VOTING_DECRYPTION_R1_RECOVERY_RANGE =   60 until 70
