@@ -56,10 +56,11 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
   def getTreasuryInfo(state: TreasuryState): Json = {
     Map(
       "epoch"                 -> state.epochNum.asJson,
-      "committeeProxyKeys"    -> state.getCommitteeProxyKeys.map(pk => Base58.encode(pk.getEncoded(true))).asJson,
-      "committeeSigningKeys"  -> state.getCommitteeSigningKeys.map(pk => pk.toString).asJson,
-      "expertsSigningKeys"    -> state.getExpertsSigningKeys.map(pk => pk.toString).asJson,
-      "votersSigningKeys"     -> state.getVotersSigningKeys.map(pk => pk.toString).asJson,
+      "committeeProxyKeys"    -> state.getCommitteeInfo.map(_.proxyKey).map(pk => Base58.encode(pk.getEncoded(true))).asJson,
+      "committeeSigningKeys"  -> state.getCommitteeInfo.map(_.signingKey).map(pk => pk.toString).asJson,
+      "approvedCommitteeSigningKeys"  -> state.getApprovedCommitteeInfo.map(_.signingKey).map(pk => pk.toString).asJson,
+      "expertsSigningKeys"    -> state.getExpertsInfo.map(_.signingKey).map(pk => pk.toString).asJson,
+      "votersSigningKeys"     -> state.getVotersInfo.map(_.signingKey).map(pk => pk.toString).asJson,
       "sharedPubKey"          -> Base58.encode(state.getSharedPubKey.getOrElse(state.cs.infinityPoint).getEncoded(true)).asJson,
       "votersBallots"         -> state.getVotersBallots.map(voter => (s"Voter id: ${voter._1}", voter._2.map(ballot => s"Ballot for proposal id ${ballot.proposalId}").asJson)).asJson,
       "expertsBallots"        -> state.getExpertsBallots.map(expert => (s"Expert id ${expert._1}", expert._2.map(ballot => s"Ballot for proposal id ${ballot.proposalId}").asJson)).asJson,
@@ -204,14 +205,14 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
           // if(IsExpert(myExpertKey, proposal)) {
           if (myExpertKey.isDefined) {
 
-            val expertId = state.getExpertsSigningKeys.indexOf(myExpertKey.get)
+            val expertId = state.getExpertsInfo.map(_.signingKey).indexOf(myExpertKey.get)
             val expert = Expert(TreasuryManager.cs, expertId, sharedPubKey)
             createBallot(proposal, expert, proposalsVotes)
 
           // } else {
           } else if (myVoterKey.isDefined) {
 
-            val numOfExperts = state.getExpertsSigningKeys.size
+            val numOfExperts = state.getExpertsInfo.size
             val stake = state.getVotersInfo.find(_.signingKey == myVoterKey.get).get.depositBox.value
             val voter = new RegularVoter(TreasuryManager.cs, numOfExperts, sharedPubKey, BigInteger.valueOf(stake))
             createBallot(proposal, voter, proposalsVotes)

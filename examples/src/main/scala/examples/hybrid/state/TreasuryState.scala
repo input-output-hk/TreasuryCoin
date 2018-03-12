@@ -38,10 +38,13 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   val cs = TreasuryManager.cs
 
   private var version: VersionTag = VersionTag @@ (ModifierId @@ Array.fill(32)(0: Byte))
-  private var committeeInfo: List[CommitteeInfo] = List()
+  private var proposals: List[Proposal] = List()
   private var expertsInfo: List[ExpertInfo] = List()
   private var votersInfo: List[VoterInfo] = List()
-  private var proposals: List[Proposal] = List()
+  private var committeeInfo: List[CommitteeInfo] = List()
+
+  private var randomness: Array[Byte] = Array.fill[Byte](32)(234.toByte) // TODO: change with a real randomness
+
   private var sharedPublicKey: Option[PubKey] = None
   private var votersBallots: Map[Int, Seq[VoterBallot]] = Map() // voterId -> Seq(ballot)
   private var expertsBallots: Map[Int, Seq[ExpertBallot]] = Map() // expertId -> Seq(ballot)
@@ -57,16 +60,13 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def getVotersInfo = votersInfo
   def getExpertsInfo = expertsInfo
   def getCommitteeInfo = committeeInfo
+  def getApprovedCommitteeInfo = committeeInfo.tail//.filter(_.approved)
 
   def getSigningKeys(role: Role): List[PublicKey25519Proposition] = role match {
-    case Role.Committee => getCommitteeSigningKeys
-    case Role.Expert => getExpertsSigningKeys
-    case Role.Voter => getVotersSigningKeys
+    case Role.Committee => getCommitteeInfo.map(_.signingKey)
+    case Role.Expert => getExpertsInfo.map(_.signingKey)
+    case Role.Voter => getVotersInfo.map(_.signingKey)
   }
-  def getCommitteeSigningKeys = committeeInfo.map(_.signingKey)
-  def getCommitteeProxyKeys = committeeInfo.map(_.proxyKey)
-  def getExpertsSigningKeys = expertsInfo.map(_.signingKey)
-  def getVotersSigningKeys = votersInfo.map(_.signingKey)
 
   def getProposals = proposals
   def getSharedPubKey = sharedPublicKey
@@ -102,7 +102,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         }
         if (t.committeeProxyPubKey.isDefined) {
           val committeeDeposit = t.newBoxes.find(_.proposition == TreasuryManager.COMMITTEE_DEPOSIT_ADDR).get
-          committeeInfo = committeeInfo :+ CommitteeInfo(t.committeeProxyPubKey.get, t.pubKey, committeeDeposit, t.paybackAddr)
+          committeeInfo = committeeInfo :+ CommitteeInfo(true, t.committeeProxyPubKey.get, t.pubKey, committeeDeposit, t.paybackAddr)
         }
       }
       case t: ProposalTransaction => Try {
@@ -110,16 +110,16 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       }
       case t: BallotTransaction => Try { t.voterType match {
         case VoterType.Voter =>
-          val id = getVotersSigningKeys.indexOf(t.pubKey)
+          val id = getVotersInfo.map(_.signingKey).indexOf(t.pubKey)
           require(id >= 0, "Voter isn't found")
           votersBallots = votersBallots + (id -> t.ballots.map(_.asInstanceOf[VoterBallot]))
         case VoterType.Expert =>
-          val id = getExpertsSigningKeys.indexOf(t.pubKey)
+          val id = getExpertsInfo.map(_.signingKey).indexOf(t.pubKey)
           require(id >= 0, "Expert isn't found")
           expertsBallots = expertsBallots + (id -> t.ballots.map(_.asInstanceOf[ExpertBallot]))
       }}
       case t: DecryptionShareTransaction => Try {
-        val id = getCommitteeSigningKeys.indexOf(t.pubKey)
+        val id = getApprovedCommitteeInfo.map(_.signingKey).indexOf(t.pubKey)
         require(id >= 0, "Committee member isn't found")
         t.round match {
           case DecryptionRound.R1 => c1SharesR1 = c1SharesR1 + (id -> t.c1Shares)
@@ -150,17 +150,17 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   private def updateState(epochHeight: Int): TreasuryState = {
     epochHeight match {
       case TreasuryManager.DISTR_KEY_GEN_RANGE.end =>
-        if (committeeInfo.nonEmpty)
-          sharedPublicKey = Some(getCommitteeProxyKeys.foldLeft(cs.infinityPoint)((sum,next) => sum.add(next)))
+        if (getApprovedCommitteeInfo.nonEmpty)
+          sharedPublicKey = Some(getApprovedCommitteeInfo.map(_.proxyKey).foldLeft(cs.infinityPoint)((sum,next) => sum.add(next)))
         else log.warn("No committee members found!")
 
       case TreasuryManager.VOTING_DECRYPTION_R1_RECOVERY_RANGE.end =>
         /* We can calculate delegations ONLY IF we have valid decryption shares from ALL committee members
         *  TODO: recover secret keys (and corresponding decryption shares) of the faulty CMs by KeyShares submissions */
-        if (c1SharesR1.size == committeeInfo.size) {
+        if (c1SharesR1.size == getApprovedCommitteeInfo.size) {
           val deleg = proposals.indices.map { i =>
             val shares = getDecryptionSharesR1ForProposal(i)
-            assert(shares.size == committeeInfo.size)
+            assert(shares.size == getApprovedCommitteeInfo.size)
             val decryptor = new DecryptionManager(TreasuryManager.cs, getBallotsForProposal(i))
             (i -> decryptor.computeDelegations(shares.map(_.decryptedC1.map(_._1))))
           }
@@ -170,12 +170,12 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       case TreasuryManager.VOTING_DECRYPTION_R2_RECOVERY_RANGE.end =>
       /* We can decrypt final voting result ONLY IF we have valid decryption shares from ALL committee members
       *  TODO: recover secret keys (and corresponding decryption shares) of the faulty CMs by KeyShares submissions */
-        if (c1SharesR2.size == committeeInfo.size && getDelegations.isDefined) {
+        if (c1SharesR2.size == getApprovedCommitteeInfo.size && getDelegations.isDefined) {
           val result = proposals.indices.foreach { i =>
             val shares = getDecryptionSharesR2ForProposal(i).map(_.decryptedC1.map(_._1))
             val delegations = getDelegations.get(i)
-            assert(shares.size == committeeInfo.size)
-            assert(delegations.size == expertsInfo.size)
+            assert(shares.size == getApprovedCommitteeInfo.size)
+            assert(delegations.size == getExpertsInfo.size)
             val decryptor = new DecryptionManager(TreasuryManager.cs, getBallotsForProposal(i))
             val tally = decryptor.computeTally(shares, delegations)
             if (tally.isSuccess)
@@ -244,7 +244,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       }
     }
 
-    val committee = getDecryptionSharesR2.toSeq.sortBy(_._1).map(v => getCommitteeInfo(v._1).paybackAddr)
+    val committee = getDecryptionSharesR2.map(v => getApprovedCommitteeInfo(v._1).paybackAddr)
     if (committee.size > 0) {
       val paymentPerCommittee = Value @@ (TreasuryManager.COMMITTEE_BUDGET / committee.size).round
       if (paymentPerCommittee > 0)
@@ -369,7 +369,8 @@ abstract class PartyInfo {
   val paybackAddr: PublicKey25519Proposition
 }
 
-case class CommitteeInfo(proxyKey: PubKey,
+case class CommitteeInfo(approved: Boolean, // we allow only constant-size committee, so not all registered parities will become approved CM
+                         proxyKey: PubKey,
                          signingKey: PublicKey25519Proposition,
                          depositBox: PublicKey25519NoncedBox,
                          paybackAddr: PublicKey25519Proposition) extends PartyInfo

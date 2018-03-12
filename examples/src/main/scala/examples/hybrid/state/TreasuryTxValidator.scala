@@ -67,17 +67,17 @@ class TreasuryTxValidator(val trState: TreasuryState,
     tx.role match {
       case Role.Expert =>
         require(TreasuryManager.EXPERT_REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
-        require(!trState.getExpertsSigningKeys.contains(tx.pubKey), "Expert pubkey has been already registered")
+        require(!trState.getExpertsInfo.exists(_.signingKey == tx.pubKey), "Expert pubkey has been already registered")
         require(TreasuryManager.EXPERT_DEPOSIT_RANGE.contains(depositAmount), "Insufficient deposit")
       case Role.Voter =>
         require(TreasuryManager.VOTER_REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
-        require(!trState.getVotersSigningKeys.contains(tx.pubKey), "Voter pubkey has been already registered")
+        require(!trState.getVotersInfo.exists(_.signingKey == tx.pubKey), "Voter pubkey has been already registered")
         require(TreasuryManager.VOTER_DEPOSIT_RANGE.contains(depositAmount), "Insufficient deposit")
     }
 
     if (tx.committeeProxyPubKey.isDefined) {
-      require(!trState.getCommitteeSigningKeys.contains(tx.pubKey), "Committee signing pubkey has been already registered")
-      require(!trState.getCommitteeProxyKeys.contains(tx.committeeProxyPubKey.get), "Committee proxy pubkey has been already registered")
+      require(!trState.getCommitteeInfo.exists(_.signingKey == tx.pubKey), "Committee signing pubkey has been already registered")
+      require(!trState.getCommitteeInfo.exists(_.proxyKey == tx.committeeProxyPubKey.get), "Committee proxy pubkey has been already registered")
 
       val committeeDeposit = tx.to.filter(_._1 == TreasuryManager.COMMITTEE_DEPOSIT_ADDR)
       require(committeeDeposit.size == 1, "Committee deposit should be as a single box payment")
@@ -97,11 +97,11 @@ class TreasuryTxValidator(val trState: TreasuryState,
 
     tx.voterType match {
       case VoterType.Voter =>
-        val id = trState.getVotersSigningKeys.indexOf(tx.pubKey)
+        val id = trState.getVotersInfo.indexWhere(_.signingKey == tx.pubKey)
         require(id >= 0, "Voter is not registered")
         require(trState.getVotersBallots.contains(id) == false, "The voter has already voted")
         tx.ballots.foreach(b => require(b.isInstanceOf[VoterBallot], "Incompatible ballot"))
-        val expertsNum = trState.getExpertsSigningKeys.size
+        val expertsNum = trState.getExpertsInfo.size
         val stake = BigInteger.valueOf(trState.getVotersInfo(id).depositBox.value)
         val voter = new RegularVoter(TreasuryManager.cs, expertsNum, trState.getSharedPubKey.get, stake)
         tx.ballots.foreach { case b: VoterBallot =>
@@ -111,7 +111,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
           require(voter.verifyBallot(b), "Ballot NIZK is not verified")}
 
       case VoterType.Expert =>
-        val id = trState.getExpertsSigningKeys.indexOf(tx.pubKey)
+        val id = trState.getExpertsInfo.indexWhere(_.signingKey == tx.pubKey)
         require(id >= 0, "Expert is not registered")
         require(trState.getExpertsBallots.contains(id) == false, "The expert has already voted")
         tx.ballots.foreach(b => require(b.isInstanceOf[ExpertBallot], "Incompatible ballot"))
@@ -131,7 +131,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
     require(trState.getSharedPubKey.isDefined, "Shared key is not defined in TreasuryState")
     require(trState.getProposals.nonEmpty, "Proposals are not defined")
 
-    val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
+    val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
     require(id >= 0, "Committee member isn't registered")
 
     require(trState.getProposals.size == tx.c1Shares.size, "Number of decryption shares isn't equal to the number of proposals")
@@ -148,14 +148,14 @@ class TreasuryTxValidator(val trState: TreasuryState,
     require(TreasuryManager.VOTING_DECRYPTION_R1_RANGE.contains(epochHeight), "Wrong height for decryption share R1 transaction")
     require(tx.round == DecryptionRound.R1, "Invalid decryption share R1: wrong round")
 
-    val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
+    val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
     require(!trState.getDecryptionSharesR1.contains(id), "The committee member has already submitted decryption shares R1")
 
-    val expertsNum = trState.getExpertsSigningKeys.size
+    val expertsNum = trState.getExpertsInfo.size
     tx.c1Shares.foreach { s =>
       require(s.decryptedC1.size == expertsNum, "Invalid decryption share R1: wrong number of decrypted c1 componenets")
       val validator = new DecryptionManager(TreasuryManager.cs, trState.getBallotsForProposal(s.proposalId))
-      require(validator.validateDelegationsC1(trState.getCommitteeProxyKeys(id), s).isSuccess, "Invalid decryption share R1: NIZK is not verified")
+      require(validator.validateDelegationsC1(trState.getApprovedCommitteeInfo(id).proxyKey, s).isSuccess, "Invalid decryption share R1: NIZK is not verified")
     }
   }
 
@@ -164,13 +164,13 @@ class TreasuryTxValidator(val trState: TreasuryState,
     require(tx.round == DecryptionRound.R2, "Invalid decryption share R2: wrong round")
     require(trState.getDelegations.isDefined, "Delegations are not defined, decryption share R2 can't be validated")
 
-    val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
+    val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
     require(!trState.getDecryptionSharesR2.contains(id), "The committee member has already submitted decryption shares R2")
 
     tx.c1Shares.foreach { s =>
       require(s.decryptedC1.size == Voter.VOTER_CHOISES_NUM, "Invalid decryption share R2: wrong number of decrypted c1 componenets")
       val validator = new DecryptionManager(TreasuryManager.cs, trState.getBallotsForProposal(s.proposalId))
-      require(validator.validateChoicesC1(trState.getCommitteeProxyKeys(id), s, trState.getDelegations.get(s.proposalId)).isSuccess,
+      require(validator.validateChoicesC1(trState.getApprovedCommitteeInfo(id).proxyKey, s, trState.getDelegations.get(s.proposalId)).isSuccess,
         "Invalid decryption share R2: NIZK is not verified")
     }
   }
