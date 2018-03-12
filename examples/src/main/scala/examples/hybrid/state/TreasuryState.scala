@@ -2,6 +2,7 @@ package examples.hybrid.state
 
 import java.math.BigInteger
 
+import com.google.common.primitives.Bytes
 import examples.commons.{PublicKey25519NoncedBox, Value}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
@@ -14,6 +15,7 @@ import examples.hybrid.transaction._
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 import scorex.core.{ModifierId, VersionTag}
+import scorex.crypto.hash.{Blake2b256, Digest32}
 import treasury.crypto.core.PubKey
 import treasury.crypto.keygen.datastructures.C1Share
 import treasury.crypto.keygen.{DecryptionManager, KeyShares}
@@ -60,7 +62,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def getVotersInfo = votersInfo
   def getExpertsInfo = expertsInfo
   def getCommitteeInfo = committeeInfo
-  def getApprovedCommitteeInfo = committeeInfo.tail//.filter(_.approved)
+  def getApprovedCommitteeInfo = committeeInfo.filter(_.approved)
 
   def getSigningKeys(role: Role): List[PublicKey25519Proposition] = role match {
     case Role.Committee => getCommitteeInfo.map(_.signingKey)
@@ -147,48 +149,6 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     updateState(epochHeight)
   }
 
-  private def updateState(epochHeight: Int): TreasuryState = {
-    epochHeight match {
-      case TreasuryManager.DISTR_KEY_GEN_RANGE.end =>
-        if (getApprovedCommitteeInfo.nonEmpty)
-          sharedPublicKey = Some(getApprovedCommitteeInfo.map(_.proxyKey).foldLeft(cs.infinityPoint)((sum,next) => sum.add(next)))
-        else log.warn("No committee members found!")
-
-      case TreasuryManager.VOTING_DECRYPTION_R1_RECOVERY_RANGE.end =>
-        /* We can calculate delegations ONLY IF we have valid decryption shares from ALL committee members
-        *  TODO: recover secret keys (and corresponding decryption shares) of the faulty CMs by KeyShares submissions */
-        if (c1SharesR1.size == getApprovedCommitteeInfo.size) {
-          val deleg = proposals.indices.map { i =>
-            val shares = getDecryptionSharesR1ForProposal(i)
-            assert(shares.size == getApprovedCommitteeInfo.size)
-            val decryptor = new DecryptionManager(TreasuryManager.cs, getBallotsForProposal(i))
-            (i -> decryptor.computeDelegations(shares.map(_.decryptedC1.map(_._1))))
-          }
-          delegations = Some(deleg.toMap)
-        }
-
-      case TreasuryManager.VOTING_DECRYPTION_R2_RECOVERY_RANGE.end =>
-      /* We can decrypt final voting result ONLY IF we have valid decryption shares from ALL committee members
-      *  TODO: recover secret keys (and corresponding decryption shares) of the faulty CMs by KeyShares submissions */
-        if (c1SharesR2.size == getApprovedCommitteeInfo.size && getDelegations.isDefined) {
-          val result = proposals.indices.foreach { i =>
-            val shares = getDecryptionSharesR2ForProposal(i).map(_.decryptedC1.map(_._1))
-            val delegations = getDelegations.get(i)
-            assert(shares.size == getApprovedCommitteeInfo.size)
-            assert(delegations.size == getExpertsInfo.size)
-            val decryptor = new DecryptionManager(TreasuryManager.cs, getBallotsForProposal(i))
-            val tally = decryptor.computeTally(shares, delegations)
-            if (tally.isSuccess)
-              tallyResult = tallyResult + (i -> tally.get)
-          }
-        }
-
-      case _ =>
-    }
-
-    this
-  }
-
   def validate(block: HybridBlock, history: HybridHistory, state: Option[HBoxStoredState]): Try[Unit] = Try {
     val blockHeight = history.storage.heightOf(block.id).get
 
@@ -209,6 +169,67 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def rollback(to: VersionTag): Try[TreasuryState] = Try {
     if (to sameElements version) this
     else throw new UnsupportedOperationException("Deep rollback is not supported")
+  }
+
+  private def updateState(epochHeight: Int): TreasuryState = {
+    epochHeight match {
+      case TreasuryManager.EXPERT_REGISTER_RANGE.end => selectApprovedCommittee()
+
+      case TreasuryManager.DISTR_KEY_GEN_RANGE.end =>
+        if (getApprovedCommitteeInfo.nonEmpty)
+          sharedPublicKey = Some(getApprovedCommitteeInfo.map(_.proxyKey).foldLeft(cs.infinityPoint)((sum,next) => sum.add(next)))
+        else log.warn("No committee members found!")
+
+      case TreasuryManager.VOTING_DECRYPTION_R1_RECOVERY_RANGE.end => calculateDelegations()
+      case TreasuryManager.VOTING_DECRYPTION_R2_RECOVERY_RANGE.end => calculateTallyResult()
+
+      case _ =>
+    }
+
+    this
+  }
+
+  private def selectApprovedCommittee(): Unit = {
+    // TODO: inefficient ordering but let it be ok for now, cause we should not have a lot of members
+    implicit val ordering = Ordering.by((_: Digest32).toIterable)
+
+    val approvedCommittee = getCommitteeInfo.map { c =>
+      val hash = Blake2b256(Bytes.concat(c.proxyKey.getEncoded(true), c.signingKey.bytes, randomness))
+      (c, hash)
+    }.sortBy(_._2).take(TreasuryManager.COMMITTEE_SIZE).map(_._1.signingKey)
+
+    committeeInfo = committeeInfo.map(c => c.copy(approved = approvedCommittee.contains(c.signingKey)))
+  }
+
+  private def calculateDelegations(): Unit = {
+    /* We can calculate delegations ONLY IF we have valid decryption shares from ALL committee members
+    *  TODO: recover secret keys (and corresponding decryption shares) of the faulty CMs by KeyShares submissions */
+    if (c1SharesR1.size == getApprovedCommitteeInfo.size) {
+      val deleg = proposals.indices.map { i =>
+        val shares = getDecryptionSharesR1ForProposal(i)
+        assert(shares.size == getApprovedCommitteeInfo.size)
+        val decryptor = new DecryptionManager(TreasuryManager.cs, getBallotsForProposal(i))
+        (i -> decryptor.computeDelegations(shares.map(_.decryptedC1.map(_._1))))
+      }
+      delegations = Some(deleg.toMap)
+    }
+  }
+
+  private def calculateTallyResult(): Unit = {
+    /* We can decrypt final voting result ONLY IF we have valid decryption shares from ALL committee members
+    *  TODO: recover secret keys (and corresponding decryption shares) of the faulty CMs by KeyShares submissions */
+    if (c1SharesR2.size == getApprovedCommitteeInfo.size && getDelegations.isDefined) {
+      val result = proposals.indices.foreach { i =>
+        val shares = getDecryptionSharesR2ForProposal(i).map(_.decryptedC1.map(_._1))
+        val delegations = getDelegations.get(i)
+        assert(shares.size == getApprovedCommitteeInfo.size)
+        assert(delegations.size == getExpertsInfo.size)
+        val decryptor = new DecryptionManager(TreasuryManager.cs, getBallotsForProposal(i))
+        val tally = decryptor.computeTally(shares, delegations)
+        if (tally.isSuccess)
+          tallyResult = tallyResult + (i -> tally.get)
+      }
+    }
   }
 
   def getPayments: Try[Seq[(PublicKey25519Proposition, Value)]] = Try {

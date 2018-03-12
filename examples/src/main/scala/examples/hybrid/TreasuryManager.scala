@@ -37,6 +37,8 @@ object TreasuryManager {
   val VOTER_DEPOSIT_ADDR = PublicKey25519Proposition(PublicKey @@ Array.fill[Byte](Curve25519.KeyLength)(0.toByte)) // actually it's a proof of burn address
   val COMMITTEE_DEPOSIT_ADDR = PublicKey25519Proposition(PublicKey @@ Array.fill[Byte](Curve25519.KeyLength)(1.toByte)) // actually it's a proof of burn address
 
+  /* How much committee members are allowed in a single epoch */
+  val COMMITTEE_SIZE = 1
 
   object Role extends Enumeration {
     type Role = Value
