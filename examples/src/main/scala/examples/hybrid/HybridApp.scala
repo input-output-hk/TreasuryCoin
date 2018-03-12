@@ -1,5 +1,7 @@
 package examples.hybrid
 
+import java.io.File
+
 import akka.actor.{ActorRef, Props}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionMemPool}
 import examples.hybrid.api.http.{DebugApiRoute, StatsApiRoute, TreasuryApiRoute, WalletApiRoute}

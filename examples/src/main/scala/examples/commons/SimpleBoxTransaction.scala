@@ -2,6 +2,7 @@ package examples.commons
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.commons.SimpleBoxTransaction._
+import examples.hybrid.transaction.DKG._
 import examples.hybrid.transaction._
 import examples.hybrid.wallet.HWallet
 import io.circe.Json
@@ -76,6 +77,11 @@ object SimpleBoxTransactionCompanion extends Serializer[SimpleBoxTransaction] {
       case t: BallotTransaction => Bytes.concat(Array(m.transactionTypeId), BallotTransactionCompanion.toBytes(t))
       case t: DecryptionShareTransaction => Bytes.concat(Array(m.transactionTypeId), DecryptionShareTransactionCompanion.toBytes(t))
       case t: DKGr1Transaction => Bytes.concat(Array(m.transactionTypeId), DKGr1TransactionCompanion.toBytes(t))
+      case t: DKGr2Transaction => Bytes.concat(Array(m.transactionTypeId), DKGr2TransactionCompanion.toBytes(t))
+      case t: DKGr3Transaction => Bytes.concat(Array(m.transactionTypeId), DKGr3TransactionCompanion.toBytes(t))
+      case t: DKGr4Transaction => Bytes.concat(Array(m.transactionTypeId), DKGr4TransactionCompanion.toBytes(t))
+      case t: DKGr5Transaction => Bytes.concat(Array(m.transactionTypeId), DKGr5TransactionCompanion.toBytes(t))
+
     }
   }
 
@@ -89,6 +95,10 @@ object SimpleBoxTransactionCompanion extends Serializer[SimpleBoxTransaction] {
       case BallotTransaction.TransactionTypeId => BallotTransactionCompanion.parseBytes(bytes.drop(1))
       case DecryptionShareTransaction.TransactionTypeId => DecryptionShareTransactionCompanion.parseBytes(bytes.drop(1))
       case DKGr1Transaction.TransactionTypeId => DKGr1TransactionCompanion.parseBytes(bytes.drop(1))
+      case DKGr2Transaction.TransactionTypeId => DKGr2TransactionCompanion.parseBytes(bytes.drop(1))
+      case DKGr3Transaction.TransactionTypeId => DKGr3TransactionCompanion.parseBytes(bytes.drop(1))
+      case DKGr4Transaction.TransactionTypeId => DKGr4TransactionCompanion.parseBytes(bytes.drop(1))
+      case DKGr5Transaction.TransactionTypeId => DKGr5TransactionCompanion.parseBytes(bytes.drop(1))
       case _ => Failure(new MatchError("Unknown transaction type id"))
     }
   }

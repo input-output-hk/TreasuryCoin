@@ -9,18 +9,25 @@ import examples.hybrid.TreasuryManager.Role.Role
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.BallotTransaction.VoterType
+import examples.hybrid.transaction.DKG._
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
 import examples.hybrid.transaction._
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 import scorex.core.{ModifierId, VersionTag}
-import treasury.crypto.core.PubKey
-import treasury.crypto.keygen.{DecryptionManager, KeyShares, R1Data}
+import scorex.crypto.encode.Base58
+import treasury.crypto.core.{PubKey, SimpleIdentifier}
+import treasury.crypto.keygen.{DecryptionManager, DistrKeyGen, KeyShares, RoundsData}
 import treasury.crypto.keygen.datastructures.C1Share
+import treasury.crypto.keygen.datastructures.round1.R1Data
+import treasury.crypto.keygen.datastructures.round2.R2Data
+import treasury.crypto.keygen.datastructures.round3.R3Data
+import treasury.crypto.keygen.datastructures.round4.R4Data
+import treasury.crypto.keygen.datastructures.round5_1.R5_1Data
 import treasury.crypto.voting.Tally
 import treasury.crypto.voting.ballots.{Ballot, ExpertBallot, VoterBallot}
 
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 case class Proposal(name: String, requestedSum: Value, recipient: PublicKey25519Proposition)
 
@@ -38,6 +45,7 @@ case class Proposal(name: String, requestedSum: Value, recipient: PublicKey25519
 case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   val cs = TreasuryManager.cs
+  val crs_h = cs.basePoint.multiply(BigInteger.valueOf(5)) // common CRS parameter (temporary)
 
   private var version: VersionTag = VersionTag @@ (ModifierId @@ Array.fill(32)(0: Byte))
   private var committeePubKeys: List[(PublicKey25519Proposition, PubKey)] = List()
@@ -57,8 +65,16 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   private var tallyResult: Map[Int, Tally.Result] = Map() // proposalId -> voting result
 
   private var DKGr1Data: Map[Int, R1Data] = Map()
+  private var DKGr2Data: Map[Int, R2Data] = Map()
+  private var DKGr3Data: Map[Int, R3Data] = Map()
+  private var DKGr4Data: Map[Int, R4Data] = Map()
+  private var DKGr5Data: Map[Int, R5_1Data] = Map()
 
   def getDKGr1Data = DKGr1Data
+  def getDKGr2Data = DKGr2Data
+  def getDKGr3Data = DKGr3Data
+  def getDKGr4Data = DKGr4Data
+  def getDKGr5Data = DKGr5Data
 
   def getSigningKeys(role: Role): List[PublicKey25519Proposition] = role match {
     case Role.Committee => getCommitteeSigningKeys
@@ -94,7 +110,13 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     c1SharesR2.flatMap(share => share._2.collect { case b if b.proposalId == proposalId => b }).toSeq
 
 
-  protected def apply(tx: TreasuryTransaction): Try[Unit] =
+  protected def apply(tx: TreasuryTransaction): Try[Unit] = {
+
+    def commonVerificationForDKGTxs(id: Long, t: SignedTreasuryTransaction) {
+      require(id >= 0, "Committee member isn't found")
+      require(t.semanticValidity.isSuccess, "Transaction isn't semantically valid!")
+    }
+
     tx match {
       case t: RegisterTransaction => Try { t.role match {
         case Role.Expert => expertsPubKeys = expertsPubKeys :+ t.pubKey
@@ -127,10 +149,30 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
       case t: DKGr1Transaction => Try {
         val id = getCommitteeSigningKeys.indexOf(t.pubKey)
-        require(id >= 0, "Committee member isn't found")
-        require(t.semanticValidity.isSuccess, "Transaction isn't semantically valid!")
+        commonVerificationForDKGTxs(id, t)
         DKGr1Data += (id -> t.r1Data)
       }
+      case t: DKGr2Transaction => Try {
+        val id = getCommitteeSigningKeys.indexOf(t.pubKey)
+        commonVerificationForDKGTxs(id, t)
+        DKGr2Data += (id -> t.r2Data)
+      }
+      case t: DKGr3Transaction => Try {
+        val id = getCommitteeSigningKeys.indexOf(t.pubKey)
+        commonVerificationForDKGTxs(id, t)
+        DKGr3Data += (id -> t.r3Data)
+      }
+      case t: DKGr4Transaction => Try {
+        val id = getCommitteeSigningKeys.indexOf(t.pubKey)
+        commonVerificationForDKGTxs(id, t)
+        DKGr4Data += (id -> t.r4Data)
+      }
+      case t: DKGr5Transaction => Try {
+        val id = getCommitteeSigningKeys.indexOf(t.pubKey)
+        commonVerificationForDKGTxs(id, t)
+        DKGr5Data += (id -> t.r5_1Data)
+      }
+    }
   }
 
   def apply(block: HybridBlock, history: HybridHistory): Try[TreasuryState] = Try {
@@ -154,10 +196,31 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   private def updateState(epochHeight: Int): TreasuryState = {
     epochHeight match {
-      case TreasuryManager.DISTR_KEY_GEN_R2_RANGE.end =>
-        if (committeePubKeys.nonEmpty)
-          sharedPublicKey = Some(committeePubKeys.map(_._2).foldLeft(cs.infinityPoint)((sum,next) => sum.add(next)))
-        else log.warn("No committee members found!")
+      case h if h >= TreasuryManager.DISTR_KEY_GEN_R5_RANGE.end && sharedPublicKey.isEmpty =>
+
+        log.info("Computing shared public key")
+
+        if (committeePubKeys.nonEmpty){
+
+          val committeeMembersPubKeys = getCommitteeProxyKeys
+          val memberIdentifier = new SimpleIdentifier(committeeMembersPubKeys)
+          val roundsData = RoundsData(
+            getDKGr1Data.values.toSeq,
+            getDKGr2Data.values.toSeq,
+            getDKGr3Data.values.toSeq,
+            getDKGr4Data.values.toSeq,
+            getDKGr5Data.values.toSeq
+          )
+          DistrKeyGen.getSharedPublicKey(cs, committeeMembersPubKeys, memberIdentifier, roundsData) match {
+            case Success(sharedPubKey) =>
+              sharedPublicKey = Some(cs.decodePoint(sharedPubKey))
+              log.info(s"Shared public key is: ${Base58.encode(sharedPublicKey.get.getEncoded(true))}")
+
+            case Failure(e) => log.error(e.getMessage)
+          }
+//          sharedPublicKey = Some(committeePubKeys.map(_._2).foldLeft(cs.infinityPoint)((sum,next) => sum.add(next)))
+
+        } else log.warn("No committee members found!")
 
       case TreasuryManager.VOTING_DECRYPTION_R1_RECOVERY_RANGE.end =>
         /* We can calculate delegations ONLY IF we have valid decryption shares from ALL committee members

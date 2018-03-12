@@ -66,7 +66,11 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
         "expertsBallots"        -> trState.getExpertsBallots.map(expert => (expert._1, expert._2.map(ballot => Base58.encode(ballot.bytes)).asJson)).asJson,
         "proposals"             -> trState.getProposals.map(p => Map(s"${trState.getProposals.indexOf(p)} ${p.name}" -> s"${p.requestedSum} -> ${p.recipient}")).asJson,
 //        "proposals"         -> trState.getProposals.map(p => p.name -> s"${p.requestedSum} -> ${p.recipient}").toMap.asJson // merges equally named proposals
-        "R1Data"                -> trState.getDKGr1Data.values.map(r1 => Base58.encode(r1.bytes)).asJson
+        "R1Data"                -> trState.getDKGr1Data.values.map(r1 => Base58.encode(r1.bytes)).asJson,
+        "R2Data"                -> trState.getDKGr2Data.values.map(r2 => Base58.encode(r2.bytes)).asJson,
+        "R3Data"                -> trState.getDKGr3Data.values.map(r3 => Base58.encode(r3.bytes)).asJson,
+        "R4Data"                -> trState.getDKGr4Data.values.map(r4 => Base58.encode(r4.bytes)).asJson,
+        "R5Data"                -> trState.getDKGr5Data.values.map(r5 => Base58.encode(r5.bytes)).asJson
       ).asJson)
     }
   }

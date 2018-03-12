@@ -4,6 +4,7 @@ import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
 import examples.hybrid.transaction.BallotTransaction.VoterType
+import examples.hybrid.transaction.DKG._
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
 import examples.hybrid.transaction._
 import scorex.core.utils.ScorexLogging
@@ -43,7 +44,11 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
       case t: ProposalTransaction => validateProposal(t).get
       case t: BallotTransaction => validateBallot(t).get
       case t: DecryptionShareTransaction => validateDecryptionShare(t).get
-      case t: DKGr1Transaction => validateDKGr1Transaction(t).get
+      case t: DKGr1Transaction => validateDKGTransaction(t).get //validateDKGr1Transaction(t).get
+      case t: DKGr2Transaction => validateDKGTransaction(t).get //validateDKGr1Transaction(t).get
+      case t: DKGr3Transaction => validateDKGTransaction(t).get
+      case t: DKGr4Transaction => validateDKGTransaction(t).get
+      case t: DKGr5Transaction => validateDKGTransaction(t).get
     }
   }
 
@@ -156,11 +161,44 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
     }
   }
 
-  def validateDKGr1Transaction(tx: DKGr1Transaction): Try[Unit] = Try {
-    require(TreasuryManager.DISTR_KEY_GEN_R1_RANGE.contains(epochHeight), "Wrong height for DKG R1 transaction")
+//  def validateDKGr1Transaction(tx: DKGr1Transaction): Try[Unit] = Try {
+//    require(TreasuryManager.DISTR_KEY_GEN_R1_RANGE.contains(epochHeight), "Wrong height for DKG R1 transaction")
+//
+//    val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
+//    require(id >= 0, "Committee member isn't found")
+//    require(!trState.getDKGr1Data.contains(id), "The committee member has already submitted DKG R1Data")
+//  }
+
+  def validateDKGTransaction(tx: SignedTreasuryTransaction): Try[Unit] = Try {
+
+    val range = tx match {
+      case _: DKGr1Transaction => TreasuryManager.DISTR_KEY_GEN_R1_RANGE
+      case _: DKGr2Transaction => TreasuryManager.DISTR_KEY_GEN_R2_RANGE
+      case _: DKGr3Transaction => TreasuryManager.DISTR_KEY_GEN_R3_RANGE
+      case _: DKGr4Transaction => TreasuryManager.DISTR_KEY_GEN_R4_RANGE
+      case _: DKGr5Transaction => TreasuryManager.DISTR_KEY_GEN_R5_RANGE
+    }
+
+    val roundDataFromTrsryState = tx match {
+      case _: DKGr1Transaction => trState.getDKGr1Data
+      case _: DKGr2Transaction => trState.getDKGr2Data
+      case _: DKGr3Transaction => trState.getDKGr3Data
+      case _: DKGr4Transaction => trState.getDKGr4Data
+      case _: DKGr5Transaction => trState.getDKGr5Data
+    }
+
+    val roundNumber = tx match {
+      case _: DKGr1Transaction => 1
+      case _: DKGr2Transaction => 2
+      case _: DKGr3Transaction => 3
+      case _: DKGr4Transaction => 4
+      case _: DKGr5Transaction => 5
+    }
+
+    require(range.contains(epochHeight), s"Wrong height for DKG R$roundNumber transaction")
 
     val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
     require(id >= 0, "Committee member isn't found")
-    require(!trState.getDKGr1Data.contains(id), "The committee member has already submitted DKG R1Data")
+    require(!roundDataFromTrsryState.contains(id), s"The committee member has already submitted DKG R${roundNumber}Data")
   }
 }
