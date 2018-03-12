@@ -126,25 +126,24 @@ object PosForger extends ScorexLogging {
         val blockHeight = view.history.storage.heightOf(bestPowBlock.id).get + 1
         val treasuryTxValidatorTry = Try(new TreasuryTxValidator(view.trState, blockHeight, Some(view.history), Some(view.state)))
 
+        val txs = view.pool.take(TransactionsPerBlock).foldLeft(Seq[SimpleBoxTransaction]()) { case (collected, tx) =>
+          if (view.state.validate(tx).isSuccess &&
+            tx.boxIdsToOpen.forall(id => !collected.flatMap(_.boxIdsToOpen)
+              .exists(_ sameElements id))) collected :+ tx
+          else collected
+        }
+
         val paymentTx =
           if ((blockHeight % TreasuryManager.EPOCH_LEN) == TreasuryManager.PAYMENT_BLOCK_HEIGHT) {
             // Mandatory PaymentTransaction at the particular height
             PaymentTransaction.create(view.trState, view.history, view.state).toOption
           } else None
 
-        val txs = view.pool.take(TransactionsPerBlock).foldLeft(Seq[SimpleBoxTransaction]()) { case (collected, tx) =>
-          if (view.state.validate(tx).isSuccess &&
-            tx.boxIdsToOpen.forall(id => !collected.flatMap(_.boxIdsToOpen)
-              .exists(_ sameElements id))) collected :+ tx
-          else collected
-        }.filter {_ match {
-            // TODO: probably here we also need to check that treasury txs from pool are consistent with each other (no duplicates, etc.)
-            case t: TreasuryTransaction => treasuryTxValidatorTry.flatMap(_.validate(t)).isSuccess
-            case _ => true
-          }
-        }
+        // currently we allow only 1 treasury tx per block (cause they may be too heavy).
+        // TODO: if more than 1 tx is allowed then probably we also need to check that treasury txs from pool are consistent with each other (no duplicates, etc.)
+        val treasuryTx = view.pool.takeTreasuryTxs(50).find(t => treasuryTxValidatorTry.flatMap(_.validate(t)).isSuccess)
 
-        val allTxs = paymentTx.map(t => Seq(t) ++ txs).getOrElse(txs)
+        val allTxs = txs ++ paymentTx.toIterable ++ treasuryTx.toIterable
 
         PosForgingInfo(pairCompleted, bestPowBlock, diff, boxKeys, allTxs)
     }
