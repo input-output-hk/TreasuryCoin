@@ -278,6 +278,8 @@ object TreasuryState {
 
   def generate(history: HybridHistory): Try[TreasuryState] = Try {
 
+    CommitteeMember.stopMember()
+
     val currentHeight = history.storage.height.toInt
     val epochNum = currentHeight / TreasuryManager.EPOCH_LEN
     val currentEpochHeight = currentHeight % TreasuryManager.EPOCH_LEN

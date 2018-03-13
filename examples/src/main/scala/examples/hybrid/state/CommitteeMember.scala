@@ -749,6 +749,15 @@ object CommitteeMember {
     }
     committeeMember
   }
+
+  def stopMember(): Unit ={
+    committeeMember match {
+      case Some(cm) =>
+        system.stop(cm)
+        committeeMember = None
+      case None =>
+    }
+  }
 }
 
 object CommitteeMemberRef {
