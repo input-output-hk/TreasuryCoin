@@ -491,7 +491,7 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
     val committeeMembersPubKeys = view.trState.getApprovedCommitteeInfo.map(_.proxyKey)
     val memberIdentifier = new SimpleIdentifier(committeeMembersPubKeys)
 
-    ownSigningKeyPairOpt = view.vault.treasurySigningSecrets(Role.Committee, view.trState.epochNum).headOption match {
+    ownSigningKeyPairOpt = view.vault.treasurySigningSecrets(view.trState.epochNum).headOption match {
       case Some(treasurySecret) => Some(treasurySecret.privKey)
       case _ => None
     }
@@ -710,7 +710,7 @@ object CommitteeMember {
 
     def isRegisteredAsCommitteeMember(view: NodeView): Boolean = {
 
-      val localSigningPubKeyOpt = view.vault.treasurySigningPubKeys(Role.Committee, view.trState.epochNum).headOption
+      val localSigningPubKeyOpt = view.vault.treasurySigningSecrets(view.trState.epochNum).headOption.map(_.privKey.publicImage)
 
       // Check if current epoch treasury state contains given signing public key (this means the key is registered)
       localSigningPubKeyOpt match {
