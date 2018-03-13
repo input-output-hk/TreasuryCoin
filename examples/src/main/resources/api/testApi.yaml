@@ -338,11 +338,34 @@ paths:
                 type: object
 
   /treasury/info:
+      get:
+        summary: Info about current treasury epoch
+        operationId: infoRoute
+        tags:
+          - treasury
+        responses:
+          200:
+            description: Json with treasury info or error
+            content:
+              application/json:
+                schema:
+                  type: object
+                  items:
+                    $ref: '#/components/schemas/Treasury'
+
+  /treasury/info/{epochId}:
     get:
-      summary: Info about treasury
+      summary: Info about specific treasury epoch
       operationId: infoRoute
       tags:
         - treasury
+      parameters:
+        - in: path
+          name: epochId
+          required: true
+          description: epoch id
+          schema:
+            type: string
       responses:
         200:
           description: Json with treasury info or error

@@ -4,14 +4,14 @@ import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import com.google.common.primitives.Longs
 import examples.commons.{PublicKey25519NoncedBox, SimpleBoxTransaction, SimpleBoxTransactionMemPool}
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
+import examples.hybrid.TreasuryManager
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.settings.HybridSettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryTxValidator}
-import examples.hybrid.transaction.TreasuryTransaction
+import examples.hybrid.transaction.{PaymentTransaction, TreasuryTransaction}
 import examples.hybrid.wallet.HWallet
-import scorex.core.LocalInterface.LocallyGeneratedModifier
-import scorex.core.NodeViewHolder.{CurrentView, GetDataFromCurrentView}
+import scorex.core.NodeViewHolder.CurrentView
 import scorex.core.transaction.state.PrivateKey25519
 import scorex.core.utils.ScorexLogging
 import scorex.crypto.hash.Blake2b256
@@ -23,6 +23,10 @@ import scala.util.{Failure, Success, Try}
 class PosForger(settings: HybridSettings, viewHolderRef: ActorRef) extends Actor with ScorexLogging {
 
   import PosForger._
+  import PosForger.ReceivableMessages._
+  import scorex.core.NodeViewHolder.ReceivableMessages.GetDataFromCurrentView
+  import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.LocallyGeneratedModifier
+
 
   var forging = false
 
@@ -61,11 +65,20 @@ class PosForger(settings: HybridSettings, viewHolderRef: ActorRef) extends Actor
 }
 
 object PosForger extends ScorexLogging {
-  val InitialDifficuly = 150000000L
 
-  case object StartForging
+  val InitialDifficuly = 1500000000L
 
-  case object StopForging
+  object ReceivableMessages {
+    case object StartForging
+    case object StopForging
+    case class PosForgingInfo(pairCompleted: Boolean,
+                              bestPowBlock: PowBlock,
+                              diff: BigInt,
+                              boxKeys: Seq[(PublicKey25519NoncedBox, PrivateKey25519)],
+                              txsToInclude: Seq[SimpleBoxTransaction])
+  }
+
+  import ReceivableMessages.PosForgingInfo
 
   def hit(pwb: PowBlock)(box: PublicKey25519NoncedBox): BigInt = {
     val h = Blake2b256(pwb.bytes ++ box.bytes)
@@ -110,21 +123,29 @@ object PosForger extends ScorexLogging {
         val boxes = view.vault.boxes().map(_.box).filter(box => view.state.closedBox(box.id).isDefined)
         val boxKeys = boxes.flatMap(b => view.vault.secretByPublicImage(b.proposition).map(s => (b, s)))
 
-        val treasuryTxValidatorTry = Try(new TreasuryTxValidator(view.trState, view.history.storage.heightOf(bestPowBlock.id).get + 1))
+        val blockHeight = view.history.storage.heightOf(bestPowBlock.id).get + 1
+        val treasuryTxValidatorTry = Try(new TreasuryTxValidator(view.trState, blockHeight, Some(view.history), Some(view.state)))
 
         val txs = view.pool.take(TransactionsPerBlock).foldLeft(Seq[SimpleBoxTransaction]()) { case (collected, tx) =>
           if (view.state.validate(tx).isSuccess &&
             tx.boxIdsToOpen.forall(id => !collected.flatMap(_.boxIdsToOpen)
               .exists(_ sameElements id))) collected :+ tx
           else collected
-        }.filter {_ match {
-            // TODO: probably here we also need to check that treasury txs from pool are consistent with each other (no duplicates, etc.)
-            case t: TreasuryTransaction => treasuryTxValidatorTry.flatMap(_.validate(t)).isSuccess
-            case _ => true
-          }
         }
 
-        PosForgingInfo(pairCompleted, bestPowBlock, diff, boxKeys, txs)
+        val paymentTx =
+          if ((blockHeight % TreasuryManager.EPOCH_LEN) == TreasuryManager.PAYMENT_BLOCK_HEIGHT) {
+            // Mandatory PaymentTransaction at the particular height
+            PaymentTransaction.create(view.trState, view.history, view.state).toOption
+          } else None
+
+        // currently we allow only 1 treasury tx per block (cause they may be too heavy).
+        // TODO: if more than 1 tx is allowed then probably we also need to check that treasury txs from pool are consistent with each other (no duplicates, etc.)
+        val treasuryTx = view.pool.takeTreasuryTxs(50).find(t => treasuryTxValidatorTry.flatMap(_.validate(t)).isSuccess)
+
+        val allTxs = txs ++ paymentTx.toIterable ++ treasuryTx.toIterable
+
+        PosForgingInfo(pairCompleted, bestPowBlock, diff, boxKeys, allTxs)
     }
     GetDataFromCurrentViewWithTreasuryState[HybridHistory,
       HBoxStoredState,
@@ -137,12 +158,6 @@ object PosForger extends ScorexLogging {
   val TransactionsPerBlock = 50
 
 }
-
-case class PosForgingInfo(pairCompleted: Boolean,
-                          bestPowBlock: PowBlock,
-                          diff: BigInt,
-                          boxKeys: Seq[(PublicKey25519NoncedBox, PrivateKey25519)],
-                          txsToInclude: Seq[SimpleBoxTransaction])
 
 object PosForgerRef {
   def props(settings: HybridSettings, viewHolderRef: ActorRef): Props = Props(new PosForger(settings, viewHolderRef))

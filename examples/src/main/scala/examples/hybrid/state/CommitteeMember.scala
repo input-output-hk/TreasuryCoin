@@ -13,7 +13,7 @@ import examples.hybrid.state.CommitteeMember.{HistoryModified, TxInfo}
 import examples.hybrid.transaction.DKG._
 import examples.hybrid.transaction._
 import examples.hybrid.wallet.HWallet
-import scorex.core.LocalInterface.LocallyGeneratedTransaction
+import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.LocallyGeneratedTransaction
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.transaction.state.PrivateKey25519
 import scorex.core.utils.ScorexLogging
@@ -194,7 +194,7 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
       case Some(ownSigningKeyPair) =>
 
         val signingPubKey = ownSigningKeyPair.publicImage
-        val ownId = view.trState.getCommitteeSigningKeys.indexOf(signingPubKey)
+        val ownId = view.trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == signingPubKey)
 
         roundNum match {
 
@@ -339,7 +339,7 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
           case _ => false
         }
 
-        val ownId = view.trState.getCommitteeSigningKeys.indexOf(signingPubKey)
+        val ownId = view.trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == signingPubKey)
 
         val accepted = roundNum match {
           case 1 => view.trState.getDKGr1Data.contains(ownId)
@@ -488,7 +488,7 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
     dkgViolatorsSecretKeys = None
     sharedPublicKeyOpt = None
 
-    val committeeMembersPubKeys = view.trState.getCommitteeProxyKeys
+    val committeeMembersPubKeys = view.trState.getApprovedCommitteeInfo.map(_.proxyKey)
     val memberIdentifier = new SimpleIdentifier(committeeMembersPubKeys)
 
     ownSigningKeyPairOpt = view.vault.treasurySigningSecrets(Role.Committee, view.trState.epochNum).headOption match {
@@ -715,7 +715,7 @@ object CommitteeMember {
       // Check if current epoch treasury state contains given signing public key (this means the key is registered)
       localSigningPubKeyOpt match {
         case Some(localSigningPubKey) =>
-          view.trState.getCommitteeSigningKeys.contains(localSigningPubKey)
+          view.trState.getApprovedCommitteeInfo.exists(_.signingKey == localSigningPubKey)
         case None => false
       }
     }

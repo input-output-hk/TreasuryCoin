@@ -1,7 +1,5 @@
 package examples.hybrid
 
-import java.io.File
-
 import akka.actor.{ActorRef, Props}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionMemPool}
 import examples.hybrid.api.http.{DebugApiRoute, StatsApiRoute, TreasuryApiRoute, WalletApiRoute}
@@ -9,8 +7,8 @@ import examples.hybrid.blocks.HybridBlock
 import examples.hybrid.history.{HybridHistory, HybridSyncInfo, HybridSyncInfoMessageSpec}
 import examples.hybrid.mining.{PosForgerRef, PowMinerRef}
 import examples.hybrid.settings.HybridSettings
-import examples.hybrid.transaction.TreasuryTxForgerRef
-import examples.hybrid.wallet.TreasuryTransactionGenerator
+import examples.hybrid.transaction.{TreasuryTxForger, TreasuryTxForgerRef}
+import examples.hybrid.wallet.{SimpleBoxTransactionGenerator, SimpleBoxTransactionGeneratorRef, TreasuryTransactionGenerator}
 import scorex.core.api.http.{ApiRoute, NodeViewApiRoute, PeersApiRoute, UtilsApiRoute}
 import scorex.core.app.Application
 import scorex.core.network.NodeViewSynchronizerRef
@@ -23,6 +21,8 @@ import scala.io.Source
 import scala.language.postfixOps
 
 class HybridApp(val settingsFilename: String) extends Application {
+
+  import examples.hybrid.wallet.SimpleBoxTransactionGenerator.ReceivableMessages.StartGeneration
 
   override type P = PublicKey25519Proposition
   override type TX = SimpleBoxTransaction

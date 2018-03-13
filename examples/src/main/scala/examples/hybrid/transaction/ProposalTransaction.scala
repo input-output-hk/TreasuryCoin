@@ -17,7 +17,7 @@ case class ProposalTransaction(name: String,
                                requestedSum: Value,
                                recipient: PublicKey25519Proposition,
                                epochID: Long,
-                               override val timestamp: Long) extends TreasuryTransaction(timestamp) {
+                               override val timestamp: Long) extends TreasuryTransaction(timestamp = timestamp) {
 
   override type M = SimpleBoxTransaction
 

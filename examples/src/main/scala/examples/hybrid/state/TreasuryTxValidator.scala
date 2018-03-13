@@ -1,8 +1,11 @@
 package examples.hybrid.state
 
+import java.math.BigInteger
+
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTx}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
+import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.transaction.DKG._
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
@@ -15,22 +18,32 @@ import treasury.crypto.voting.{Expert, RegularVoter, Voter}
 
 import scala.util.{Failure, Success, Try}
 
-class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends ScorexLogging {
+/**
+  * Validates treasury transactions against current node view. Note that it is critical to pass consistent
+  * TreasuryState, HybridHistory and HBoxStoredState. Inconsistent version of TreasuryState and HBoxStoredState (which
+  * actually may happens during TreasuryState regeneration) will lead to failures during the PaymentTransaction verification.
+  * Thus HybridHistory and HBoxStoredState are optional arguments and could be skipped. In this case deposits paybacks in
+  * PaymentTransaction will not be verified, but it should be suitable in some cases (for instance, during TreasuryState
+  * regeneration, but not updating)
+  *
+  * @param trState TreasuryState
+  * @param history History
+  * @param state HBoxStoredState consistent to the trState (namely having the same version)
+  * @param height height
+  */
+class TreasuryTxValidator(val trState: TreasuryState,
+                          val height: Long,
+                          val history: Option[HybridHistory] = None,
+                          val state: Option[HBoxStoredState] = None) extends ScorexLogging {
 
-  val epochHeight = height - (trState.epochNum * TreasuryManager.EPOCH_LEN)
-
-  Try(require(epochHeight >= 0 && epochHeight < TreasuryManager.EPOCH_LEN,
-    s"Totally wrong situation. Probably treasury state is corrupted or problems with " +
-      s"validation pipeline. Height = $height, epochHeight = $epochHeight")) match {
-    case Failure(e) =>
-      log.error("Inconsistent height in TreasuryTxValidator", e)
-      throw e
-    case Success(_) =>
-  }
+  //  val epochHeight = height - (trState.epochNum * TreasuryManager.EPOCH_LEN)
+  //  require(epochHeight >= 0 && epochHeight < TreasuryManager.EPOCH_LEN)
+  // TODO: epochHeight and trState height may be inconsistent, consider this situation. At least it will happen for each first block in the epoch
+  val epochHeight = height % TreasuryManager.EPOCH_LEN
 
   def validate(tx: SimpleBoxTransaction): Try[Unit] = tx match {
-      case t: TreasuryTransaction => validate(t)
-      case _: SimpleBoxTx => Success(Unit)
+    case t: TreasuryTransaction => validate(t)
+    case _: SimpleBoxTx => Success(Unit)
   }
 
   def validate(tx: TreasuryTransaction): Try[Unit] = Try {
@@ -40,38 +53,42 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
     /* Checks for specific treasury txs */
     tx match {
       case t: RegisterTransaction => validateRegistration(t).get
-      case t: CommitteeRegisterTransaction => validateCommitteeRegistration(t).get
       case t: ProposalTransaction => validateProposal(t).get
       case t: BallotTransaction => validateBallot(t).get
       case t: DecryptionShareTransaction => validateDecryptionShare(t).get
-      case t: DKGr1Transaction => validateDKGTransaction(t).get //validateDKGr1Transaction(t).get
-      case t: DKGr2Transaction => validateDKGTransaction(t).get //validateDKGr1Transaction(t).get
+      case t: DKGr1Transaction => validateDKGTransaction(t).get
+      case t: DKGr2Transaction => validateDKGTransaction(t).get
       case t: DKGr3Transaction => validateDKGTransaction(t).get
       case t: DKGr4Transaction => validateDKGTransaction(t).get
       case t: DKGr5Transaction => validateDKGTransaction(t).get
+      case t: PaymentTransaction => validatePayment(t).get
     }
   }
 
   def validateRegistration(tx: RegisterTransaction): Try[Unit] = Try {
-    require(TreasuryManager.REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
+    val deposit = tx.to.filter(_._1 == TreasuryManager.VOTER_DEPOSIT_ADDR)
+    require(deposit.size == 1, "Deposit should be as a single box payment")
+    val depositAmount = deposit.head._2
 
     tx.role match {
-      case Role.Expert => require(!trState.getExpertsSigningKeys.contains(tx.pubKey), "Expert pubkey has been already registered")
-      case Role.Voter => require(!trState.getVotersSigningKeys.contains(tx.pubKey), "Voter pubkey has been already registered")
+      case Role.Expert =>
+        require(TreasuryManager.EXPERT_REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
+        require(!trState.getExpertsInfo.exists(_.signingKey == tx.pubKey), "Expert pubkey has been already registered")
+        require(TreasuryManager.EXPERT_DEPOSIT_RANGE.contains(depositAmount), "Insufficient deposit")
+      case Role.Voter =>
+        require(TreasuryManager.VOTER_REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
+        require(!trState.getVotersInfo.exists(_.signingKey == tx.pubKey), "Voter pubkey has been already registered")
+        require(TreasuryManager.VOTER_DEPOSIT_RANGE.contains(depositAmount), "Insufficient deposit")
     }
 
-    // TODO: check that transaction makes a necessary deposit. Probably there should be some special type of time-locked box.
-    // tx.to.foreach()
-  }
+    if (tx.committeeProxyPubKey.isDefined) {
+      require(!trState.getCommitteeInfo.exists(_.signingKey == tx.pubKey), "Committee signing pubkey has been already registered")
+      require(!trState.getCommitteeInfo.exists(_.proxyKey == tx.committeeProxyPubKey.get), "Committee proxy pubkey has been already registered")
 
-  def validateCommitteeRegistration(tx: CommitteeRegisterTransaction): Try[Unit] = Try {
-    require(TreasuryManager.REGISTER_RANGE.contains(epochHeight), "Wrong height for register transaction")
-
-    require(!trState.getCommitteeSigningKeys.contains(tx.pubKey), "Committee signing pubkey has been already registered")
-    require(!trState.getCommitteeProxyKeys.contains(tx.proxyPubKey), "Committee proxy pubkey has been already registered")
-
-    // TODO: check that transaction makes a necessary deposit. Probably there should be some special type of time-locked box.
-    // tx.to.foreach()
+      val committeeDeposit = tx.to.filter(_._1 == TreasuryManager.COMMITTEE_DEPOSIT_ADDR)
+      require(committeeDeposit.size == 1, "Committee deposit should be as a single box payment")
+      require(TreasuryManager.COMMITTEE_DEPOSIT_RANGE.contains(committeeDeposit.head._2), "Insufficient deposit amount")
+    }
   }
 
   def validateProposal(tx: ProposalTransaction): Try[Unit] = Try {
@@ -86,18 +103,22 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
 
     tx.voterType match {
       case VoterType.Voter =>
-        val id = trState.getVotersSigningKeys.indexOf(tx.pubKey)
+        val id = trState.getVotersInfo.indexWhere(_.signingKey == tx.pubKey)
         require(id >= 0, "Voter is not registered")
         require(trState.getVotersBallots.contains(id) == false, "The voter has already voted")
         tx.ballots.foreach(b => require(b.isInstanceOf[VoterBallot], "Incompatible ballot"))
-        val expertsNum = trState.getExpertsSigningKeys.size
-        val voter = new RegularVoter(TreasuryManager.cs, expertsNum, trState.getSharedPubKey.get, One)
-        tx.ballots.foreach { b =>
-          require(b.unitVector.length == expertsNum + Voter.VOTER_CHOISES_NUM)
-          require(voter.verifyBallot(b), "Ballot NIZK is not verified")}
+        val expertsNum = trState.getExpertsInfo.size
+        val stake = BigInteger.valueOf(trState.getVotersInfo(id).depositBox.value)
+        val voter = new RegularVoter(TreasuryManager.cs, expertsNum, trState.getSharedPubKey.get, stake)
+        tx.ballots.foreach { case b: VoterBallot =>
+          require(b.uvChoice.length == Voter.VOTER_CHOISES_NUM)
+          require(b.uvDelegations.length == expertsNum)
+          require(b.stake.equals(stake))
+          require(voter.verifyBallot(b), "Ballot NIZK is not verified")
+        }
 
       case VoterType.Expert =>
-        val id = trState.getExpertsSigningKeys.indexOf(tx.pubKey)
+        val id = trState.getExpertsInfo.indexWhere(_.signingKey == tx.pubKey)
         require(id >= 0, "Expert is not registered")
         require(trState.getExpertsBallots.contains(id) == false, "The expert has already voted")
         tx.ballots.foreach(b => require(b.isInstanceOf[ExpertBallot], "Incompatible ballot"))
@@ -105,7 +126,8 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
         tx.ballots.foreach { b =>
           require(b.unitVector.length == Voter.VOTER_CHOISES_NUM)
           require(b.asInstanceOf[ExpertBallot].expertId == id, "Wrong expertId in a ballot")
-          require(expert.verifyBallot(b), "Ballot NIZK is not verified")}
+          require(expert.verifyBallot(b), "Ballot NIZK is not verified")
+        }
     }
 
     require(trState.getProposals.size == tx.ballots.size, "Number of ballots isn't equal to the number of proposals")
@@ -117,7 +139,7 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
     require(trState.getSharedPubKey.isDefined, "Shared key is not defined in TreasuryState")
     require(trState.getProposals.nonEmpty, "Proposals are not defined")
 
-    val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
+    val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
     require(id >= 0, "Committee member isn't registered")
 
     require(trState.getProposals.size == tx.c1Shares.size, "Number of decryption shares isn't equal to the number of proposals")
@@ -134,14 +156,14 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
     require(TreasuryManager.VOTING_DECRYPTION_R1_RANGE.contains(epochHeight), "Wrong height for decryption share R1 transaction")
     require(tx.round == DecryptionRound.R1, "Invalid decryption share R1: wrong round")
 
-    val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
+    val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
     require(!trState.getDecryptionSharesR1.contains(id), "The committee member has already submitted decryption shares R1")
 
-    val expertsNum = trState.getExpertsSigningKeys.size
+    val expertsNum = trState.getExpertsInfo.size
     tx.c1Shares.foreach { s =>
       require(s.decryptedC1.size == expertsNum, "Invalid decryption share R1: wrong number of decrypted c1 componenets")
       val validator = new DecryptionManager(TreasuryManager.cs, trState.getBallotsForProposal(s.proposalId))
-      require(validator.validateDelegationsC1(trState.getCommitteeProxyKeys(id), s).isSuccess, "Invalid decryption share R1: NIZK is not verified")
+      require(validator.validateDelegationsC1(trState.getApprovedCommitteeInfo(id).proxyKey, s).isSuccess, "Invalid decryption share R1: NIZK is not verified")
     }
   }
 
@@ -150,24 +172,16 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
     require(tx.round == DecryptionRound.R2, "Invalid decryption share R2: wrong round")
     require(trState.getDelegations.isDefined, "Delegations are not defined, decryption share R2 can't be validated")
 
-    val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
+    val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
     require(!trState.getDecryptionSharesR2.contains(id), "The committee member has already submitted decryption shares R2")
 
     tx.c1Shares.foreach { s =>
       require(s.decryptedC1.size == Voter.VOTER_CHOISES_NUM, "Invalid decryption share R2: wrong number of decrypted c1 componenets")
       val validator = new DecryptionManager(TreasuryManager.cs, trState.getBallotsForProposal(s.proposalId))
-      require(validator.validateChoicesC1(trState.getCommitteeProxyKeys(id), s, trState.getDelegations.get(s.proposalId)).isSuccess,
+      require(validator.validateChoicesC1(trState.getApprovedCommitteeInfo(id).proxyKey, s, trState.getDelegations.get(s.proposalId)).isSuccess,
         "Invalid decryption share R2: NIZK is not verified")
     }
   }
-
-//  def validateDKGr1Transaction(tx: DKGr1Transaction): Try[Unit] = Try {
-//    require(TreasuryManager.DISTR_KEY_GEN_R1_RANGE.contains(epochHeight), "Wrong height for DKG R1 transaction")
-//
-//    val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
-//    require(id >= 0, "Committee member isn't found")
-//    require(!trState.getDKGr1Data.contains(id), "The committee member has already submitted DKG R1Data")
-//  }
 
   def validateDKGTransaction(tx: SignedTreasuryTransaction): Try[Unit] = Try {
 
@@ -197,8 +211,22 @@ class TreasuryTxValidator(val trState: TreasuryState, val height: Long) extends 
 
     require(range.contains(epochHeight), s"Wrong height for DKG R$roundNumber transaction")
 
-    val id = trState.getCommitteeSigningKeys.indexOf(tx.pubKey)
+    val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
     require(id >= 0, "Committee member isn't found")
     require(!roundDataFromTrsryState.contains(id), s"The committee member has already submitted DKG R${roundNumber}Data")
   }
+
+  def validatePayment(tx: PaymentTransaction): Try[Unit] = Try {
+    require(TreasuryManager.PAYMENT_BLOCK_HEIGHT == epochHeight, "Wrong height for payment transaction")
+
+    val coinbasePayments = trState.getPayments.getOrElse(Seq())
+    require(coinbasePayments.equals(tx.coinbasePayments), "Coinbase payments are invalid")
+
+    if (history.isDefined && state.isDefined) {
+      log.info("Validating deposit paybacks ...")
+      val depositPaybacks = trState.getDepositPaybacks(history.get, state.get).getOrElse(Seq())
+      require(depositPaybacks.equals(tx.depositPayback), "Deposit paybacks are invalid")
+    }
+  }
 }
+

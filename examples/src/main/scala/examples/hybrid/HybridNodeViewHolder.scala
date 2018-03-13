@@ -9,6 +9,7 @@ import examples.hybrid.settings.HybridMiningSettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryState, TreasuryTxValidator}
 import examples.hybrid.wallet.HWallet
 import scorex.core.NodeViewHolder._
+import scorex.core.NodeViewLocalInterfaceSharedMessages.ReceivableMessages._
 import scorex.core.consensus.History.ProgressInfo
 import scorex.core.serialization.Serializer
 import scorex.core.settings.ScorexSettings
@@ -73,7 +74,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
 
   override protected def txModify(tx: SimpleBoxTransaction): Unit = {
     //todo: async validation?
-    val treasuryTxValidatorTry = Try(new TreasuryTxValidator(treasuryState, history().height))
+    val treasuryTxValidatorTry = Try(new TreasuryTxValidator(treasuryState, history().height, Some(history), Some(minimalState)))
 
     val errorOpt: Option[Throwable] = minimalState() match {
       case txValidator: TransactionValidation[P, TX] =>
@@ -120,33 +121,35 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
           notifySubscribers(EventType.OpenSurfaceChanged, NewOpenSurface(historyBeforeStUpdate.openSurfaceIds()))
 
           if (progressInfo.toApply.nonEmpty) {
-            val (newHistory, newStateTry) = updateState(historyBeforeStUpdate, minimalState(), progressInfo)
-            newStateTry match {
-              case Success(newMinState) =>
-                val newMemPool = updateMemPool(progressInfo, memoryPool(), newMinState)
+            updateTreasuryState(history, minimalState, treasuryState, progressInfo) match {
+              case Success(newTreasuryState) =>
+                val (newHistory, newStateTry) = updateState(historyBeforeStUpdate, minimalState(), progressInfo)
+                newStateTry match {
+                  case Success(newMinState) =>
+                    val newMemPool = updateMemPool(progressInfo, memoryPool(), newMinState)
 
-                //we consider that vault always able to perform a rollback needed
-                val newVault = if (progressInfo.chainSwitchingNeeded) {
-                  vault().rollback(VersionTag @@ progressInfo.branchPoint.get).get.scanPersistent(progressInfo.toApply)
-                } else {
-                  vault().scanPersistent(progressInfo.toApply)
-                }
+                    //we consider that vault always able to perform a rollback needed
+                    val newVault = if (progressInfo.chainSwitchingNeeded) {
+                      vault().rollback(VersionTag @@ progressInfo.branchPoint.get).get.scanPersistent(progressInfo.toApply)
+                    } else {
+                      vault().scanPersistent(progressInfo.toApply)
+                    }
 
-                /* if everything is ok we can update treasury state */
-                updateTreasuryState(newHistory, treasuryState, progressInfo) match {
-                  case Success(newTreasuryState) =>
+                    /* if everything is ok we can finally update treasury state */
                     treasuryState = newTreasuryState
                     updateNodeView(Some(newHistory), Some(newMinState), Some(newVault), Some(newMemPool))
                     log.info(s"Persistent modifier ${pmod.encodedId} applied successfully")
+
                   case Failure(e) =>
-                    log.warn(s"Persistent modifier (id: ${pmod.encodedId}, contents: $pmod) can not be applied to treasury state", e)
+                    // TODO: do we need rollback for TreasuryState here? Because it has been already updated with a failed block
+                    log.warn(s"Can`t apply persistent modifier (id: ${pmod.encodedId}, contents: $pmod) to minimal state", e)
                     updateNodeView(updatedHistory = Some(newHistory))
                     notifySubscribers(EventType.SemanticallyFailedPersistentModifier, SemanticallyFailedModification(pmod, e))
                 }
 
               case Failure(e) =>
-                log.warn(s"Can`t apply persistent modifier (id: ${pmod.encodedId}, contents: $pmod) to minimal state", e)
-                updateNodeView(updatedHistory = Some(newHistory))
+                log.warn(s"Persistent modifier (id: ${pmod.encodedId}) is not valid against the treasury state", e)
+                //updateNodeView(updatedHistory = Some(newHistory))
                 notifySubscribers(EventType.SemanticallyFailedPersistentModifier, SemanticallyFailedModification(pmod, e))
             }
           } else {
@@ -163,17 +166,20 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
   }
 
   private def updateTreasuryState(his: HybridHistory,
-                              trState: TreasuryState,
-                              progressInfo: ProgressInfo[HybridBlock]): Try[TreasuryState] = Try {
+                                  state: HBoxStoredState,
+                                  trState: TreasuryState,
+                                  progressInfo: ProgressInfo[HybridBlock]): Try[TreasuryState] = Try {
     val epochNum = his.storage.heightOf(progressInfo.toApply.get.id).get / TreasuryManager.EPOCH_LEN
 
     if (trState.epochNum != epochNum) { // new epoch has been started, reset treasury state
+      // TODO: potentially TreasuryState.generate without PaymentTransaction verification could lead to invalid payments being accepted
       TreasuryState.generate(his).get
     } else if (progressInfo.chainSwitchingNeeded) {
       trState.rollback(VersionTag @@ progressInfo.branchPoint.get)
-        .getOrElse(TreasuryState.generate(his).get) // regenerate it entirely in case of failed rollback
+        .flatMap(_.apply(progressInfo.toApply.get, his, Some(state))) // apply block after rollback
+        .getOrElse(TreasuryState.generate(his).get)      // regenerate it entirely in case of failed rollback
     } else {
-      trState.apply(progressInfo.toApply.get, his).get
+      trState.apply(progressInfo.toApply.get, his, Some(state)).get
     }
   }
 
@@ -209,9 +215,14 @@ object HybridNodeViewHolder extends ScorexLogging {
       IndexedSeq(genesisAccountPriv -> Nonce @@ 0L),
       icoMembers.map(_ -> GenesisBalance),
       0L,
-      0L)).ensuring(t => Base58.encode(t.head.id) == "EKuWxCuUAg9XgVWKxsnehP9FLsF3zPSyn9yczqeBHD8S")
+      0L)).ensuring { t => 
+        @SuppressWarnings(Array("org.wartremover.warts.TraversableOps"))
+        val tHead = t.head
+        Base58.encode(tHead.id) == "EKuWxCuUAg9XgVWKxsnehP9FLsF3zPSyn9yczqeBHD8S" 
+      }
+      
 
-    log.debug(s"Initialize state with transaction ${genesisTxs.head} with boxes ${genesisTxs.head.newBoxes}")
+    log.debug(s"Initialize state with transaction ${genesisTxs.headOption} with boxes ${genesisTxs.headOption.map(_.newBoxes)}")
 
     val genesisBox = PublicKey25519NoncedBox(genesisAccountPriv.publicImage, Nonce @@ 0L, GenesisBalance)
     val attachment = "genesis attachment".getBytes
