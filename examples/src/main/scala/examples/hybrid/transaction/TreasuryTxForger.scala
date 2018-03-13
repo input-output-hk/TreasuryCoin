@@ -1,23 +1,23 @@
 package examples.hybrid.transaction
 
+import java.math.BigInteger
+
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
-import examples.commons.SimpleBoxTransactionMemPool
+import examples.commons.{SimpleBoxTransactionMemPool, Value}
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
 import examples.hybrid.TreasuryManager.Role.Role
 import examples.hybrid.history.HybridHistory
-import examples.hybrid.mining.PosForger
-import examples.hybrid.settings.{HybridSettings, TreasurySettings}
+import examples.hybrid.settings.TreasurySettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryTxValidator}
 import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
-import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound.DecryptionRound
 import examples.hybrid.wallet.HWallet
-import scorex.core.LocalInterface.LocallyGeneratedTransaction
+import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.LocallyGeneratedTransaction
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
-import treasury.crypto.core.{One, VoteCases}
+import treasury.crypto.core.VoteCases
 import treasury.crypto.keygen.DecryptionManager
 import treasury.crypto.voting.ballots.Ballot
 import treasury.crypto.voting.{Expert, RegularVoter}
@@ -69,8 +69,9 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     val epochHeight = view.history.height % TreasuryManager.EPOCH_LEN
 
     epochHeight match {
-      case h if REGISTER_RANGE.contains(h) => generateRegisterTx(view)
-      case h if VOTING_RANGE.contains(h) => generateBallotTx(view) // Only for testing! Normally a ballot should be created manually by a voter
+      case h if VOTER_REGISTER_RANGE.contains(h) => generateRegisterTx(Role.Voter, view)
+      case h if EXPERT_REGISTER_RANGE.contains(h) => generateRegisterTx(Role.Expert, view)
+      case h if VOTING_RANGE.contains(h) && settings.automaticBallotGeneration => generateBallotTx(view) // Only for testing! Normally a ballot should be created manually by a voter
       case h if VOTING_DECRYPTION_R1_RANGE.contains(h) => generateC1ShareR1(view)
       case h if VOTING_DECRYPTION_R2_RANGE.contains(h) => generateC1ShareR2(view)
       // TODO: other stages
@@ -78,49 +79,54 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     }
   }
 
-  private def generateRegisterTx(view: NodeView): Seq[TreasuryTransaction] = {
+  private def generateRegisterTx(role: Role, view: NodeView): Seq[TreasuryTransaction] = {
     // TODO: consider a better way to check if a node has already been registered for the role
-    val isRegisteredAsCommittee = view.vault.treasurySigningPubKeys(Role.Committee, view.trState.epochNum).nonEmpty
-    val isRegisteredAsExpert = view.vault.treasurySigningPubKeys(Role.Expert, view.trState.epochNum).nonEmpty
-    val isRegisteredAsVoter = view.vault.treasurySigningPubKeys(Role.Voter, view.trState.epochNum).nonEmpty
+    val tx = role match {
+      case Role.Expert =>
+        val isRegisteredAsExpert = view.vault.treasurySigningPubKeys(Role.Expert, view.trState.epochNum).nonEmpty
+        if (settings.isExpert && !isRegisteredAsExpert)
+          RegisterTransaction.create(view.vault, Role.Expert,
+            Value @@ TreasuryManager.EXPERT_DEPOSIT_RANGE.start.toLong, settings.isCommittee, 1, view.trState.epochNum).toOption
+        else None
+      case Role.Voter =>
+        val isRegisteredAsVoter = view.vault.treasurySigningPubKeys(Role.Voter, view.trState.epochNum).nonEmpty
+        if (settings.isVoter && !isRegisteredAsVoter)
+          RegisterTransaction.create(view.vault, Role.Voter,
+            Value @@ TreasuryManager.VOTER_DEPOSIT_RANGE.start.toLong, settings.isCommittee, 1, view.trState.epochNum).toOption
+        else None
+    }
 
-    var txs = List[TreasuryTransaction]()
-    if (settings.isCommittee && !isRegisteredAsCommittee)
-      txs = CommitteeRegisterTransaction.create(view.vault, view.trState.epochNum).get :: txs
-    if (settings.isExpert && !isRegisteredAsExpert)
-      txs = RegisterTransaction.create(view.vault, Role.Expert, view.trState.epochNum).get :: txs
-    if (settings.isVoter && !isRegisteredAsVoter)
-      txs = RegisterTransaction.create(view.vault, Role.Voter, view.trState.epochNum).get :: txs
-    txs
+    tx.map(Seq(_)).getOrElse(Seq())
   }
 
   /* It is only for testing purposes. Normally Ballot transactions should be created manually by a voter */
   private def generateBallotTx(view: NodeView): Seq[BallotTransaction] = {
-    val myVoterKeys = view.vault.treasurySigningPubKeys(Role.Voter, view.trState.epochNum)
-    val voterBallot = if (myVoterKeys.nonEmpty &&
+    val myVoterKey = view.vault.treasurySigningPubKeys(Role.Voter, view.trState.epochNum).headOption
+    val voterBallot = if (myVoterKey.isDefined &&
         view.trState.getSharedPubKey.isDefined &&
-        view.trState.getVotersSigningKeys.contains(myVoterKeys.head)) {
-      val numberOfExperts = view.trState.getExpertsSigningKeys.size
-      val voter = new RegularVoter(TreasuryManager.cs, numberOfExperts, view.trState.getSharedPubKey.get, One)
+        view.trState.getVotersInfo.exists(_.signingKey == myVoterKey.get)) {
+      val numberOfExperts = view.trState.getExpertsInfo.size
+      val stake = view.trState.getVotersInfo.find(_.signingKey == myVoterKey.get).get.depositBox.value
+      val voter = new RegularVoter(TreasuryManager.cs, numberOfExperts, view.trState.getSharedPubKey.get, BigInteger.valueOf(stake))
       var ballots = List[Ballot]()
       for (i <- view.trState.getProposals.indices)
         ballots = voter.produceDelegatedVote(i, 0) :: ballots
 
-      val privKey = view.vault.treasurySigningSecretByPubKey(view.trState.epochNum, myVoterKeys.head).get.privKey
+      val privKey = view.vault.treasurySigningSecretByPubKey(view.trState.epochNum, myVoterKey.get).get.privKey
       Seq(BallotTransaction.create(privKey, VoterType.Voter, ballots, view.trState.epochNum).get)
     } else Seq()
 
-    val myExpertKeys = view.vault.treasurySigningPubKeys(Role.Expert, view.trState.epochNum)
-    val expertBallot = if (myExpertKeys.nonEmpty &&
+    val myExpertKey = view.vault.treasurySigningPubKeys(Role.Expert, view.trState.epochNum).headOption
+    val expertBallot = if (myExpertKey.isDefined &&
         view.trState.getSharedPubKey.isDefined &&
-        view.trState.getExpertsSigningKeys.contains(myExpertKeys.head)) {
-      val expertId = view.trState.getExpertsSigningKeys.indexOf(myExpertKeys.head)
+        view.trState.getExpertsInfo.exists(_.signingKey == myExpertKey.get)) {
+      val expertId = view.trState.getExpertsInfo.indexWhere(_.signingKey == myExpertKey.get)
       val expert = new Expert(TreasuryManager.cs, expertId, view.trState.getSharedPubKey.get)
       var ballots = List[Ballot]()
       for (i <- view.trState.getProposals.indices)
-        ballots = expert.produceVote(i, VoteCases.Abstain) :: ballots
+        ballots = expert.produceVote(i, VoteCases.Yes) :: ballots
 
-      val privKey = view.vault.treasurySigningSecretByPubKey(view.trState.epochNum, myExpertKeys.head).get.privKey
+      val privKey = view.vault.treasurySigningSecretByPubKey(view.trState.epochNum, myExpertKey.get).get.privKey
       Seq(BallotTransaction.create(privKey, VoterType.Expert, ballots, view.trState.epochNum).get)
     } else Seq()
 
@@ -136,11 +142,13 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
   }
 
   private def generateC1ShareR1(view: NodeView): Seq[DecryptionShareTransaction] = {
-    val myCommitteMemberSigningKey = view.vault.treasurySigningSecrets(Role.Committee, view.trState.epochNum).headOption
+    // Since we have a joint registration of voter/expert and committee member, they will use the same signing key
+    val myCommitteMemberSigningKey = view.vault.treasurySigningSecrets(view.trState.epochNum).headOption
     val myCommitteMemberProxyKey = view.vault.treasuryCommitteeSecrets(view.trState.epochNum).headOption
     (myCommitteMemberSigningKey, myCommitteMemberProxyKey) match {
       case (Some(signingSecret), Some(committeeSecret)) =>
-        val id = view.trState.getCommitteeSigningKeys.indexOf(signingSecret.privKey.publicImage)
+        val id = view.trState.getApprovedCommitteeInfo.indexWhere(
+          c => c.signingKey == signingSecret.privKey.publicImage && c.proxyKey == committeeSecret.pubKey)
         if (id >= 0) {
           val pending = view.pool.unconfirmed.map(_._2).find {
             case t: DecryptionShareTransaction => (t.round == DecryptionRound.R1) && (signingSecret.privKey.publicImage == t.pubKey)
@@ -162,11 +170,12 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
   }
 
   private def generateC1ShareR2(view: NodeView): Seq[DecryptionShareTransaction] = {
-    val myCommitteMemberSigningKey = view.vault.treasurySigningSecrets(Role.Committee, view.trState.epochNum).headOption
+    val myCommitteMemberSigningKey = view.vault.treasurySigningSecrets(view.trState.epochNum).headOption
     val myCommitteMemberProxyKey = view.vault.treasuryCommitteeSecrets(view.trState.epochNum).headOption
     (myCommitteMemberSigningKey, myCommitteMemberProxyKey) match {
       case (Some(signingSecret), Some(committeeSecret)) =>
-        val id = view.trState.getCommitteeSigningKeys.indexOf(signingSecret.privKey.publicImage)
+        val id = view.trState.getApprovedCommitteeInfo.indexWhere(
+          c => c.signingKey == signingSecret.privKey.publicImage && c.proxyKey == committeeSecret.pubKey)
         if (id >= 0) {
           val pending = view.pool.unconfirmed.map(_._2).find {
             case t: DecryptionShareTransaction => (t.round == DecryptionRound.R2) && (signingSecret.privKey.publicImage == t.pubKey)

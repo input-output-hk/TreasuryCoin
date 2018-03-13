@@ -27,7 +27,8 @@ case class HybridMiningSettings(offlineGeneration: Boolean,
 
 case class TreasurySettings(isVoter: Boolean,
                             isExpert: Boolean,
-                            isCommittee: Boolean)
+                            isCommittee: Boolean,
+                            automaticBallotGeneration: Boolean)
 
 object HybridSettings extends ScorexLogging with SettingsReaders {
   def read(userConfigPath: Option[String]): HybridSettings = {
@@ -41,7 +42,9 @@ object HybridSettings extends ScorexLogging with SettingsReaders {
     log.info(config.toString)
     val miningSettings = config.as[HybridMiningSettings]("scorex.miner")
     val scorexSettings = config.as[ScorexSettings]("scorex")
-    val treasurySettings = config.as[TreasurySettings]("scorex.treasury")
+    var treasurySettings = config.as[TreasurySettings]("scorex.treasury")
+    if (treasurySettings.isVoter && treasurySettings.isExpert)
+      treasurySettings = treasurySettings.copy(isVoter = false) // don't allow to be voter and expert simultaneously
     HybridSettings(miningSettings, scorexSettings, treasurySettings)
   }
 }

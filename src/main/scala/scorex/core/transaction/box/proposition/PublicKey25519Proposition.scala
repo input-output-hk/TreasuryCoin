@@ -47,6 +47,7 @@ object PublicKey25519Proposition {
   val AddressVersion: Byte = 1
   val ChecksumLength = 4
   val AddressLength = 1 + Constants25519.PubKeyLength + ChecksumLength
+  val PropositionLength = Curve25519.KeyLength
 
   def calcCheckSum(bytes: Array[Byte]): Array[Byte] = Blake2b256.hash(bytes).take(ChecksumLength)
 

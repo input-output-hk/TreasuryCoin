@@ -1,5 +1,6 @@
 package examples.commons
 
+import examples.hybrid.transaction.TreasuryTransaction
 import io.iohk.iodb.ByteArrayWrapper
 import scorex.core.ModifierId
 import scorex.core.transaction.MemoryPool
@@ -42,8 +43,12 @@ case class SimpleBoxTransactionMemPool(unconfirmed: TrieMap[ByteArrayWrapper, Si
     this
   }
 
+  // Return only regular SimpleBoxTx here
   override def take(limit: Int): Iterable[SimpleBoxTransaction] =
-    unconfirmed.values.toSeq.sortBy(-_.fee).take(limit)
+    unconfirmed.values.toSeq.filter(!_.isInstanceOf[TreasuryTransaction]).sortBy(-_.fee).take(limit)
+
+  def takeTreasuryTxs(limit: Int): Iterable[TreasuryTransaction] =
+    unconfirmed.values.toSeq.collect{case t:TreasuryTransaction => t}.take(limit)
 
   override def filter(condition: (SimpleBoxTransaction) => Boolean): SimpleBoxTransactionMemPool = {
     unconfirmed.retain { (k, v) =>

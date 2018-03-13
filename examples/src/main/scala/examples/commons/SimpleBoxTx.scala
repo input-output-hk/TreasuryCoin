@@ -85,25 +85,10 @@ object SimpleBoxTx {
              to: Seq[(PublicKey25519Proposition, Value)],
              fee: Long,
              boxesIdsToExclude: Seq[Array[Byte]] = Seq()): Try[SimpleBoxTx] = Try {
-    var s = 0L
-    val amount = to.map(_._2.toLong).sum
 
-    val from: IndexedSeq[(PrivateKey25519, Nonce, Value)] = w.boxes()
-      .filter(b => !boxesIdsToExclude.exists(_ sameElements b.box.id)).sortBy(_.createdAt).takeWhile { b =>
-      s = s + b.box.value
-      s < amount + b.box.value
-    }.flatMap { b =>
-      w.secretByPublicImage(b.box.proposition).map(s => (s, b.box.nonce, b.box.value))
-    }.toIndexedSeq
-    val canSend = from.map(_._3.toLong).sum
-    val charge: (PublicKey25519Proposition, Value) = (w.publicKeys.head, Value @@ (canSend - amount - fee))
-
-    val outputs: IndexedSeq[(PublicKey25519Proposition, Value)] = (to :+ charge).toIndexedSeq
-
-    require(from.map(_._3.toLong).sum - outputs.map(_._2.toLong).sum == fee)
-
+    val (inputs, outputs) = w.prepareOutputs(to, fee, boxesIdsToExclude).get
     val timestamp = System.currentTimeMillis()
-    SimpleBoxTx(from.map(t => t._1 -> t._2), outputs, fee, timestamp)
+    SimpleBoxTx(inputs, outputs, fee, timestamp)
   }
 }
 
@@ -111,39 +96,11 @@ object SimpleBoxTx {
 object SimpleBoxTxCompanion extends Serializer[SimpleBoxTransaction] {
 
   override def toBytes(m: SimpleBoxTransaction): Array[Byte] = {
-    Bytes.concat(Longs.toByteArray(m.fee),
-      Longs.toByteArray(m.timestamp),
-      Ints.toByteArray(m.signatures.length),
-      Ints.toByteArray(m.from.length),
-      Ints.toByteArray(m.to.length),
-      m.signatures.foldLeft(Array[Byte]())((a, b) => Bytes.concat(a, b.bytes)),
-      m.from.foldLeft(Array[Byte]())((a, b) => Bytes.concat(a, b._1.bytes, Longs.toByteArray(b._2))),
-      m.to.foldLeft(Array[Byte]())((a, b) => Bytes.concat(a, b._1.bytes, Longs.toByteArray(b._2)))
-    )
+    SimpleBoxTransactionCompanion.toBytesCommonArgs(m)
   }
 
   override def parseBytes(bytes: Array[Byte]): Try[SimpleBoxTransaction] = Try {
-    val fee = Longs.fromByteArray(bytes.slice(0, 8))
-    val timestamp = Longs.fromByteArray(bytes.slice(8, 16))
-    val sigLength = Ints.fromByteArray(bytes.slice(16, 20))
-    val fromLength = Ints.fromByteArray(bytes.slice(20, 24))
-    val toLength = Ints.fromByteArray(bytes.slice(24, 28))
-    val signatures = (0 until sigLength) map { i =>
-      Signature25519(Signature @@ bytes.slice(28 + i * Curve25519.SignatureLength, 28 + (i + 1) * Curve25519.SignatureLength))
-    }
-    val s = 28 + sigLength * Curve25519.SignatureLength
-    val elementLength = 8 + Curve25519.KeyLength
-    val from = (0 until fromLength) map { i =>
-      val pk = PublicKey @@ bytes.slice(s + i * elementLength, s + (i + 1) * elementLength - 8)
-      val v = Longs.fromByteArray(bytes.slice(s + (i + 1) * elementLength - 8, s + (i + 1) * elementLength))
-      (PublicKey25519Proposition(pk), Nonce @@ v)
-    }
-    val s2 = s + fromLength * elementLength
-    val to = (0 until toLength) map { i =>
-      val pk = PublicKey @@ bytes.slice(s2 + i * elementLength, s2 + (i + 1) * elementLength - 8)
-      val v = Longs.fromByteArray(bytes.slice(s2 + (i + 1) * elementLength - 8, s2 + (i + 1) * elementLength))
-      (PublicKey25519Proposition(pk), Value @@ v)
-    }
+    val (from, to, signatures, fee, timestamp) = SimpleBoxTransactionCompanion.parseBytesCommonArgs(bytes).get
     new SimpleBoxTx(from, to, signatures, fee, timestamp)
   }
 }
