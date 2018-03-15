@@ -18,7 +18,7 @@ import scorex.core.utils.ScorexLogging
 import scorex.core.{ModifierId, VersionTag}
 import scorex.crypto.encode.Base58
 import scorex.crypto.hash.{Blake2b256, Digest32}
-import treasury.crypto.core.{PubKey, SimpleIdentifier}
+import treasury.crypto.core.{PrivKey, PubKey, SimpleIdentifier}
 import treasury.crypto.keygen.{DecryptionManager, DistrKeyGen, KeyShares, RoundsData}
 import treasury.crypto.keygen.datastructures.C1Share
 import treasury.crypto.keygen.datastructures.round1.R1Data
@@ -56,6 +56,9 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   private var randomness: Array[Byte] = Array.fill[Byte](32)(234.toByte) // TODO: change with a real randomness
 
   private var sharedPublicKey: Option[PubKey] = None
+  private var allDisqualifiedCommitteeMembers: Seq[CommitteeInfo] = Seq()
+  private var recoveredKeysOfDisqualifiedCommitteeMembers: Seq[(PubKey, PrivKey)] = Seq()
+
   private var votersBallots: Map[Int, Seq[VoterBallot]] = Map() // voterId -> Seq(ballot)
   private var expertsBallots: Map[Int, Seq[ExpertBallot]] = Map() // expertId -> Seq(ballot)
 
@@ -83,6 +86,8 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def getExpertsInfo = expertsInfo
   def getCommitteeInfo = committeeInfo
   def getApprovedCommitteeInfo = committeeInfo.filter(_.approved)
+  def getDisqualifiedCommitteeInfo = allDisqualifiedCommitteeMembers
+  def getRecoveredKeys = recoveredKeysOfDisqualifiedCommitteeMembers
 
   def getSigningKeys(role: Role): List[PublicKey25519Proposition] = role match {
     case Role.Committee => getCommitteeInfo.map(_.signingKey)
@@ -273,35 +278,17 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   private def updateState(epochHeight: Int): TreasuryState = {
     epochHeight match {
-
-      case h if h >= TreasuryManager.DISTR_KEY_GEN_R5_RANGE.end && sharedPublicKey.isEmpty =>
-
-        log.info("Computing shared public key")
-
-        if (getApprovedCommitteeInfo.nonEmpty){
-
-          val committeeMembersPubKeys = getApprovedCommitteeInfo.map(_.proxyKey)
-          val memberIdentifier = new SimpleIdentifier(committeeMembersPubKeys)
-          val roundsData = RoundsData(
-            getDKGr1Data.values.toSeq,
-            getDKGr2Data.values.toSeq,
-            getDKGr3Data.values.toSeq,
-            getDKGr4Data.values.toSeq,
-            getDKGr5Data.values.toSeq
-          )
-          DistrKeyGen.getSharedPublicKey(cs, committeeMembersPubKeys, memberIdentifier, roundsData) match {
-            case Success(sharedPubKey) =>
-              sharedPublicKey = Some(cs.decodePoint(sharedPubKey))
-              log.info(s"Shared public key is: ${Base58.encode(sharedPublicKey.get.getEncoded(true))}")
-
-            case Failure(e) => log.error(e.getMessage)
-          }
-        } else log.warn("No committee members found!")
-
-      case TreasuryManager.EXPERT_REGISTER_RANGE.end => selectApprovedCommittee()
-      case TreasuryManager.VOTING_DECRYPTION_R1_RECOVERY_RANGE.end => calculateDelegations()
-      case TreasuryManager.VOTING_DECRYPTION_R2_RECOVERY_RANGE.end => calculateTallyResult()
-
+      case TreasuryManager.EXPERT_REGISTER_RANGE.end =>
+        selectApprovedCommittee()
+      case TreasuryManager.DISTR_KEY_GEN_R5_RANGE.end =>
+        retrieveSharedPublicKey()
+        retrieveDisqualifiedAfterDKG()
+      case TreasuryManager.VOTING_DECRYPTION_R1_RECOVERY_RANGE.end =>
+        retrieveDisqualifiedAfterDecryptionR1()
+        calculateDelegations()
+      case TreasuryManager.VOTING_DECRYPTION_R2_RECOVERY_RANGE.end =>
+        retrieveDisqualifiedAfterDecryptionR2()
+        calculateTallyResult()
       case _ =>
     }
 
@@ -320,31 +307,88 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     committeeInfo = committeeInfo.map(c => c.copy(approved = approvedCommittee.contains(c.signingKey)))
   }
 
-  private def calculateDelegations(): Unit = {
-    /* We can calculate delegations ONLY IF we have valid decryption shares from ALL committee members
-    *  TODO: recover secret keys (and corresponding decryption shares) of the faulty CMs by KeyShares submissions */
-    if (c1SharesR1.size == getApprovedCommitteeInfo.size) {
-      val deleg = proposals.indices.map { i =>
-        val shares = getDecryptionSharesR1ForProposal(i)
-        assert(shares.size == getApprovedCommitteeInfo.size)
-        val decryptor = new DecryptionManager(TreasuryManager.cs, getBallotsForProposal(i))
-        (i -> decryptor.computeDelegations(shares.map(_.decryptedC1.map(_._1))))
-      }
-      delegations = Some(deleg.toMap)
+  private def retrieveSharedPublicKey(): Try[Unit] = Try {
+      log.info("Computing shared public key")
+
+      if (getApprovedCommitteeInfo.nonEmpty) {
+
+        val committeeMembersPubKeys = getApprovedCommitteeInfo.map(_.proxyKey)
+        val memberIdentifier = new SimpleIdentifier(committeeMembersPubKeys)
+        val roundsData = RoundsData(
+          getDKGr1Data.values.toSeq,
+          getDKGr2Data.values.toSeq,
+          getDKGr3Data.values.toSeq,
+          getDKGr4Data.values.toSeq,
+          getDKGr5Data.values.toSeq
+        )
+        DistrKeyGen.getSharedPublicKey(cs, committeeMembersPubKeys, memberIdentifier, roundsData) match {
+          case Success(sharedPubKey) =>
+            sharedPublicKey = Some(cs.decodePoint(sharedPubKey))
+            log.info(s"Shared public key is: ${Base58.encode(sharedPublicKey.get.getEncoded(true))}")
+
+          case Failure(e) => log.error(e.getMessage)
+        }
+      } else log.warn("No committee members found!")
+  }
+
+  private def retrieveDisqualifiedAfterDKG(): Unit = {
+    if (sharedPublicKey.isDefined) {
+      val proxyKeys = getApprovedCommitteeInfo.map(_.proxyKey)
+      val identifier = new SimpleIdentifier(proxyKeys)
+
+      val disqualifiedOnR1 = DistrKeyGen.getDisqualifiedOnR1CommitteeMembersIDs(
+        TreasuryManager.cs, proxyKeys, identifier, getDKGr1Data.values.toSeq, getDKGr2Data.values.toSeq)
+      val disqualifiedOnR3 = DistrKeyGen.getDisqualifiedOnR3CommitteeMembersIDs(
+        TreasuryManager.cs, proxyKeys, identifier, disqualifiedOnR1, getDKGr3Data.values.toSeq, getDKGr4Data.values.toSeq)
+
+      val disqualifiedPubKeys = disqualifiedOnR1.map(identifier.getPubKey(_).get) ++ disqualifiedOnR3.map(identifier.getPubKey(_).get)
+      allDisqualifiedCommitteeMembers ++= disqualifiedPubKeys.map(k => getApprovedCommitteeInfo.find(_.proxyKey == k).get)
+
+      recoveredKeysOfDisqualifiedCommitteeMembers ++= DistrKeyGen.recoverKeysOfDisqualifiedOnR3Members(TreasuryManager.cs, proxyKeys.size,
+        getDKGr5Data.values.toSeq, disqualifiedOnR1, disqualifiedOnR3)
     }
   }
 
-  private def calculateTallyResult(): Unit = {
-    /* We can decrypt final voting result ONLY IF we have valid decryption shares from ALL committee members
-    *  TODO: recover secret keys (and corresponding decryption shares) of the faulty CMs by KeyShares submissions */
-    if (c1SharesR2.size == getApprovedCommitteeInfo.size && getDelegations.isDefined) {
+  private def retrieveDisqualifiedAfterDecryptionR1(): Unit = {
+
+  }
+
+  private def retrieveDisqualifiedAfterDecryptionR2(): Unit = {
+
+  }
+
+  private def calculateDelegations(): Try[Unit] = Try {
+    val deleg = proposals.indices.map { i =>
+      val shares = getDecryptionSharesR1ForProposal(i)
+      assert(shares.size == getApprovedCommitteeInfo.size)
+      val decryptor = new DecryptionManager(TreasuryManager.cs, getBallotsForProposal(i))
+
+      /* We can calculate delegations ONLY IF we have valid decryption shares from ALL committee members */
+      val c1OfActiveCMs = getDecryptionSharesR1ForProposal(i).map(_.decryptedC1.map(_._1))
+      val c1OfRecoveredCMs = decryptor.recoverDelegationsC1(recoveredKeysOfDisqualifiedCommitteeMembers.map(_._2))
+      val allC1ForDelegations = c1OfActiveCMs ++ c1OfRecoveredCMs
+      assert(allC1ForDelegations.size == getApprovedCommitteeInfo.size)
+
+      (i -> decryptor.computeDelegations(allC1ForDelegations))
+    }
+    delegations = Some(deleg.toMap)
+  }
+
+  private def calculateTallyResult(): Try[Unit] = Try {
+    if (getDelegations.isDefined) {
       val result = proposals.indices.foreach { i =>
-        val shares = getDecryptionSharesR2ForProposal(i).map(_.decryptedC1.map(_._1))
-        val delegations = getDelegations.get(i)
-        assert(shares.size == getApprovedCommitteeInfo.size)
-        assert(delegations.size == getExpertsInfo.size)
         val decryptor = new DecryptionManager(TreasuryManager.cs, getBallotsForProposal(i))
-        val tally = decryptor.computeTally(shares, delegations)
+        val delegations = getDelegations.get(i)
+
+        val c1OfActiveMembers = getDecryptionSharesR2ForProposal(i).map(_.decryptedC1.map(_._1))
+        val c1OfRecoveredCMs = decryptor.recoverChoicesC1(recoveredKeysOfDisqualifiedCommitteeMembers.map(_._2), delegations)
+        val allChoicesC1 = c1OfActiveMembers ++ c1OfRecoveredCMs
+
+        /* We can decrypt final voting result ONLY IF we have valid decryption shares from ALL committee members */
+        assert(allChoicesC1.size == getApprovedCommitteeInfo.size)
+        assert(delegations.size == getExpertsInfo.size)
+
+        val tally = decryptor.computeTally(allChoicesC1, delegations)
         if (tally.isSuccess)
           tallyResult = tallyResult + (i -> tally.get)
       }

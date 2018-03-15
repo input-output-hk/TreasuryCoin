@@ -62,16 +62,10 @@ class HybridApp(val settingsFilename: String) extends Application {
                                                      (networkControllerRef, nodeViewHolderRef, localInterface,
                                                       HybridSyncInfoMessageSpec, settings.network, timeProvider))
 
-  //touching lazy vals
-  miner
-  localInterface
-  nodeViewSynchronizer
-
 //  if (settings.network.nodeName.startsWith("generatorNode")) {
 //    log.info("Starting transactions generation")
 //    val generator: ActorRef = SimpleBoxTransactionGeneratorRef(nodeViewHolderRef)
 //    generator ! StartGeneration(10 seconds)
-//  }
 
   if (settings.network.nodeName.startsWith("node1")) {
     log.info("Starting treasury transactions generation")

@@ -1,11 +1,10 @@
 package scorex.core
 
 import akka.actor.{Actor, ActorRef}
-import scorex.core.NodeViewLocalInterfaceSharedMessages.ReceivableMessages.{ChangedHistory, ChangedMempool, ChangedVault}
 import scorex.core.consensus.{HistoryReader, SyncInfo}
-import scorex.core.transaction.{MempoolReader, Transaction}
 import scorex.core.transaction.box.proposition.Proposition
 import scorex.core.transaction.state.StateReader
+import scorex.core.transaction.{MempoolReader, Transaction}
 import scorex.core.utils.ScorexLogging
 
 /**
@@ -15,13 +14,9 @@ trait LocalInterface[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
   extends Actor with ScorexLogging {
 
   import scorex.core.LocalInterface.ReceivableMessages._
-  import scorex.core.NodeViewLocalInterfaceSharedMessages.ReceivableMessages.{SuccessfulTransaction, FailedTransaction,
-                                                                              SyntacticallySuccessfulModifier, SyntacticallyFailedModification,
-                                                                              SemanticallySuccessfulModifier, SemanticallyFailedModification,
-                                                                              ChangedState, NewOpenSurface, RollbackFailed,
-                                                                              StartingPersistentModifierApplication}
+  import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.{LocallyGeneratedModifier, LocallyGeneratedTransaction}
   import scorex.core.NodeViewHolder.ReceivableMessages.Subscribe
-  import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.{LocallyGeneratedTransaction, LocallyGeneratedModifier}
+  import scorex.core.network.NodeViewSynchronizer.ReceivableMessages._
 
   val viewHolderRef: ActorRef
 
@@ -129,5 +124,13 @@ object LocalInterface {
   object ReceivableMessages {
     case object NoBetterNeighbour
     case object BetterNeighbourAppeared
+
+    import scorex.core.network.NodeViewSynchronizer.ReceivableMessages.{NodeViewChange, NodeViewHolderEvent}
+
+    case class ChangedState[SR <: StateReader](reader: SR) extends NodeViewChange
+    //todo: consider sending info on the rollback
+    case object RollbackFailed extends NodeViewHolderEvent
+    case class NewOpenSurface(newSurface: Seq[ModifierId]) extends NodeViewHolderEvent
+    case class StartingPersistentModifierApplication[PMOD <: PersistentNodeViewModifier](modifier: PMOD) extends NodeViewHolderEvent
   }
 }
