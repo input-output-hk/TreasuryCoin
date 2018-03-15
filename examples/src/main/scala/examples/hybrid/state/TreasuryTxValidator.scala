@@ -141,6 +141,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
 
     val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
     require(id >= 0, "Committee member isn't registered")
+    require(!trState.getDisqualifiedCommitteeInfo.exists(_.signingKey == tx.pubKey), "Committee member is disqualified")
 
     require(trState.getProposals.size == tx.c1Shares.size, "Number of decryption shares isn't equal to the number of proposals")
     trState.getProposals.indices.foreach(i =>
