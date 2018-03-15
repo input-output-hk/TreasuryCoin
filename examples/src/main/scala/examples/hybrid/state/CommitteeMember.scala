@@ -62,8 +62,6 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
     case HistoryModified => viewHolderRef ! getTransaction
   }
 
-  private var roundNum = 0 // is used to avoid repeated calls of the same round functions
-
   def synchronizeState(epochHeight: Long, view: NodeView, dkgOptIn: Option[DistrKeyGen]): Option[DistrKeyGen] = {
 
     var dkgOpt: Option[DistrKeyGen] = dkgOptIn
@@ -465,7 +463,7 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
           None
 
         case _ =>
-          log.info(s"Current height: ${epochHeight}; roundNum: ${roundNum}")
+          log.info(s"Current height: ${epochHeight}")
           None
       }
     } else { // !dkgOpt.isDefined
@@ -722,13 +720,20 @@ object CommitteeMember {
 
     val currentView = getCurrentView
 
+    import examples.hybrid.TreasuryManager._
+    val epochHeight = currentView.get.history.height % TreasuryManager.EPOCH_LEN
+
+    println(s"epochHeight: ${epochHeight}")
+
     if (currentView.isSuccess &&
         isRegisteredAsCommitteeMember(currentView.get)) {
 
       val history = currentView.get.history
 
-      import examples.hybrid.TreasuryManager._
-      val epochHeight = history.height % TreasuryManager.EPOCH_LEN
+//      import examples.hybrid.TreasuryManager._
+//      val epochHeight = history.height % TreasuryManager.EPOCH_LEN
+//
+//      println(s"epochHeight: ${epochHeight}")
 
       if (epochHeight >= DISTR_KEY_GEN_R1_RANGE.start &&
           epochHeight <  PAYMENT_BLOCK_HEIGHT) {
