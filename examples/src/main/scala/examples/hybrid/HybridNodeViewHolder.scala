@@ -1,16 +1,17 @@
 package examples.hybrid
 
-import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState, log}
 import akka.actor.{ActorRef, ActorSystem, Props}
 import examples.commons._
+import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.blocks._
 import examples.hybrid.history.{HybridHistory, HybridSyncInfo}
 import examples.hybrid.settings.HybridMiningSettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryState, TreasuryTxValidator}
 import examples.hybrid.wallet.HWallet
+import scorex.core.LocalInterface.ReceivableMessages.{NewOpenSurface, StartingPersistentModifierApplication}
 import scorex.core.NodeViewHolder._
-import scorex.core.NodeViewLocalInterfaceSharedMessages.ReceivableMessages._
 import scorex.core.consensus.History.ProgressInfo
+import scorex.core.network.NodeViewSynchronizer.ReceivableMessages._
 import scorex.core.serialization.Serializer
 import scorex.core.settings.ScorexSettings
 import scorex.core.transaction.Transaction
