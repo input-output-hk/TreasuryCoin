@@ -13,12 +13,14 @@ import examples.hybrid.settings.TreasurySettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryTxValidator}
 import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
-import examples.hybrid.wallet.HWallet
+import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound.DecryptionRound
+import examples.hybrid.transaction.RecoveryShareTransaction.OpenedShareWithId
+import examples.hybrid.wallet.{HWallet, TreasuryCommitteeSecret, TreasurySigningSecret}
 import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.LocallyGeneratedTransaction
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
-import treasury.crypto.core.VoteCases
-import treasury.crypto.keygen.DecryptionManager
+import treasury.crypto.core.{SimpleIdentifier, VoteCases}
+import treasury.crypto.keygen.{DecryptionManager, DistrKeyGen}
 import treasury.crypto.voting.ballots.Ballot
 import treasury.crypto.voting.{Expert, RegularVoter}
 
@@ -73,7 +75,9 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       case h if EXPERT_REGISTER_RANGE.contains(h) => generateRegisterTx(Role.Expert, view)
       case h if VOTING_RANGE.contains(h) && settings.automaticBallotGeneration => generateBallotTx(view) // Only for testing! Normally a ballot should be created manually by a voter
       case h if VOTING_DECRYPTION_R1_RANGE.contains(h) => generateC1ShareR1(view)
+      case h if VOTING_DECRYPTION_R1_RECOVERY_RANGE.contains(h) => generateRecoveryShare(DecryptionRound.R1, view)
       case h if VOTING_DECRYPTION_R2_RANGE.contains(h) => generateC1ShareR2(view)
+      case h if VOTING_DECRYPTION_R2_RECOVERY_RANGE.contains(h) => generateRecoveryShare(DecryptionRound.R2, view)
       // TODO: other stages
       case _ => Seq()
     }
@@ -169,6 +173,35 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     }
   }
 
+  private def generateRecoveryShare(round: DecryptionRound, view: NodeView): Seq[RecoveryShareTransaction] = Try {
+    val secrets = checkCommitteeMemberRegistration(view)
+    if (secrets.isDefined) {
+      val needRecover = round match {
+        case DecryptionRound.R1 => view.trState.getDisqualifiedAfterDecryptionR1CommitteeInfo
+        case DecryptionRound.R2 => view.trState.getDisqualifiedAfterDecryptionR2CommitteeInfo
+      }
+
+      if (needRecover.nonEmpty) {
+        val (signingSecret, proxySecret) = secrets.get
+        val identifier = new SimpleIdentifier(view.trState.getApprovedCommitteeInfo.map(_.proxyKey))
+
+        val shares = needRecover.map { violator =>
+          val violatorId = view.trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == violator.signingKey)
+          val openedShare = DistrKeyGen.generateRecoveryKeyShare(
+            TreasuryManager.cs,
+            identifier,
+            (proxySecret.privKey, proxySecret.pubKey),
+            violator.proxyKey,
+            view.trState.getDKGr1Data.values.toSeq).get
+          OpenedShareWithId(violatorId, openedShare)
+        }
+
+        Seq(RecoveryShareTransaction.create(signingSecret.privKey, round, shares, view.trState.epochNum).get)
+
+      } else Seq()
+    } else Seq()
+  }.getOrElse(Seq())
+
   private def generateC1ShareR2(view: NodeView): Seq[DecryptionShareTransaction] = {
     val myCommitteMemberSigningKey = view.vault.treasurySigningSecrets(view.trState.epochNum).headOption
     val myCommitteMemberProxyKey = view.vault.treasuryCommitteeSecrets(view.trState.epochNum).headOption
@@ -193,6 +226,20 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
           } else Seq()
         } else Seq()
       case _ => Seq()
+    }
+  }
+
+  private def checkCommitteeMemberRegistration(view: NodeView): Option[(TreasurySigningSecret, TreasuryCommitteeSecret)] = {
+    val myCommitteMemberSigningKey = view.vault.treasurySigningSecrets(view.trState.epochNum).headOption
+    val myCommitteMemberProxyKey = view.vault.treasuryCommitteeSecrets(view.trState.epochNum).headOption
+    (myCommitteMemberSigningKey, myCommitteMemberProxyKey) match {
+      case (Some(signingSecret), Some(committeeSecret)) =>
+        val id = view.trState.getApprovedCommitteeInfo.indexWhere(
+          c => c.signingKey == signingSecret.privKey.publicImage && c.proxyKey == committeeSecret.pubKey)
+        if (id >= 0) {
+          Some((signingSecret, committeeSecret))
+        } else None
+      case _ => None
     }
   }
 }

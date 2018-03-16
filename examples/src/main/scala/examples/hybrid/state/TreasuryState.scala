@@ -24,11 +24,12 @@ import treasury.crypto.keygen.datastructures.C1Share
 import treasury.crypto.keygen.datastructures.round1.R1Data
 import treasury.crypto.keygen.datastructures.round2.R2Data
 import treasury.crypto.keygen.datastructures.round3.R3Data
-import treasury.crypto.keygen.datastructures.round4.R4Data
+import treasury.crypto.keygen.datastructures.round4.{OpenedShare, R4Data}
 import treasury.crypto.keygen.datastructures.round5_1.R5_1Data
 import treasury.crypto.voting.Tally
 import treasury.crypto.voting.ballots.{Ballot, ExpertBallot, VoterBallot}
 
+import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -56,17 +57,21 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   private var randomness: Array[Byte] = Array.fill[Byte](32)(234.toByte) // TODO: change with a real randomness
 
   private var sharedPublicKey: Option[PubKey] = None
-  private var allDisqualifiedCommitteeMembers: Seq[CommitteeInfo] = Seq()
+
+  private var disqualifiedCommitteeMembersAfterDKG: Seq[CommitteeInfo] = Seq()
+  private var disqualifiedCommitteeMembersAfterDecryptionR1: Seq[CommitteeInfo] = Seq()
+  private var disqualifiedCommitteeMembersAfterDecryptionR2: Seq[CommitteeInfo] = Seq()
+  private var disqualifiedCommitteeMembersAfterSeedGen: Seq[CommitteeInfo] = Seq()
   private var recoveredKeysOfDisqualifiedCommitteeMembers: Seq[(PubKey, PrivKey)] = Seq()
 
   private var votersBallots: Map[Int, Seq[VoterBallot]] = Map() // voterId -> Seq(ballot)
   private var expertsBallots: Map[Int, Seq[ExpertBallot]] = Map() // expertId -> Seq(ballot)
 
   private var c1SharesR1: Map[Int, Seq[C1Share]] = Map() // committeeMemberId -> Seq(C1Share)
-  private var keyRecoverySharesR1: Map[Int, KeyShares] = Map() // committeeMemberId -> KeyShares
+  private var keyRecoverySharesR1: mutable.Map[Int, Seq[OpenedShare]] = mutable.Map() // recoveredCommitteeMemberId -> opened shares
   private var delegations: Option[Map[Int, Seq[BigInteger]]] = None  // delegations for all proposals
   private var c1SharesR2: Map[Int, Seq[C1Share]] = Map() // committeeMemberId -> Seq(C1Share)
-  private var keyRecoverySharesR2: Map[Int, KeyShares] = Map() // committeeMemberId -> KeyShares
+  private var keyRecoverySharesR2: mutable.Map[Int, Seq[OpenedShare]] = mutable.Map() // recoveredCommitteeMemberId -> opened shares
 
   private var tallyResult: Map[Int, Tally.Result] = Map() // proposalId -> voting result
 
@@ -86,7 +91,13 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def getExpertsInfo = expertsInfo
   def getCommitteeInfo = committeeInfo
   def getApprovedCommitteeInfo = committeeInfo.filter(_.approved)
-  def getDisqualifiedCommitteeInfo = allDisqualifiedCommitteeMembers
+
+  def getDisqualifiedAfterDKGCommitteeInfo = disqualifiedCommitteeMembersAfterDKG
+  def getDisqualifiedAfterDecryptionR1CommitteeInfo = disqualifiedCommitteeMembersAfterDecryptionR1
+  def getDisqualifiedAfterDecryptionR2CommitteeInfo = disqualifiedCommitteeMembersAfterDecryptionR2
+  def getDisqualifiedAfterSeedGenCommitteeInfo = disqualifiedCommitteeMembersAfterSeedGen
+  def getAllDisqualifiedCommitteeInfo = getDisqualifiedAfterDKGCommitteeInfo ++ getDisqualifiedAfterSeedGenCommitteeInfo ++
+    getDisqualifiedAfterDecryptionR1CommitteeInfo ++ getDisqualifiedAfterDecryptionR2CommitteeInfo
   def getRecoveredKeys = recoveredKeysOfDisqualifiedCommitteeMembers
 
   def getSigningKeys(role: Role): List[PublicKey25519Proposition] = role match {
@@ -163,6 +174,18 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         t.round match {
           case DecryptionRound.R1 => c1SharesR1 = c1SharesR1 + (id -> t.c1Shares)
           case DecryptionRound.R2 => c1SharesR2 = c1SharesR2 + (id -> t.c1Shares)
+        }
+      }
+      case t: RecoveryShareTransaction => Try {
+        t.round match {
+          case DecryptionRound.R1 => t.openedShares.foreach { s =>
+            val updatedShares = keyRecoverySharesR1(s.violatorId) :+ s.openedShare
+            keyRecoverySharesR1(s.violatorId) = updatedShares
+          }
+          case DecryptionRound.R2 => t.openedShares.foreach { s =>
+            val updatedShares = keyRecoverySharesR2(s.violatorId) :+ s.openedShare
+            keyRecoverySharesR2(s.violatorId) = updatedShares
+          }
         }
       }
       case t: DKGr1Transaction => Try {
@@ -283,11 +306,15 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       case TreasuryManager.DISTR_KEY_GEN_R5_RANGE.end =>
         retrieveSharedPublicKey()
         retrieveDisqualifiedAfterDKG()
+      case TreasuryManager.VOTING_DECRYPTION_R1_RANGE.end =>
+        updateDisqualifiedAfterDecryptionR1()
       case TreasuryManager.VOTING_DECRYPTION_R1_RECOVERY_RANGE.end =>
-        retrieveDisqualifiedAfterDecryptionR1()
+        retrieveKeysOfDisqualifiedAfterDecryptionR1()
         calculateDelegations()
+      case TreasuryManager.VOTING_DECRYPTION_R2_RANGE.end =>
+        updateDisqualifiedAfterDecryptionR2()
       case TreasuryManager.VOTING_DECRYPTION_R2_RECOVERY_RANGE.end =>
-        retrieveDisqualifiedAfterDecryptionR2()
+        retrieveKeysOfDisqualifiedAfterDecryptionR2()
         calculateTallyResult()
       case _ =>
     }
@@ -342,18 +369,37 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         TreasuryManager.cs, proxyKeys, identifier, disqualifiedOnR1, getDKGr3Data.values.toSeq, getDKGr4Data.values.toSeq)
 
       val disqualifiedPubKeys = disqualifiedOnR1.map(identifier.getPubKey(_).get) ++ disqualifiedOnR3.map(identifier.getPubKey(_).get)
-      allDisqualifiedCommitteeMembers ++= disqualifiedPubKeys.map(k => getApprovedCommitteeInfo.find(_.proxyKey == k).get)
+      disqualifiedCommitteeMembersAfterDKG ++= disqualifiedPubKeys.map(k => getApprovedCommitteeInfo.find(_.proxyKey == k).get)
 
       recoveredKeysOfDisqualifiedCommitteeMembers ++= DistrKeyGen.recoverKeysOfDisqualifiedOnR3Members(TreasuryManager.cs, proxyKeys.size,
         getDKGr5Data.values.toSeq, disqualifiedOnR1, disqualifiedOnR3)
     }
   }
 
-  private def retrieveDisqualifiedAfterDecryptionR1(): Unit = {
+  private def updateDisqualifiedAfterDecryptionR1(): Unit = {
+    /* Disqualified are those who didn't submit valid c1Share and hasn't been disqualified before */
+    val disqualified = getApprovedCommitteeInfo
+      .filter(i => !getDecryptionSharesR1.contains(getApprovedCommitteeInfo.indexOf(i)))
+      .filter(i => !getDisqualifiedAfterDKGCommitteeInfo.exists(_.signingKey == i.signingKey))
+
+    disqualifiedCommitteeMembersAfterDecryptionR1 = disqualified
+  }
+
+  private def retrieveKeysOfDisqualifiedAfterDecryptionR1(): Unit = {
 
   }
 
-  private def retrieveDisqualifiedAfterDecryptionR2(): Unit = {
+  private def updateDisqualifiedAfterDecryptionR2(): Unit = {
+    /* Disqualified are those who didn't submit valid c1Share and hasn't been disqualified before */
+    val disqualified = getApprovedCommitteeInfo
+      .filter(i => !getDecryptionSharesR2.contains(getApprovedCommitteeInfo.indexOf(i)))
+      .filter(i => !getDisqualifiedAfterDKGCommitteeInfo.exists(_.signingKey == i.signingKey))
+      .filter(i => !getDisqualifiedAfterDecryptionR1CommitteeInfo.exists(_.signingKey == i.signingKey))
+
+    disqualifiedCommitteeMembersAfterDecryptionR2 = disqualified
+  }
+
+  private def retrieveKeysOfDisqualifiedAfterDecryptionR2(): Unit = {
 
   }
 

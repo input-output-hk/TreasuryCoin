@@ -70,7 +70,7 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
       "R3Data"                -> state.getDKGr3Data.values.map(r3 => Base58.encode(r3.bytes)).asJson,
       "R4Data"                -> state.getDKGr4Data.values.map(r4 => Base58.encode(r4.bytes)).asJson,
       "R5Data"                -> state.getDKGr5Data.values.map(r5 => Base58.encode(r5.bytes)).asJson,
-      "disqualifiedCommitteeMembers"  -> state.getDisqualifiedCommitteeInfo.map(_.signingKey.toString).asJson,
+      "disqualifiedCommitteeMembers"  -> state.getAllDisqualifiedCommitteeInfo.map(_.signingKey.toString).asJson,
       "recoveredKeys"         -> state.getRecoveredKeys.map(_._1.toString).asJson,
       "decryption shares R1"  -> state.getDecryptionSharesR1.map(member => s"Committee id ${member._1}. Number of submitted shares: ${member._2.size}").asJson,
       "decryption shares R2"  -> state.getDecryptionSharesR2.map(member => s"Committee id ${member._1}. Number of submitted shares: ${member._2.size}").asJson,

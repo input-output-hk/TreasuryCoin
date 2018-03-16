@@ -11,8 +11,8 @@ import examples.hybrid.transaction.DKG._
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
 import examples.hybrid.transaction._
 import scorex.core.utils.ScorexLogging
-import treasury.crypto.core.One
-import treasury.crypto.keygen.DecryptionManager
+import treasury.crypto.core.{One, SimpleIdentifier}
+import treasury.crypto.keygen.{DecryptionManager, DistrKeyGen}
 import treasury.crypto.voting.ballots.{ExpertBallot, VoterBallot}
 import treasury.crypto.voting.{Expert, RegularVoter, Voter}
 
@@ -56,6 +56,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
       case t: ProposalTransaction => validateProposal(t).get
       case t: BallotTransaction => validateBallot(t).get
       case t: DecryptionShareTransaction => validateDecryptionShare(t).get
+      case t: RecoveryShareTransaction => validateRecoveryShare(t).get
       case t: DKGr1Transaction => validateDKGTransaction(t).get
       case t: DKGr2Transaction => validateDKGTransaction(t).get
       case t: DKGr3Transaction => validateDKGTransaction(t).get
@@ -141,7 +142,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
 
     val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
     require(id >= 0, "Committee member isn't registered")
-    require(!trState.getDisqualifiedCommitteeInfo.exists(_.signingKey == tx.pubKey), "Committee member is disqualified")
+    require(!trState.getAllDisqualifiedCommitteeInfo.exists(_.signingKey == tx.pubKey), "Committee member is disqualified")
 
     require(trState.getProposals.size == tx.c1Shares.size, "Number of decryption shares isn't equal to the number of proposals")
     trState.getProposals.indices.foreach(i =>
@@ -181,6 +182,70 @@ class TreasuryTxValidator(val trState: TreasuryState,
       val validator = new DecryptionManager(TreasuryManager.cs, trState.getBallotsForProposal(s.proposalId))
       require(validator.validateChoicesC1(trState.getApprovedCommitteeInfo(id).proxyKey, s, trState.getDelegations.get(s.proposalId)).isSuccess,
         "Invalid decryption share R2: NIZK is not verified")
+    }
+  }
+
+  def validateRecoveryShare(tx: RecoveryShareTransaction): Try[Unit] = Try {
+    require(trState.getSharedPubKey.isDefined, "Shared key is not defined in TreasuryState")
+    require(trState.getProposals.nonEmpty, "Proposals are not defined")
+
+    val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
+    require(id >= 0, "Committee member isn't registered")
+    require(!trState.getAllDisqualifiedCommitteeInfo.exists(_.signingKey == tx.pubKey), "Committee member is disqualified")
+    require(tx.openedShares.nonEmpty, "No opened shares detected")
+
+    val submitterInfo = trState.getApprovedCommitteeInfo(id)
+    val identifier = new SimpleIdentifier(trState.getApprovedCommitteeInfo.map(_.proxyKey))
+    val ids = tx.openedShares.map(_.violatorId)
+    require(ids.size == ids.distinct.size, "The transaction contains duplicated OpenedShares")
+
+    tx.openedShares.foreach { s =>
+      val violatorProxyKey = trState.getApprovedCommitteeInfo(s.violatorId).proxyKey
+      val valid = DistrKeyGen.validateRecoveryKeyShare(
+        TreasuryManager.cs,
+        identifier,
+        submitterInfo.proxyKey,
+        violatorProxyKey,
+        trState.getDKGr1Data.values.toSeq,
+        s.openedShare).isSuccess
+      require(valid, "Invalid OpenedShare R1")
+    }
+
+    tx.round match {
+      case DecryptionRound.R1 => validateRecoveryShareR1(tx).get
+      case DecryptionRound.R2 => validateRecoveryShareR2(tx).get
+    }
+  }
+
+  def validateRecoveryShareR1(tx: RecoveryShareTransaction): Try[Unit] = Try {
+    require(TreasuryManager.VOTING_DECRYPTION_R1_RECOVERY_RANGE.contains(epochHeight), "Wrong height for recovery share R1 transaction")
+    require(tx.round == DecryptionRound.R1, "Invalid decryption share R1: wrong round")
+
+    val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
+
+    tx.openedShares.foreach { s =>
+      val submittedSharesOpt = Try(trState.getKeyRecoverySharesR1(s.violatorId)).toOption
+      submittedSharesOpt.foreach(ss => require(!ss.exists(_.receiverID == id), "The OpenedShare R1 has already been submitted"))
+
+      val violatorProxyKey = trState.getApprovedCommitteeInfo(s.violatorId).proxyKey
+      val validViolator = trState.getDisqualifiedAfterDecryptionR1CommitteeInfo.exists(_.proxyKey == violatorProxyKey)
+      require(validViolator, "Invalid OpenedShare: the target is not disqualified in R1")
+    }
+  }
+
+  def validateRecoveryShareR2(tx: RecoveryShareTransaction): Try[Unit] = Try {
+    require(TreasuryManager.VOTING_DECRYPTION_R2_RECOVERY_RANGE.contains(epochHeight), "Wrong height for recovery share R2 transaction")
+    require(tx.round == DecryptionRound.R2, "Invalid decryption share R2: wrong round")
+
+    val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
+
+    tx.openedShares.foreach { s =>
+      val submittedSharesOpt = Try(trState.getKeyRecoverySharesR2(s.violatorId)).toOption
+      submittedSharesOpt.foreach(ss => require(!ss.exists(_.receiverID == id), "The OpenedShare R2 has already been submitted"))
+
+      val violatorProxyKey = trState.getApprovedCommitteeInfo(s.violatorId).proxyKey
+      val validViolator = trState.getDisqualifiedAfterDecryptionR2CommitteeInfo.exists(_.proxyKey == violatorProxyKey)
+      require(validViolator, "Invalid OpenedShare: the target is not disqualified in R2")
     }
   }
 

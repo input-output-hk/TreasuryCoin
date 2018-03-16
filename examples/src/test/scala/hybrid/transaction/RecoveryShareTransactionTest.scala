@@ -27,7 +27,7 @@ class RecoveryShareTransactionTest extends FunSuite {
   test("serialization") {
     val fakeKey = PrivateKey25519(PrivateKey @@ Array.fill[Byte](32)(1.toByte), PublicKey @@ Array.fill[Byte](32)(1.toByte))
 
-    val txBytes = RecoveryShareTransaction.create(fakeKey, openedShares, 12).get.bytes
+    val txBytes = RecoveryShareTransaction.create(fakeKey, DecryptionRound.R1, openedShares, 12).get.bytes
     val tx = SimpleBoxTransactionCompanion.parseBytes(txBytes).get.asInstanceOf[RecoveryShareTransaction]
 
     assert(tx.semanticValidity.isFailure)

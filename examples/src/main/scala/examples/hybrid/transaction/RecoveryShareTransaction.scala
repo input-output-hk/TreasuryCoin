@@ -3,6 +3,8 @@ package examples.hybrid.transaction
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
 import examples.hybrid.TreasuryManager
+import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
+import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound.DecryptionRound
 import examples.hybrid.transaction.RecoveryShareTransaction.OpenedShareWithId
 import io.circe.Json
 import io.circe.syntax._
@@ -23,7 +25,8 @@ import scala.util.Try
   *
   * @param openedShares (id, openedShare) id of violator and corresponding opened share of his private key
   */
-case class RecoveryShareTransaction(openedShares: Seq[OpenedShareWithId],
+case class RecoveryShareTransaction(round: DecryptionRound,
+                                    openedShares: Seq[OpenedShareWithId],
                                     override val epochID: Long,
                                     override val pubKey: PublicKey25519Proposition, // previously registered committee public key
                                     override val signature: Signature25519,
@@ -45,7 +48,7 @@ case class RecoveryShareTransaction(openedShares: Seq[OpenedShareWithId],
       Bytes.concat(a, Bytes.concat(Ints.toByteArray(b.violatorId), b.openedShare.bytes))
     }
 
-    Bytes.concat(openedSharesBytes, Longs.toByteArray(epochID), superBytes)
+    Bytes.concat(Ints.toByteArray(round.id), openedSharesBytes, Longs.toByteArray(epochID), pubKey.bytes, superBytes)
   }
 
   override lazy val json: Json = Map("id" -> Base58.encode(id).asJson).asJson //TODO
@@ -65,14 +68,15 @@ object RecoveryShareTransaction {
   val TransactionTypeId: scorex.core.ModifierTypeId = RecoveryShareTxTypeId
 
   def create(privKey: PrivateKey25519,
+             round: DecryptionRound,
              openedShares: Seq[OpenedShareWithId],
              epochID: Long): Try[RecoveryShareTransaction] = Try {
     val timestamp = System.currentTimeMillis()
     val fakeSig = Signature25519(Signature @@ Array[Byte]())
-    val unsigned = RecoveryShareTransaction(openedShares, epochID, privKey.publicImage, fakeSig, timestamp)
+    val unsigned = RecoveryShareTransaction(round, openedShares, epochID, privKey.publicImage, fakeSig, timestamp)
     val sig = PrivateKey25519Companion.sign(privKey, unsigned.messageToSign)
 
-    RecoveryShareTransaction(openedShares, epochID, privKey.publicImage, sig, timestamp)
+    RecoveryShareTransaction(round, openedShares, epochID, privKey.publicImage, sig, timestamp)
   }
 }
 
@@ -84,6 +88,7 @@ object RecoveryShareTransactionCompanion extends Serializer[RecoveryShareTransac
     }
 
     Bytes.concat(
+      Array(t.round.id.toByte),
       Ints.toByteArray(t.openedShares.size),
       openedSharesBytes,
       Longs.toByteArray(t.epochID),
@@ -94,9 +99,9 @@ object RecoveryShareTransactionCompanion extends Serializer[RecoveryShareTransac
   }
 
   def parseBytes(bytes: Array[Byte]): Try[RecoveryShareTransaction] = Try {
-
-    val sharesSize = Ints.fromByteArray(bytes.slice(0,4))
-    var s = 4
+    val round = DecryptionRound(bytes(0))
+    val sharesSize = Ints.fromByteArray(bytes.slice(1,5))
+    var s = 5
     val openedShares: Seq[OpenedShareWithId] = (0 until sharesSize).map { _ =>
       val violatorId = Ints.fromByteArray(bytes.slice(s, s+4))
       val openedShare = OpenedShareSerializer.parseBytes(bytes.drop(s+4), TreasuryManager.cs).get
@@ -110,6 +115,6 @@ object RecoveryShareTransactionCompanion extends Serializer[RecoveryShareTransac
     s = s + Curve25519.SignatureLength
     val timestamp = Longs.fromByteArray(bytes.slice(s,s+8))
 
-    RecoveryShareTransaction(openedShares, epochID, pubKey, sig, timestamp)
+    RecoveryShareTransaction(round, openedShares, epochID, pubKey, sig, timestamp)
   }
 }
