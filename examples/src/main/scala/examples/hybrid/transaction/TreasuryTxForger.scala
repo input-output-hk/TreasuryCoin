@@ -146,31 +146,28 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
   }
 
   private def generateC1ShareR1(view: NodeView): Seq[DecryptionShareTransaction] = {
-    // Since we have a joint registration of voter/expert and committee member, they will use the same signing key
-    val myCommitteMemberSigningKey = view.vault.treasurySigningSecrets(view.trState.epochNum).headOption
-    val myCommitteMemberProxyKey = view.vault.treasuryCommitteeSecrets(view.trState.epochNum).headOption
-    (myCommitteMemberSigningKey, myCommitteMemberProxyKey) match {
-      case (Some(signingSecret), Some(committeeSecret)) =>
-        val id = view.trState.getApprovedCommitteeInfo.indexWhere(
-          c => c.signingKey == signingSecret.privKey.publicImage && c.proxyKey == committeeSecret.pubKey)
-        if (id >= 0) {
-          val pending = view.pool.unconfirmed.map(_._2).find {
-            case t: DecryptionShareTransaction => (t.round == DecryptionRound.R1) && (signingSecret.privKey.publicImage == t.pubKey)
-            case _ => false
-          }.isDefined
-          val submitted = view.trState.getDecryptionSharesR1.find(_._1 == id).isDefined
-          if (!pending && !submitted) {
-            val c1Shares = view.trState.getProposals.indices.map { i =>
-              val ballots = view.trState.getExpertBallotsForProposal(i) ++ view.trState.getVoterBallotsForProposal(i)
-              val manager = new DecryptionManager(TreasuryManager.cs, ballots)
-              manager.decryptC1ForDelegations(id, i, committeeSecret.privKey)
-            }
+    val secrets = checkCommitteeMemberRegistration(view)
+    if (secrets.isDefined) {
+      val (signingSecret, proxySecret) = secrets.get
+      val id = view.trState.getApprovedCommitteeInfo.indexWhere(
+        c => c.signingKey == signingSecret.privKey.publicImage && c.proxyKey == proxySecret.pubKey)
+      if (id >= 0) {
+        val pending = view.pool.unconfirmed.map(_._2).find {
+          case t: DecryptionShareTransaction => (t.round == DecryptionRound.R1) && (signingSecret.privKey.publicImage == t.pubKey)
+          case _ => false
+        }.isDefined
+        val submitted = view.trState.getDecryptionSharesR1.find(_._1 == id).isDefined
+        if (!pending && !submitted) {
+          val c1Shares = view.trState.getProposals.indices.map { i =>
+            val ballots = view.trState.getExpertBallotsForProposal(i) ++ view.trState.getVoterBallotsForProposal(i)
+            val manager = new DecryptionManager(TreasuryManager.cs, ballots)
+            manager.decryptC1ForDelegations(id, i, proxySecret.privKey)
+          }
 
-            Seq(DecryptionShareTransaction.create(signingSecret.privKey, DecryptionRound.R1, c1Shares, view.trState.epochNum).get)
-          } else Seq()
+          Seq(DecryptionShareTransaction.create(signingSecret.privKey, DecryptionRound.R1, c1Shares, view.trState.epochNum).get)
         } else Seq()
-      case _ => Seq()
-    }
+      } else Seq()
+    } else Seq()
   }
 
   private def generateRecoveryShare(round: DecryptionRound, view: NodeView): Seq[RecoveryShareTransaction] = Try {
@@ -210,30 +207,28 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
   }.getOrElse(Seq())
 
   private def generateC1ShareR2(view: NodeView): Seq[DecryptionShareTransaction] = {
-    val myCommitteMemberSigningKey = view.vault.treasurySigningSecrets(view.trState.epochNum).headOption
-    val myCommitteMemberProxyKey = view.vault.treasuryCommitteeSecrets(view.trState.epochNum).headOption
-    (myCommitteMemberSigningKey, myCommitteMemberProxyKey) match {
-      case (Some(signingSecret), Some(committeeSecret)) =>
-        val id = view.trState.getApprovedCommitteeInfo.indexWhere(
-          c => c.signingKey == signingSecret.privKey.publicImage && c.proxyKey == committeeSecret.pubKey)
-        if (id >= 0) {
-          val pending = view.pool.unconfirmed.map(_._2).find {
-            case t: DecryptionShareTransaction => (t.round == DecryptionRound.R2) && (signingSecret.privKey.publicImage == t.pubKey)
-            case _ => false
-          }.isDefined
-          val submitted = view.trState.getDecryptionSharesR2.find(_._1 == id).isDefined
-          if (!pending && !submitted && view.trState.getDelegations.isDefined) {
-            val c1Shares = view.trState.getProposals.indices.map { i =>
-              val ballots = view.trState.getExpertBallotsForProposal(i) ++ view.trState.getVoterBallotsForProposal(i)
-              val manager = new DecryptionManager(TreasuryManager.cs, ballots)
-              manager.decryptC1ForChoices(id, i, committeeSecret.privKey, view.trState.getDelegations.get(i))
-            }
+    val secrets = checkCommitteeMemberRegistration(view)
+    if (secrets.isDefined) {
+      val (signingSecret, proxySecret) = secrets.get
+      val id = view.trState.getApprovedCommitteeInfo.indexWhere(
+        c => c.signingKey == signingSecret.privKey.publicImage && c.proxyKey == proxySecret.pubKey)
+      if (id >= 0) {
+        val pending = view.pool.unconfirmed.map(_._2).find {
+          case t: DecryptionShareTransaction => (t.round == DecryptionRound.R2) && (signingSecret.privKey.publicImage == t.pubKey)
+          case _ => false
+        }.isDefined
+        val submitted = view.trState.getDecryptionSharesR2.find(_._1 == id).isDefined
+        if (!pending && !submitted && view.trState.getDelegations.isDefined) {
+          val c1Shares = view.trState.getProposals.indices.map { i =>
+            val ballots = view.trState.getExpertBallotsForProposal(i) ++ view.trState.getVoterBallotsForProposal(i)
+            val manager = new DecryptionManager(TreasuryManager.cs, ballots)
+            manager.decryptC1ForChoices(id, i, proxySecret.privKey, view.trState.getDelegations.get(i))
+          }
 
-            Seq(DecryptionShareTransaction.create(signingSecret.privKey, DecryptionRound.R2, c1Shares, view.trState.epochNum).get)
-          } else Seq()
+          Seq(DecryptionShareTransaction.create(signingSecret.privKey, DecryptionRound.R2, c1Shares, view.trState.epochNum).get)
         } else Seq()
-      case _ => Seq()
-    }
+      } else Seq()
+    } else Seq()
   }
 
   private def checkCommitteeMemberRegistration(view: NodeView): Option[(TreasurySigningSecret, TreasuryCommitteeSecret)] = {
