@@ -133,14 +133,6 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   protected def apply(tx: TreasuryTransaction): Try[Unit] = {
 
-    def commonVerificationForDKGTxs(id: Long, t: SignedTreasuryTransaction) {
-      require(id >= 0, "Committee member isn't found")
-      require(t.semanticValidity.isSuccess, "Transaction isn't semantically valid!")
-    }
-
-    val committeeMembersPubKeys = getApprovedCommitteeInfo.map(_.proxyKey)
-    val memberIdentifier = new SimpleIdentifier(committeeMembersPubKeys)
-
     tx match {
       case t: RegisterTransaction => Try {
         val deposit = t.newBoxes.find(_.proposition == TreasuryManager.VOTER_DEPOSIT_ADDR).get
@@ -190,69 +182,27 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       }
       case t: DKGr1Transaction => Try {
         val id = getApprovedCommitteeInfo.indexWhere(_.signingKey == t.pubKey)
-        commonVerificationForDKGTxs(id, t)
-        require(
-          DistrKeyGen.checkR1Data(
-            t.r1Data,
-            memberIdentifier,
-            committeeMembersPubKeys).isSuccess,
-          s"Incorrect R1 data from member ${t.r1Data.issuerID}"
-        )
+        require(id >= 0, "Committee member isn't found")
         DKGr1Data += (id -> t.r1Data)
       }
       case t: DKGr2Transaction => Try {
         val id = getApprovedCommitteeInfo.indexWhere(_.signingKey == t.pubKey)
-        commonVerificationForDKGTxs(id, t)
-        require(
-          DistrKeyGen.checkR2Data(
-            t.r2Data,
-            memberIdentifier,
-            committeeMembersPubKeys,
-            cs).isSuccess,
-          s"Incorrect R2 data from member ${t.r2Data.issuerID}"
-        )
+        require(id >= 0, "Committee member isn't found")
         DKGr2Data += (id -> t.r2Data)
       }
       case t: DKGr3Transaction => Try {
         val id = getApprovedCommitteeInfo.indexWhere(_.signingKey == t.pubKey)
-        commonVerificationForDKGTxs(id, t)
-        require(
-          DistrKeyGen.checkR3Data(
-            t.r3Data,
-            memberIdentifier,
-            committeeMembersPubKeys).isSuccess,
-          s"Incorrect R3 data from member ${t.r3Data.issuerID}"
-        )
+        require(id >= 0, "Committee member isn't found")
         DKGr3Data += (id -> t.r3Data)
       }
       case t: DKGr4Transaction => Try {
         val id = getApprovedCommitteeInfo.indexWhere(_.signingKey == t.pubKey)
-        commonVerificationForDKGTxs(id, t)
-        require(
-          DistrKeyGen.checkR4Data(
-            t.r4Data,
-            memberIdentifier,
-            committeeMembersPubKeys,
-            cs,
-            crs_h,
-            getDKGr1Data.values.toSeq,
-            getDKGr3Data.values.toSeq).isSuccess,
-          s"Incorrect R4 data from member ${t.r4Data.issuerID}"
-        )
+        require(id >= 0, "Committee member isn't found")
         DKGr4Data += (id -> t.r4Data)
       }
       case t: DKGr5Transaction => Try {
         val id = getApprovedCommitteeInfo.indexWhere(_.signingKey == t.pubKey)
-        commonVerificationForDKGTxs(id, t)
-        require(
-          DistrKeyGen.checkR5Data(
-            t.r5_1Data,
-            memberIdentifier,
-            committeeMembersPubKeys,
-            cs,
-            getDKGr1Data.values.toSeq).isSuccess,
-          s"Incorrect R5 data from member ${t.r5_1Data.issuerID}"
-        )
+        require(id >= 0, "Committee member isn't found")
         DKGr5Data += (id -> t.r5_1Data)
       }
       case t: PaymentTransaction => Try(log.info(s"Payment tx was applied ${tx.json}"))
@@ -314,7 +264,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       case TreasuryManager.VOTING_DECRYPTION_R1_RECOVERY_RANGE.end =>
         retrieveKeysOfDisqualified(getKeyRecoverySharesR1.toMap)
         calculateDelegations() match {
-          case Success(_) => log.info("Delegations is successfully calculated")
+          case Success(_) => log.info("Delegations are successfully calculated")
           case Failure(e) => log.error("Failed to calculate delegations", e)
         }
       case TreasuryManager.VOTING_DECRYPTION_R2_RANGE.end =>

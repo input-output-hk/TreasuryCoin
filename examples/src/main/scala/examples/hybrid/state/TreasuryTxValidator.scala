@@ -280,6 +280,61 @@ class TreasuryTxValidator(val trState: TreasuryState,
     val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
     require(id >= 0, "Committee member isn't found")
     require(!roundDataFromTrsryState.contains(id), s"The committee member has already submitted DKG R${roundNumber}Data")
+
+    val committeeMembersPubKeys = trState.getApprovedCommitteeInfo.map(_.proxyKey)
+    val memberIdentifier = new SimpleIdentifier(committeeMembersPubKeys)
+
+    tx match {
+      case t: DKGr1Transaction =>
+        require(
+          DistrKeyGen.checkR1Data(
+            t.r1Data,
+            memberIdentifier,
+            committeeMembersPubKeys).isSuccess,
+          s"Incorrect R1 data from member ${t.r1Data.issuerID}"
+        )
+      case t: DKGr2Transaction =>
+        require(
+          DistrKeyGen.checkR2Data(
+            t.r2Data,
+            memberIdentifier,
+            committeeMembersPubKeys,
+            trState.cs,
+            trState.crs_h,
+            trState.getDKGr1Data.values.toSeq).isSuccess,
+          s"Incorrect R2 data from member ${t.r2Data.issuerID}"
+        )
+      case t: DKGr3Transaction =>
+        require(
+          DistrKeyGen.checkR3Data(
+            t.r3Data,
+            memberIdentifier,
+            committeeMembersPubKeys).isSuccess,
+          s"Incorrect R3 data from member ${t.r3Data.issuerID}"
+        )
+      case t: DKGr4Transaction =>
+        require(
+          DistrKeyGen.checkR4Data(
+            t.r4Data,
+            memberIdentifier,
+            committeeMembersPubKeys,
+            trState.cs,
+            trState.crs_h,
+            trState.getDKGr1Data.values.toSeq,
+            trState.getDKGr3Data.values.toSeq).isSuccess,
+          s"Incorrect R4 data from member ${t.r4Data.issuerID}"
+        )
+      case t: DKGr5Transaction =>
+        require(
+          DistrKeyGen.checkR5Data(
+            t.r5_1Data,
+            memberIdentifier,
+            committeeMembersPubKeys,
+            trState.cs,
+            trState.getDKGr1Data.values.toSeq).isSuccess,
+          s"Incorrect R5 data from member ${t.r5_1Data.issuerID}"
+        )
+    }
   }
 
   def validatePayment(tx: PaymentTransaction): Try[Unit] = Try {

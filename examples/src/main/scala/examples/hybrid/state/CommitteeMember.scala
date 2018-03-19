@@ -79,7 +79,9 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
           ownDataInMempool = getOwnRoundDataFromMempool(roundNumber, view)
           val ownDataInState = getOwnRoundDataFromState(roundNumber, view)
 
-          require(!(ownDataInMempool.r1Data.nonEmpty && ownDataInState.r1Data.nonEmpty), s"R$roundNumber data exists both in mempool and state")
+          // Abnormal case, but it still can be handled
+          if (ownDataInMempool.r1Data.nonEmpty && ownDataInState.r1Data.nonEmpty)
+            ownDataInMempool.r1Data = Seq() // own round data already exists in history, so it can be retrieved directly from there
 
           if (ownDataInMempool.r1Data.nonEmpty || ownDataInState.r1Data.nonEmpty) roundNumber // round data is already posted, so there is a need to restore the current round state
           else roundNumber - 1
@@ -92,7 +94,9 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
           ownDataInMempool = getOwnRoundDataFromMempool(roundNumber, view)
           val ownDataInState = getOwnRoundDataFromState(roundNumber, view)
 
-          require(!(ownDataInMempool.r2Data.nonEmpty && ownDataInState.r2Data.nonEmpty), s"R$roundNumber data exists both in mempool and state")
+          // Abnormal case, but it still can be handled
+          if (ownDataInMempool.r2Data.nonEmpty && ownDataInState.r2Data.nonEmpty)
+            ownDataInMempool.r2Data = Seq() // own round data already exists in history, so it can be retrieved directly from there
 
           if (ownDataInMempool.r2Data.nonEmpty || ownDataInState.r2Data.nonEmpty) roundNumber // round data is already posted, so there is a need to restore the current round state
           else roundNumber - 1
@@ -105,7 +109,9 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
           ownDataInMempool = getOwnRoundDataFromMempool(roundNumber, view)
           val ownDataInState = getOwnRoundDataFromState(roundNumber, view)
 
-          require(!(ownDataInMempool.r3Data.nonEmpty && ownDataInState.r3Data.nonEmpty), s"R$roundNumber data exists both in mempool and state")
+          // Abnormal case, but it still can be handled
+          if (ownDataInMempool.r3Data.nonEmpty && ownDataInState.r3Data.nonEmpty)
+            ownDataInMempool.r3Data = Seq() // own round data already exists in history, so it can be retrieved directly from there
 
           if (ownDataInMempool.r3Data.nonEmpty || ownDataInState.r3Data.nonEmpty) roundNumber // round data is already posted, so there is a need to restore the current round state
           else roundNumber - 1
@@ -118,7 +124,9 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
           ownDataInMempool = getOwnRoundDataFromMempool(roundNumber, view)
           val ownDataInState = getOwnRoundDataFromState(roundNumber, view)
 
-          require(!(ownDataInMempool.r4Data.nonEmpty && ownDataInState.r4Data.nonEmpty), s"R$roundNumber data exists both in mempool and state")
+          // Abnormal case, but it still can be handled
+          if (ownDataInMempool.r4Data.nonEmpty && ownDataInState.r4Data.nonEmpty)
+            ownDataInMempool.r4Data = Seq() // own round data already exists in history, so it can be retrieved directly from there
 
           if (ownDataInMempool.r4Data.nonEmpty || ownDataInState.r4Data.nonEmpty) roundNumber // round data is already posted, so there is a need to restore the current round state
           else roundNumber - 1
@@ -131,7 +139,9 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
           ownDataInMempool = getOwnRoundDataFromMempool(roundNumber, view)
           val ownDataInState = getOwnRoundDataFromState(roundNumber, view)
 
-          require(!(ownDataInMempool.r5_1Data.nonEmpty && ownDataInState.r5_1Data.nonEmpty), s"R$roundNumber data exists both in mempool and state")
+          // Abnormal case, but it still can be handled
+          if (ownDataInMempool.r5_1Data.nonEmpty && ownDataInState.r5_1Data.nonEmpty)
+            ownDataInMempool.r5_1Data = Seq() // own round data already exists in history, so it can be retrieved directly from there
 
           if (ownDataInMempool.r5_1Data.nonEmpty || ownDataInState.r5_1Data.nonEmpty) roundNumber // round data is already posted, so there is a need to restore the current round state
           else roundNumber - 1
