@@ -176,13 +176,18 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
   private def generateRecoveryShare(round: DecryptionRound, view: NodeView): Seq[RecoveryShareTransaction] = Try {
     val secrets = checkCommitteeMemberRegistration(view)
     if (secrets.isDefined) {
+      val (signingSecret, proxySecret) = secrets.get
+
       val needRecover = round match {
         case DecryptionRound.R1 => view.trState.getDisqualifiedAfterDecryptionR1CommitteeInfo
         case DecryptionRound.R2 => view.trState.getDisqualifiedAfterDecryptionR2CommitteeInfo
       }
+      val pending = view.pool.unconfirmed.map(_._2).find {
+        case t: RecoveryShareTransaction => (t.round == round) && (signingSecret.privKey.publicImage == t.pubKey)
+        case _ => false
+      }.isDefined
 
-      if (needRecover.nonEmpty) {
-        val (signingSecret, proxySecret) = secrets.get
+      if (needRecover.nonEmpty && !pending) {
         val identifier = new SimpleIdentifier(view.trState.getApprovedCommitteeInfo.map(_.proxyKey))
 
         val shares = needRecover.map { violator =>
@@ -196,7 +201,9 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
           OpenedShareWithId(violatorId, openedShare)
         }
 
-        Seq(RecoveryShareTransaction.create(signingSecret.privKey, round, shares, view.trState.epochNum).get)
+        val tx = RecoveryShareTransaction.create(signingSecret.privKey, round, shares, view.trState.epochNum).get
+        val valid = Try(new TreasuryTxValidator(view.trState, view.history.height + 1)).flatMap(_.validate(tx))
+        if(valid.isSuccess) Seq(tx) else Seq()
 
       } else Seq()
     } else Seq()

@@ -179,11 +179,11 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       case t: RecoveryShareTransaction => Try {
         t.round match {
           case DecryptionRound.R1 => t.openedShares.foreach { s =>
-            val updatedShares = keyRecoverySharesR1(s.violatorId) :+ s.openedShare
+            val updatedShares = keyRecoverySharesR1.get(s.violatorId).getOrElse(Seq()) :+ s.openedShare
             keyRecoverySharesR1(s.violatorId) = updatedShares
           }
           case DecryptionRound.R2 => t.openedShares.foreach { s =>
-            val updatedShares = keyRecoverySharesR2(s.violatorId) :+ s.openedShare
+            val updatedShares = keyRecoverySharesR2.get(s.violatorId).getOrElse(Seq()) :+ s.openedShare
             keyRecoverySharesR2(s.violatorId) = updatedShares
           }
         }
@@ -304,18 +304,27 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       case TreasuryManager.EXPERT_REGISTER_RANGE.end =>
         selectApprovedCommittee()
       case TreasuryManager.DISTR_KEY_GEN_R5_RANGE.end =>
-        retrieveSharedPublicKey()
+        retrieveSharedPublicKey() match {
+          case Success(_) =>
+          case Failure(e) => log.error("Failed to generate shared key", e)
+        }
         retrieveDisqualifiedAfterDKG()
       case TreasuryManager.VOTING_DECRYPTION_R1_RANGE.end =>
         updateDisqualifiedAfterDecryptionR1()
       case TreasuryManager.VOTING_DECRYPTION_R1_RECOVERY_RANGE.end =>
-        retrieveKeysOfDisqualifiedAfterDecryptionR1()
-        calculateDelegations()
+        retrieveKeysOfDisqualified(getKeyRecoverySharesR1.toMap)
+        calculateDelegations() match {
+          case Success(_) => log.info("Delegations is successfully calculated")
+          case Failure(e) => log.error("Failed to calculate delegations", e)
+        }
       case TreasuryManager.VOTING_DECRYPTION_R2_RANGE.end =>
         updateDisqualifiedAfterDecryptionR2()
       case TreasuryManager.VOTING_DECRYPTION_R2_RECOVERY_RANGE.end =>
-        retrieveKeysOfDisqualifiedAfterDecryptionR2()
-        calculateTallyResult()
+        retrieveKeysOfDisqualified(getKeyRecoverySharesR2.toMap)
+        calculateTallyResult() match {
+          case Success(_) => log.info("Tally is successfully calculated")
+          case Failure(e) => log.error("Failed to calculate Tally", e)
+        }
       case _ =>
     }
 
@@ -385,8 +394,17 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     disqualifiedCommitteeMembersAfterDecryptionR1 = disqualified
   }
 
-  private def retrieveKeysOfDisqualifiedAfterDecryptionR1(): Unit = {
-
+  private def retrieveKeysOfDisqualified(recoveryShares: Map[Int, Seq[OpenedShare]]): Unit = {
+    var recoveredKeys: Seq[(PubKey, PrivKey)] = Seq()
+    recoveryShares.foreach { s =>
+      val pubKey = cs.decodePoint(getDKGr3Data(s._1).commitments(0))
+      val privKeyOpt = DistrKeyGen.recoverPrivateKeyByOpenedShares(cs, getApprovedCommitteeInfo.size, s._2, Some(pubKey))
+      privKeyOpt match {
+        case Success(privKey) => recoveredKeys +:= (pubKey, privKey)
+        case Failure(e) => log.error("Failed key recovery", e)
+      }
+    }
+    recoveredKeysOfDisqualifiedCommitteeMembers ++= recoveredKeys
   }
 
   private def updateDisqualifiedAfterDecryptionR2(): Unit = {
@@ -399,14 +417,8 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     disqualifiedCommitteeMembersAfterDecryptionR2 = disqualified
   }
 
-  private def retrieveKeysOfDisqualifiedAfterDecryptionR2(): Unit = {
-
-  }
-
   private def calculateDelegations(): Try[Unit] = Try {
     val deleg = proposals.indices.map { i =>
-      val shares = getDecryptionSharesR1ForProposal(i)
-      assert(shares.size == getApprovedCommitteeInfo.size)
       val decryptor = new DecryptionManager(TreasuryManager.cs, getBallotsForProposal(i))
 
       /* We can calculate delegations ONLY IF we have valid decryption shares from ALL committee members */
