@@ -5,7 +5,7 @@ import examples.commons.SimpleBoxTransaction._
 import examples.hybrid.transaction.DKG._
 import examples.hybrid.transaction._
 import examples.hybrid.wallet.HWallet
-import io.circe.Json
+import io.circe.{Encoder, Json}
 import io.circe.syntax._
 import io.iohk.iodb.ByteArrayWrapper
 import scorex.core.{ModifierId, ModifierTypeId}
@@ -15,6 +15,7 @@ import scorex.core.transaction.account.PublicKeyNoncedBox
 import scorex.core.transaction.box.BoxUnlocker
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.transaction.proof.{Proof, Signature25519}
+import scorex.crypto.encode.Base58
 import scorex.crypto.hash.Blake2b256
 import scorex.crypto.signatures.{Curve25519, PublicKey, Signature}
 
@@ -59,6 +60,8 @@ abstract class SimpleBoxTransaction(val from: IndexedSeq[(PublicKey25519Proposit
     PublicKey25519NoncedBox(prop, nonce, value)
   }
 
+  val json: Json
+
   val semanticValidity: Try[Unit]
 }
 
@@ -70,6 +73,8 @@ object SimpleBoxTransaction {
       IndexedSeq[Signature25519], // signatures
       Long, // fee
       Long) // timestamp
+
+  implicit val simpleBoxEncoder: Encoder[SimpleBoxTransaction] = (sbe: SimpleBoxTransaction) => sbe.json
 
   def nonceFromDigest(digest: Array[Byte]): Nonce = Nonce @@ Longs.fromByteArray(digest.take(8))
 }

@@ -45,9 +45,9 @@ case class WalletApiRoute(override val settings: RESTApiSettings, nodeViewHolder
               @SuppressWarnings(Array("org.wartremover.warts.TraversableOps"))
               val recipient: PublicKey25519Proposition = PublicKey25519Proposition(PublicKey @@ Base58.decode((json \\ "recipient").head.asString.get).get)
               val fee: Long = (json \\ "fee").headOption.flatMap(_.asNumber).flatMap(_.toLong).getOrElse(DefaultFee)
-              val tx = SimpleBoxTx.create(wallet, Seq((recipient, Value @@ amount)), fee).get
+              val tx: SimpleBoxTransaction = SimpleBoxTx.create(wallet, Seq((recipient, Value @@ amount)), fee).get
               nodeViewHolderRef ! LocallyGeneratedTransaction[PublicKey25519Proposition, SimpleBoxTransaction](tx)
-              tx.json
+              tx.asJson
             } match {
               case Success(resp) => complete(SuccessApiResponse(resp))
               case Failure(e) => complete(ApiException(e))
@@ -65,7 +65,7 @@ case class WalletApiRoute(override val settings: RESTApiSettings, nodeViewHolder
       complete(SuccessApiResponse(
         "totalBalance" -> boxes.map(_.box.value.toLong).sum.toString.asJson,
         "publicKeys" -> wallet.publicKeys.map(pk => Base58.encode(pk.pubKeyBytes)).asJson,
-        "boxes" -> boxes.map(_.box.json).asJson
+        "boxes" -> boxes.map(_.box.asJson).asJson
       ))
     }
   }
