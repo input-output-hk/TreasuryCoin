@@ -516,6 +516,69 @@ object TreasuryState {
   }
 
   /**
+    * Recovers info about R1Data submissions for old epochs.
+    * It is done by parsing R1Data blocks for the required epoch.
+    *
+    * @param history history
+    * @param epochId epochid
+    * @return Success(seq) where seq is a sequence of R1Data
+    */
+  def generateR1Data(history: HybridHistory, epochId: Int): Try[Seq[R1Data]] = Try {
+    val currentHeight = history.storage.height.toInt
+    val currentEpochNum = currentHeight / TreasuryManager.EPOCH_LEN
+    val currentEpochHeight = currentHeight % TreasuryManager.EPOCH_LEN
+    require(epochId >= 0 && epochId < currentEpochNum, "R1Data can be generated only for past epochs. Use getR1Data methods directly for the current epoch.")
+
+    val count = (currentEpochNum - epochId) * TreasuryManager.EPOCH_LEN + currentEpochHeight + 1
+    // we should take all R1Data blocks
+    val epochBlocksIds = history.lastBlockIds(history.bestBlock, count)
+      .take(TreasuryManager.DISTR_KEY_GEN_R1_RANGE.end)
+      .drop(TreasuryManager.DISTR_KEY_GEN_R1_RANGE.start)
+
+    /* extract R1Data */
+    var r1Data: Seq[R1Data] = Seq()
+    epochBlocksIds.foreach { blockId =>
+      history.modifierById(blockId).get.transactions.collect {case t: DKGr1Transaction => t}.foreach { t =>
+        r1Data :+= t.r1Data
+      }
+    }
+    r1Data
+  }
+
+  /**
+    * Recovers info about randomness submissions for old epochs.
+    * It is done by parsing randomness submission blocks for the required epoch.
+    *
+    * @param history history
+    * @param epochId epochid
+    * @return Success(seq) where seq is a sequence of encrypted randomness paired with a signing public key
+    *         of the committee member who submitted this randomness
+    */
+  def generateRandomnessSubmission(history: HybridHistory, epochId: Int):
+    Try[Seq[(PublicKey25519Proposition, Ciphertext)]] = Try {
+
+    val currentHeight = history.storage.height.toInt
+    val currentEpochNum = currentHeight / TreasuryManager.EPOCH_LEN
+    val currentEpochHeight = currentHeight % TreasuryManager.EPOCH_LEN
+    require(epochId >= 0 && epochId < currentEpochNum, "Randomness submission can be generated only for past epochs. Use getSubmittedRandomness method directly for the current epoch.")
+
+    val count = (currentEpochNum - epochId) * TreasuryManager.EPOCH_LEN + currentEpochHeight + 1
+    // we should take all randomness submission blocks
+    val epochBlocksIds = history.lastBlockIds(history.bestBlock, count)
+      .take(TreasuryManager.RANDOMNESS_SUBMISSION_RANGE.end)
+      .drop(TreasuryManager.RANDOMNESS_SUBMISSION_RANGE.start)
+
+    /* extract Randomness data */
+    var submittedRandomness: Seq[(PublicKey25519Proposition, Ciphertext)] = Seq()
+    epochBlocksIds.foreach { blockId =>
+      history.modifierById(blockId).get.transactions.collect {case t: RandomnessTransaction => t}.foreach { t =>
+        submittedRandomness :+= (t.pubKey, t.encryptedRandomness)
+      }
+    }
+    submittedRandomness
+  }
+
+  /**
     * Generate TreasuryState for the current epoch. Note that state is optional because it is needed only to validate
     * PaymentTransaction. In cases when it is not needed state can be None.
     *

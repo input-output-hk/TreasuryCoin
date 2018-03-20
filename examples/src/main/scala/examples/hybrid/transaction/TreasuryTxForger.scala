@@ -79,7 +79,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       case h if VOTING_DECRYPTION_R1_RECOVERY_RANGE.contains(h) => generateRecoveryShare(DecryptionRound.R1, view)
       case h if VOTING_DECRYPTION_R2_RANGE.contains(h) => generateC1ShareR2(view)
       case h if VOTING_DECRYPTION_R2_RECOVERY_RANGE.contains(h) => generateRecoveryShare(DecryptionRound.R2, view)
-      case h if SEED_SUBMISSION_RANGE.contains(h) => generateSeedTx(view)
+      case h if RANDOMNESS_SUBMISSION_RANGE.contains(h) => generateSeedTx(view)
       case _ => Seq()
     }
   }

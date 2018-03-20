@@ -25,7 +25,7 @@ object TreasuryManager {
   val VOTING_DECRYPTION_R1_RECOVERY_RANGE =   132 until 144
   val VOTING_DECRYPTION_R2_RANGE =            144 until 156
   val VOTING_DECRYPTION_R2_RECOVERY_RANGE =   156 until 168
-  val SEED_SUBMISSION_RANGE =                 168 until 180
+  val RANDOMNESS_SUBMISSION_RANGE =           168 until 180
   val PAYMENT_BLOCK_HEIGHT =                  180
 
   /* Constants related to reward distribution */

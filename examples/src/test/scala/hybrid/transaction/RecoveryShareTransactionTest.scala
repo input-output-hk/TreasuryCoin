@@ -2,16 +2,14 @@ package hybrid.transaction
 
 import examples.commons.SimpleBoxTransactionCompanion
 import examples.hybrid.TreasuryManager
-import examples.hybrid.transaction.{DecryptionShareTransaction, RecoveryShareTransaction}
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
+import examples.hybrid.transaction.RecoveryShareTransaction
 import examples.hybrid.transaction.RecoveryShareTransaction.OpenedShareWithId
 import org.scalatest.FunSuite
 import scorex.core.transaction.state.PrivateKey25519
 import scorex.crypto.signatures.{PrivateKey, PublicKey}
-import treasury.crypto.core.{HybridPlaintext, One, VoteCases}
-import treasury.crypto.keygen.DecryptionManager
+import treasury.crypto.core.HybridPlaintext
 import treasury.crypto.keygen.datastructures.round4.OpenedShare
-import treasury.crypto.voting.RegularVoter
 
 class RecoveryShareTransactionTest extends FunSuite {
 

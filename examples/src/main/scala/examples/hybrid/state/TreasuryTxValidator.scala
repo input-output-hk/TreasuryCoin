@@ -341,7 +341,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
   }
 
   def validateRandomnessTransaction(tx: RandomnessTransaction): Try[Unit] = Try {
-    require(TreasuryManager.SEED_SUBMISSION_RANGE.contains(epochHeight), "Wrong height for seed transaction")
+    require(TreasuryManager.RANDOMNESS_SUBMISSION_RANGE.contains(epochHeight), "Wrong height for seed transaction")
 
     val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
     require(id >= 0, "Committee member isn't registered")
