@@ -16,15 +16,15 @@ import treasury.crypto.core.{Ciphertext, CiphertextSerizlizer}
 
 import scala.util.Try
 
-case class SeedTransaction(encryptedSeed: Ciphertext,
-                           override val epochID: Long,
-                           override val pubKey: PublicKey25519Proposition, // previously registered committee signing public key
-                           override val signature: Signature25519,
-                           override val timestamp: Long) extends SignedTreasuryTransaction(timestamp) {
+case class RandomnessTransaction(encryptedRandomness: Ciphertext,
+                                 override val epochID: Long,
+                                 override val pubKey: PublicKey25519Proposition, // previously registered committee signing public key
+                                 override val signature: Signature25519,
+                                 override val timestamp: Long) extends SignedTreasuryTransaction(timestamp) {
 
   override type M = SimpleBoxTransaction
 
-  override val transactionTypeId: ModifierTypeId = DecryptionShareTransaction.TransactionTypeId
+  override val transactionTypeId: ModifierTypeId = RandomnessTransaction.TransactionTypeId
 
   override val serializer = SimpleBoxTransactionCompanion
 
@@ -35,7 +35,7 @@ case class SeedTransaction(encryptedSeed: Ciphertext,
       Longs.toByteArray(fee))
 
     Bytes.concat(
-      CiphertextSerizlizer.toBytes(encryptedSeed),
+      CiphertextSerizlizer.toBytes(encryptedRandomness),
       Longs.toByteArray(epochID),
       pubKey.bytes,
       superBytes)
@@ -48,30 +48,30 @@ case class SeedTransaction(encryptedSeed: Ciphertext,
     require(signature.isValid(pubKey, messageToSign))
   }
 
-  override def toString: String = s"SeedTransaction (${json.noSpaces})"
+  override def toString: String = s"RandomnessTransaction (${json.noSpaces})"
 }
 
-object SeedTransaction {
+object RandomnessTransaction {
 
-  val TransactionTypeId: scorex.core.ModifierTypeId = SeedTxTypeId
+  val TransactionTypeId: scorex.core.ModifierTypeId = RandomnessTxTypeId
 
   def create(privKey: PrivateKey25519,
              ciphertext: Ciphertext,
-             epochID: Long): Try[SeedTransaction] = Try {
+             epochID: Long): Try[RandomnessTransaction] = Try {
     val timestamp = System.currentTimeMillis()
     val fakeSig = Signature25519(Signature @@ Array[Byte]())
-    val unsigned = SeedTransaction(ciphertext, epochID, privKey.publicImage, fakeSig, timestamp)
+    val unsigned = RandomnessTransaction(ciphertext, epochID, privKey.publicImage, fakeSig, timestamp)
     val sig = PrivateKey25519Companion.sign(privKey, unsigned.messageToSign)
 
-    SeedTransaction(ciphertext, epochID, privKey.publicImage, sig, timestamp)
+    RandomnessTransaction(ciphertext, epochID, privKey.publicImage, sig, timestamp)
   }
 }
 
-object SeedTransactionCompanion extends Serializer[SeedTransaction] {
+object RandomnessTransactionCompanion extends Serializer[RandomnessTransaction] {
 
-  def toBytes(t: SeedTransaction): Array[Byte] = {
+  def toBytes(t: RandomnessTransaction): Array[Byte] = {
     Bytes.concat(
-      CiphertextSerizlizer.toBytes(t.encryptedSeed),
+      CiphertextSerizlizer.toBytes(t.encryptedRandomness),
       Longs.toByteArray(t.epochID),
       t.pubKey.bytes,
       t.signature.bytes,
@@ -79,9 +79,9 @@ object SeedTransactionCompanion extends Serializer[SeedTransaction] {
     )
   }
 
-  def parseBytes(bytes: Array[Byte]): Try[SeedTransaction] = Try {
-    val encryptedSeed = CiphertextSerizlizer.parseBytes(bytes, TreasuryManager.cs).get
-    var s = CiphertextSerizlizer.toBytes(encryptedSeed).size
+  def parseBytes(bytes: Array[Byte]): Try[RandomnessTransaction] = Try {
+    val encryptedRandomness = CiphertextSerizlizer.parseBytes(bytes, TreasuryManager.cs).get
+    var s = CiphertextSerizlizer.toBytes(encryptedRandomness).size
 
     val epochID = Longs.fromByteArray(bytes.slice(s,s+8))
     val pubKey = PublicKey25519Proposition(PublicKey @@ bytes.slice(s+8, s+8+Curve25519.KeyLength))
@@ -90,6 +90,6 @@ object SeedTransactionCompanion extends Serializer[SeedTransaction] {
     s = s + Curve25519.SignatureLength
     val timestamp = Longs.fromByteArray(bytes.slice(s,s+8))
 
-    SeedTransaction(encryptedSeed, epochID, pubKey, sig, timestamp)
+    RandomnessTransaction(encryptedRandomness, epochID, pubKey, sig, timestamp)
   }
 }

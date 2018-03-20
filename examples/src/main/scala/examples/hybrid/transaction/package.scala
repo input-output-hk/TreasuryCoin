@@ -18,5 +18,5 @@ package object transaction {
   val DKGr5TxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 69.toByte
   val DKGr6TxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 70.toByte
   val PaymentTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 71.toByte
-  val SeedTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 72.toByte
+  val RandomnessTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 72.toByte
 }

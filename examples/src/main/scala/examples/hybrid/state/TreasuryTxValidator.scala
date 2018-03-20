@@ -63,6 +63,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
       case t: DKGr3Transaction => validateDKGTransaction(t).get
       case t: DKGr4Transaction => validateDKGTransaction(t).get
       case t: DKGr5Transaction => validateDKGTransaction(t).get
+      case t: RandomnessTransaction => validateRandomnessTransaction(t).get
       case t: PaymentTransaction => validatePayment(t).get
     }
   }
@@ -145,6 +146,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
     require(id >= 0, "Committee member isn't registered")
     require(!trState.getAllDisqualifiedCommitteeInfo.exists(_.signingKey == tx.pubKey), "Committee member is disqualified")
 
+    require(tx.c1Shares.size > 0, "Decryption shares are not found")
     require(trState.getProposals.size == tx.c1Shares.size, "Number of decryption shares isn't equal to the number of proposals")
     trState.getProposals.indices.foreach(i =>
       require(tx.c1Shares.find(s => s.proposalId == i).isDefined, s"No C1Share for proposal ${i}"))
@@ -336,6 +338,15 @@ class TreasuryTxValidator(val trState: TreasuryState,
           s"Incorrect R5 data from member ${t.r5_1Data.issuerID}"
         )
     }
+  }
+
+  def validateRandomnessTransaction(tx: RandomnessTransaction): Try[Unit] = Try {
+    require(TreasuryManager.SEED_SUBMISSION_RANGE.contains(epochHeight), "Wrong height for seed transaction")
+
+    val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
+    require(id >= 0, "Committee member isn't registered")
+    require(!trState.getAllDisqualifiedCommitteeInfo.exists(_.signingKey == tx.pubKey), "Committee member is disqualified")
+    require(!trState.getSubmittedRandomnessForNextEpoch.contains(id), "The committee member has already submitted seed tx")
   }
 
   def validatePayment(tx: PaymentTransaction): Try[Unit] = Try {

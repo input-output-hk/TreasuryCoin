@@ -18,7 +18,7 @@ import scorex.core.utils.ScorexLogging
 import scorex.core.{ModifierId, VersionTag}
 import scorex.crypto.encode.Base58
 import scorex.crypto.hash.{Blake2b256, Digest32}
-import treasury.crypto.core.{PrivKey, PubKey, SimpleIdentifier}
+import treasury.crypto.core._
 import treasury.crypto.decryption.DecryptionManager
 import treasury.crypto.keygen.datastructures.C1Share
 import treasury.crypto.keygen.datastructures.round1.R1Data
@@ -56,6 +56,9 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   private var committeeInfo: List[CommitteeInfo] = List()
 
   private var randomness: Array[Byte] = Array.fill[Byte](32)(234.toByte) // TODO: change with a real randomness
+  private var submittedRandomnessForNextEpoch: Map[Int, Ciphertext] = Map() // committee member id -> encrypted randomness
+  private var decryptedRandomness: Map[Int, Point] = Map() // committee member id -> random point
+  private var keyRecoverySharesRandGen: mutable.Map[Int, Seq[OpenedShare]] = mutable.Map() // recoveredCommitteeMemberId -> opened shares
 
   private var sharedPublicKey: Option[PubKey] = None
 
@@ -100,6 +103,8 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def getAllDisqualifiedCommitteeInfo = getDisqualifiedAfterDKGCommitteeInfo ++ getDisqualifiedAfterSeedGenCommitteeInfo ++
     getDisqualifiedAfterDecryptionR1CommitteeInfo ++ getDisqualifiedAfterDecryptionR2CommitteeInfo
   def getRecoveredKeys = recoveredKeysOfDisqualifiedCommitteeMembers
+
+  def getSubmittedRandomnessForNextEpoch = submittedRandomnessForNextEpoch
 
   def getSigningKeys(role: Role): List[PublicKey25519Proposition] = role match {
     case Role.Committee => getCommitteeInfo.map(_.signingKey)
@@ -205,6 +210,11 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         val id = getApprovedCommitteeInfo.indexWhere(_.signingKey == t.pubKey)
         require(id >= 0, "Committee member isn't found")
         DKGr5Data += (id -> t.r5_1Data)
+      }
+      case t: RandomnessTransaction => Try {
+        val id = getApprovedCommitteeInfo.indexWhere(_.signingKey == t.pubKey)
+        require(id >= 0, "Committee member isn't found")
+        submittedRandomnessForNextEpoch += (id -> t.encryptedRandomness)
       }
       case t: PaymentTransaction => Try(log.info(s"Payment tx was applied ${tx.json}"))
     }
@@ -337,12 +347,15 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   }
 
   private def updateDisqualifiedAfterDecryptionR1(): Unit = {
-    /* Disqualified are those who didn't submit valid c1Share and hasn't been disqualified before */
-    val disqualified = getApprovedCommitteeInfo
-      .filter(i => !getDecryptionSharesR1.contains(getApprovedCommitteeInfo.indexOf(i)))
-      .filter(i => !getDisqualifiedAfterDKGCommitteeInfo.exists(_.signingKey == i.signingKey))
+    /* First check that there was ballots that should be decrypted */
+    if (getExpertsBallots.nonEmpty || getVotersBallots.nonEmpty) {
+      /* Disqualified are those who didn't submit valid c1Share and hasn't been disqualified before */
+      val disqualified = getApprovedCommitteeInfo
+        .filter(i => !getDecryptionSharesR1.contains(getApprovedCommitteeInfo.indexOf(i)))
+        .filter(i => !getDisqualifiedAfterDKGCommitteeInfo.exists(_.signingKey == i.signingKey))
 
-    disqualifiedCommitteeMembersAfterDecryptionR1 = disqualified
+      disqualifiedCommitteeMembersAfterDecryptionR1 = disqualified
+    }
   }
 
   private def retrieveKeysOfDisqualified(recoveryShares: Map[Int, Seq[OpenedShare]]): Unit = {
@@ -359,13 +372,16 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   }
 
   private def updateDisqualifiedAfterDecryptionR2(): Unit = {
-    /* Disqualified are those who didn't submit valid c1Share and hasn't been disqualified before */
-    val disqualified = getApprovedCommitteeInfo
-      .filter(i => !getDecryptionSharesR2.contains(getApprovedCommitteeInfo.indexOf(i)))
-      .filter(i => !getDisqualifiedAfterDKGCommitteeInfo.exists(_.signingKey == i.signingKey))
-      .filter(i => !getDisqualifiedAfterDecryptionR1CommitteeInfo.exists(_.signingKey == i.signingKey))
+    /* First check that there was ballots that should be decrypted */
+    if (getExpertsBallots.nonEmpty || getVotersBallots.nonEmpty) {
+      /* Disqualified are those who didn't submit valid c1Share and hasn't been disqualified before */
+      val disqualified = getApprovedCommitteeInfo
+        .filter(i => !getDecryptionSharesR2.contains(getApprovedCommitteeInfo.indexOf(i)))
+        .filter(i => !getDisqualifiedAfterDKGCommitteeInfo.exists(_.signingKey == i.signingKey))
+        .filter(i => !getDisqualifiedAfterDecryptionR1CommitteeInfo.exists(_.signingKey == i.signingKey))
 
-    disqualifiedCommitteeMembersAfterDecryptionR2 = disqualified
+      disqualifiedCommitteeMembersAfterDecryptionR2 = disqualified
+    }
   }
 
   private def calculateDelegations(): Try[Unit] = Try {

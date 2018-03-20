@@ -20,7 +20,7 @@ import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.LocallyG
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 import treasury.crypto.core.{SimpleIdentifier, VoteCases}
-import treasury.crypto.decryption.DecryptionManager
+import treasury.crypto.decryption.{DecryptionManager, SeedGenManager}
 import treasury.crypto.keygen.DistrKeyGen
 import treasury.crypto.voting.ballots.Ballot
 import treasury.crypto.voting.{Expert, RegularVoter}
@@ -79,7 +79,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       case h if VOTING_DECRYPTION_R1_RECOVERY_RANGE.contains(h) => generateRecoveryShare(DecryptionRound.R1, view)
       case h if VOTING_DECRYPTION_R2_RANGE.contains(h) => generateC1ShareR2(view)
       case h if VOTING_DECRYPTION_R2_RECOVERY_RANGE.contains(h) => generateRecoveryShare(DecryptionRound.R2, view)
-      // TODO: other stages
+      case h if SEED_SUBMISSION_RANGE.contains(h) => generateSeedTx(view)
       case _ => Seq()
     }
   }
@@ -157,15 +157,16 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
           case t: DecryptionShareTransaction => (t.round == DecryptionRound.R1) && (signingSecret.privKey.publicImage == t.pubKey)
           case _ => false
         }.isDefined
-        val submitted = view.trState.getDecryptionSharesR1.find(_._1 == id).isDefined
-        if (!pending && !submitted) {
+        if (!pending) {
           val c1Shares = view.trState.getProposals.indices.map { i =>
             val ballots = view.trState.getExpertBallotsForProposal(i) ++ view.trState.getVoterBallotsForProposal(i)
             val manager = new DecryptionManager(TreasuryManager.cs, ballots)
             manager.decryptC1ForDelegations(id, i, proxySecret.privKey)
           }
 
-          Seq(DecryptionShareTransaction.create(signingSecret.privKey, DecryptionRound.R1, c1Shares, view.trState.epochNum).get)
+          val tx = DecryptionShareTransaction.create(signingSecret.privKey, DecryptionRound.R1, c1Shares, view.trState.epochNum).get
+          val valid = Try(new TreasuryTxValidator(view.trState, view.history.height + 1)).flatMap(_.validate(tx))
+          if(valid.isSuccess) Seq(tx) else Seq()
         } else Seq()
       } else Seq()
     } else Seq()
@@ -218,16 +219,38 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
           case t: DecryptionShareTransaction => (t.round == DecryptionRound.R2) && (signingSecret.privKey.publicImage == t.pubKey)
           case _ => false
         }.isDefined
-        val submitted = view.trState.getDecryptionSharesR2.find(_._1 == id).isDefined
-        if (!pending && !submitted && view.trState.getDelegations.isDefined) {
+        if (!pending && view.trState.getDelegations.isDefined) {
           val c1Shares = view.trState.getProposals.indices.map { i =>
             val ballots = view.trState.getExpertBallotsForProposal(i) ++ view.trState.getVoterBallotsForProposal(i)
             val manager = new DecryptionManager(TreasuryManager.cs, ballots)
             manager.decryptC1ForChoices(id, i, proxySecret.privKey, view.trState.getDelegations.get(i))
           }
 
-          Seq(DecryptionShareTransaction.create(signingSecret.privKey, DecryptionRound.R2, c1Shares, view.trState.epochNum).get)
+          val tx = DecryptionShareTransaction.create(signingSecret.privKey, DecryptionRound.R2, c1Shares, view.trState.epochNum).get
+          val valid = Try(new TreasuryTxValidator(view.trState, view.history.height + 1)).flatMap(_.validate(tx))
+          if(valid.isSuccess) Seq(tx) else Seq()
         } else Seq()
+      } else Seq()
+    } else Seq()
+  }
+
+  private def generateSeedTx(view: NodeView): Seq[RandomnessTransaction] = {
+    val secrets = checkCommitteeMemberRegistration(view)
+    if (secrets.isDefined) {
+      val (signingSecret, proxySecret) = secrets.get
+
+      val pending = view.pool.unconfirmed.map(_._2).find {
+        case t: RandomnessTransaction => signingSecret.privKey.publicImage == t.pubKey
+        case _ => false
+      }.isDefined
+
+      if (!pending) {
+        val seed = SeedGenManager.getRand(TreasuryManager.cs, proxySecret.privKey.toByteArray)
+        val encryptedSeed = SeedGenManager.encryptSeedShare(TreasuryManager.cs, proxySecret.pubKey, seed)
+
+        val tx = RandomnessTransaction.create(signingSecret.privKey, encryptedSeed, view.trState.epochNum).get
+        val valid = Try(new TreasuryTxValidator(view.trState, view.history.height + 1)).flatMap(_.validate(tx))
+        if(valid.isSuccess) Seq(tx) else Seq()
       } else Seq()
     } else Seq()
   }
