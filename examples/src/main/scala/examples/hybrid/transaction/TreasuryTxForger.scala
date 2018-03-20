@@ -20,7 +20,8 @@ import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.LocallyG
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 import treasury.crypto.core.{SimpleIdentifier, VoteCases}
-import treasury.crypto.keygen.{DecryptionManager, DistrKeyGen}
+import treasury.crypto.decryption.DecryptionManager
+import treasury.crypto.keygen.DistrKeyGen
 import treasury.crypto.voting.ballots.Ballot
 import treasury.crypto.voting.{Expert, RegularVoter}
 

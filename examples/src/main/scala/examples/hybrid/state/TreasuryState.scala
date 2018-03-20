@@ -19,13 +19,14 @@ import scorex.core.{ModifierId, VersionTag}
 import scorex.crypto.encode.Base58
 import scorex.crypto.hash.{Blake2b256, Digest32}
 import treasury.crypto.core.{PrivKey, PubKey, SimpleIdentifier}
-import treasury.crypto.keygen.{DecryptionManager, DistrKeyGen, KeyShares, RoundsData}
+import treasury.crypto.decryption.DecryptionManager
 import treasury.crypto.keygen.datastructures.C1Share
 import treasury.crypto.keygen.datastructures.round1.R1Data
 import treasury.crypto.keygen.datastructures.round2.R2Data
 import treasury.crypto.keygen.datastructures.round3.R3Data
 import treasury.crypto.keygen.datastructures.round4.{OpenedShare, R4Data}
 import treasury.crypto.keygen.datastructures.round5_1.R5_1Data
+import treasury.crypto.keygen.{DistrKeyGen, RoundsData}
 import treasury.crypto.voting.Tally
 import treasury.crypto.voting.ballots.{Ballot, ExpertBallot, VoterBallot}
 

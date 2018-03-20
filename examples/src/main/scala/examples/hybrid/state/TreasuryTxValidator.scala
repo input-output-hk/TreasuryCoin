@@ -11,12 +11,13 @@ import examples.hybrid.transaction.DKG._
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
 import examples.hybrid.transaction._
 import scorex.core.utils.ScorexLogging
-import treasury.crypto.core.{One, SimpleIdentifier}
-import treasury.crypto.keygen.{DecryptionManager, DistrKeyGen}
+import treasury.crypto.core.SimpleIdentifier
+import treasury.crypto.decryption.DecryptionManager
+import treasury.crypto.keygen.DistrKeyGen
 import treasury.crypto.voting.ballots.{ExpertBallot, VoterBallot}
 import treasury.crypto.voting.{Expert, RegularVoter, Voter}
 
-import scala.util.{Failure, Success, Try}
+import scala.util.{Success, Try}
 
 /**
   * Validates treasury transactions against current node view. Note that it is critical to pass consistent

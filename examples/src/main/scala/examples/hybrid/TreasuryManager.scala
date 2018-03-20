@@ -9,22 +9,24 @@ object TreasuryManager {
   val cs = new Cryptosystem
 
   /* Intervals of an epoch stages in blocks (both Pos/Pow). All numbers should be even. */
-  val EPOCH_LEN =                             152
+  val EPOCH_LEN =                             182
   val PROPOSAL_SUBMISSION_RANGE =             4 until 20
   val VOTER_REGISTER_RANGE =                  4 until 14
   val EXPERT_REGISTER_RANGE =                 14 until 24
-  val DISTR_KEY_GEN_R1_RANGE =                24 until 36
-  val DISTR_KEY_GEN_R2_RANGE =                36 until 48
-  val DISTR_KEY_GEN_R3_RANGE =                48 until 60
-  val DISTR_KEY_GEN_R4_RANGE =                60 until 72
-  val DISTR_KEY_GEN_R5_RANGE =                72 until 84
-  val VOTING_RANGE =                          84 until 100
-  val VOTING_DECRYPTION_R1_RANGE =            100 until 112
-  val VOTING_DECRYPTION_R1_RECOVERY_RANGE =   112 until 124
-  val VOTING_DECRYPTION_R2_RANGE =            124 until 136
-  val VOTING_DECRYPTION_R2_RECOVERY_RANGE =   136 until 148
-  val TALLY_SIGNING_RANGE =                   148 until 150
-  val PAYMENT_BLOCK_HEIGHT =                  150
+  val SEED_DECRYPTION_RANGE =                 24 until 34
+  val SEED_DECRYPTION_RECOVERY_RANGE =        34 until 44
+  val DISTR_KEY_GEN_R1_RANGE =                44 until 56
+  val DISTR_KEY_GEN_R2_RANGE =                56 until 68
+  val DISTR_KEY_GEN_R3_RANGE =                68 until 80
+  val DISTR_KEY_GEN_R4_RANGE =                80 until 92
+  val DISTR_KEY_GEN_R5_RANGE =                92 until 104
+  val VOTING_RANGE =                          104 until 120
+  val VOTING_DECRYPTION_R1_RANGE =            120 until 132
+  val VOTING_DECRYPTION_R1_RECOVERY_RANGE =   132 until 144
+  val VOTING_DECRYPTION_R2_RANGE =            144 until 156
+  val VOTING_DECRYPTION_R2_RECOVERY_RANGE =   156 until 168
+  val SEED_SUBMISSION_RANGE =                 168 until 180
+  val PAYMENT_BLOCK_HEIGHT =                  180
 
   /* Constants related to reward distribution */
   val BUDGET =               1000
