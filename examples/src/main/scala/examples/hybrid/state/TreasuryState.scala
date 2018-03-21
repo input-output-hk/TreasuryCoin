@@ -12,6 +12,7 @@ import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.transaction.DKG._
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
+import examples.hybrid.transaction.RecoveryShareTransaction.RecoveryRound
 import examples.hybrid.transaction._
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
@@ -19,7 +20,7 @@ import scorex.core.{ModifierId, VersionTag}
 import scorex.crypto.encode.Base58
 import scorex.crypto.hash.{Blake2b256, Digest32}
 import treasury.crypto.core._
-import treasury.crypto.decryption.DecryptionManager
+import treasury.crypto.decryption.{DecryptionManager, RandomnessGenManager}
 import treasury.crypto.keygen.datastructures.C1Share
 import treasury.crypto.keygen.datastructures.round1.R1Data
 import treasury.crypto.keygen.datastructures.round2.R2Data
@@ -59,13 +60,14 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   private var submittedRandomnessForNextEpoch: Map[Int, Ciphertext] = Map() // committee member id -> encrypted randomness
   private var decryptedRandomness: Map[PublicKey25519Proposition, Point] = Map() // committee member signing pub key -> random point
   private var keyRecoverySharesRandGen: mutable.Map[Int, Seq[OpenedShare]] = mutable.Map() // recoveredCommitteeMemberId -> opened shares
+  private var disqualifiedCommitteeMembersAfterRandGen: Seq[CommitteeInfo] = Seq()
+  private var recoveredRandomness: Seq[Point] = Seq()
 
   private var sharedPublicKey: Option[PubKey] = None
 
   private var disqualifiedCommitteeMembersAfterDKG: Seq[CommitteeInfo] = Seq()
   private var disqualifiedCommitteeMembersAfterDecryptionR1: Seq[CommitteeInfo] = Seq()
   private var disqualifiedCommitteeMembersAfterDecryptionR2: Seq[CommitteeInfo] = Seq()
-  private var disqualifiedCommitteeMembersAfterSeedGen: Seq[CommitteeInfo] = Seq()
   private var recoveredKeysOfDisqualifiedCommitteeMembers: Seq[(PubKey, PrivKey)] = Seq()
 
   private var votersBallots: Map[Int, Seq[VoterBallot]] = Map() // voterId -> Seq(ballot)
@@ -99,14 +101,16 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def getDisqualifiedAfterDKGCommitteeInfo = disqualifiedCommitteeMembersAfterDKG
   def getDisqualifiedAfterDecryptionR1CommitteeInfo = disqualifiedCommitteeMembersAfterDecryptionR1
   def getDisqualifiedAfterDecryptionR2CommitteeInfo = disqualifiedCommitteeMembersAfterDecryptionR2
-  def getDisqualifiedAfterSeedGenCommitteeInfo = disqualifiedCommitteeMembersAfterSeedGen
-  def getAllDisqualifiedCommitteeInfo = getDisqualifiedAfterDKGCommitteeInfo ++ getDisqualifiedAfterSeedGenCommitteeInfo ++
+  def getAllDisqualifiedCommitteeInfo = getDisqualifiedAfterDKGCommitteeInfo ++ getDisqualifiedAfterRandGenCommitteeInfo ++
     getDisqualifiedAfterDecryptionR1CommitteeInfo ++ getDisqualifiedAfterDecryptionR2CommitteeInfo
   def getRecoveredKeys = recoveredKeysOfDisqualifiedCommitteeMembers
 
   def getSubmittedRandomnessForNextEpoch = submittedRandomnessForNextEpoch
   def getDecryptedRandomness = decryptedRandomness
+  def getRecoveredRandomness = recoveredRandomness
   def getRandomness = randomness
+  def getKeyRecoverySharesRandGen = keyRecoverySharesRandGen.toSeq
+  def getDisqualifiedAfterRandGenCommitteeInfo = disqualifiedCommitteeMembersAfterRandGen
 
   def getSigningKeys(role: Role): List[PublicKey25519Proposition] = role match {
     case Role.Committee => getCommitteeInfo.map(_.signingKey)
@@ -178,13 +182,17 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       }
       case t: RecoveryShareTransaction => Try {
         t.round match {
-          case DecryptionRound.R1 => t.openedShares.foreach { s =>
+          case RecoveryRound.DecryptionR1 => t.openedShares.foreach { s =>
             val updatedShares = keyRecoverySharesR1.get(s.violatorId).getOrElse(Seq()) :+ s.openedShare
             keyRecoverySharesR1(s.violatorId) = updatedShares
           }
-          case DecryptionRound.R2 => t.openedShares.foreach { s =>
+          case RecoveryRound.DecryptionR2 => t.openedShares.foreach { s =>
             val updatedShares = keyRecoverySharesR2.get(s.violatorId).getOrElse(Seq()) :+ s.openedShare
             keyRecoverySharesR2(s.violatorId) = updatedShares
+          }
+          case RecoveryRound.Randomness => t.openedShares.foreach { s =>
+            val updatedShares = keyRecoverySharesRandGen.get(s.violatorId).getOrElse(Seq()) :+ s.openedShare
+            keyRecoverySharesRandGen(s.violatorId) = updatedShares
           }
         }
       }
@@ -230,7 +238,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
     block match {
       case b:PosBlock => {
-        log.info(s"TreasuryState: applying PoS block ${block.encodedId} at height ${history.storage.heightOf(block.id)}")
+        //log.info(s"TreasuryState: applying PoS block ${block.encodedId} at height ${history.storage.heightOf(block.id)}")
 
         val trTxs = b.transactions.collect { case t: TreasuryTransaction => t }
         trTxs.foreach(tx => apply(tx).get)
@@ -240,7 +248,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     }
 
     val epochHeight = history.storage.heightOf(block.id).get.toInt % TreasuryManager.EPOCH_LEN
-    updateState(epochHeight)
+    updateState(epochHeight, history)
   }
 
   def validate(block: HybridBlock, history: HybridHistory, state: Option[HBoxStoredState]): Try[Unit] = Try {
@@ -265,9 +273,12 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     else throw new UnsupportedOperationException("Deep rollback is not supported")
   }
 
-  private def updateState(epochHeight: Int): TreasuryState = {
+  private def updateState(epochHeight: Int, history: HybridHistory): TreasuryState = {
     epochHeight match {
+      case TreasuryManager.RANDOMNESS_DECRYPTION_RANGE.end =>
+        retrieveDisqualifiedAfterRandGen(history)
       case TreasuryManager.RANDOMNESS_DECRYPTION_RECOVERY_RANGE.end =>
+        recoverRandomness(history)
         updateRandomness()
         selectApprovedCommittee()
       case TreasuryManager.DISTR_KEY_GEN_R5_RANGE.end =>
@@ -298,8 +309,33 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     this
   }
 
+  private def retrieveDisqualifiedAfterRandGen(history: HybridHistory): Unit = Try {
+    val prevCommittee = TreasuryState.generatePartiesInfo(history, epochNum - 1).get._3.filter(_.approved)
+    val submitters = TreasuryState.generateRandomnessSubmission(history, epochNum - 1).get.map(_._1)
+    val submittersWhoDecrypted = getDecryptedRandomness.keys
+    val disqualified = submitters.filter(s => !submittersWhoDecrypted.exists(k => k == s))
+
+    disqualifiedCommitteeMembersAfterRandGen = prevCommittee.filter(c => disqualified.contains(c.signingKey))
+  }
+
+  private def recoverRandomness(history: HybridHistory): Unit = Try {
+    val prevCommittee = TreasuryState.generatePartiesInfo(history, epochNum - 1).get._3.filter(_.approved)
+    val randomnessSubmisstion = TreasuryState.generateRandomnessSubmission(history, epochNum - 1).get
+
+    keyRecoverySharesRandGen.foreach { s =>
+      val violatorInfo = prevCommittee(s._1)
+      val privKeyOpt = DistrKeyGen.recoverPrivateKeyByOpenedShares(cs, prevCommittee.size, s._2, Some(violatorInfo.proxyKey))
+      privKeyOpt match {
+        case Success(privKey) =>
+          val encryptedRandomness = randomnessSubmisstion.find(_._1 == violatorInfo.signingKey).get._2
+          recoveredRandomness +:= RandomnessGenManager.decryptRandomnessShare(TreasuryManager.cs, privKey, encryptedRandomness).randomness
+        case Failure(e) => log.error("Failed key recovery", e)
+      }
+    }
+  }
+
   private def updateRandomness(): Unit = {
-    val randBytes = decryptedRandomness.values.foldLeft(Array[Byte]()) { (acc, r) =>
+    val randBytes = (decryptedRandomness.values ++ recoveredRandomness).foldLeft(Array[Byte]()) { (acc, r) =>
       Bytes.concat(acc, r.getEncoded(true))
     }
     if (randBytes.nonEmpty)
@@ -602,7 +638,6 @@ object TreasuryState {
     * @return
     */
   def generate(history: HybridHistory, state: Option[HBoxStoredState] = None): Try[TreasuryState] = Try {
-
     CommitteeMember.stopMember()
 
     val currentHeight = history.storage.height.toInt

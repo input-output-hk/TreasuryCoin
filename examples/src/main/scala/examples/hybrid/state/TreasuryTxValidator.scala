@@ -9,6 +9,7 @@ import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.transaction.DKG._
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
+import examples.hybrid.transaction.RecoveryShareTransaction.RecoveryRound
 import examples.hybrid.transaction._
 import scorex.core.utils.ScorexLogging
 import treasury.crypto.core.SimpleIdentifier
@@ -57,7 +58,11 @@ class TreasuryTxValidator(val trState: TreasuryState,
       case t: ProposalTransaction => validateProposal(t).get
       case t: BallotTransaction => validateBallot(t).get
       case t: DecryptionShareTransaction => validateDecryptionShare(t).get
-      case t: RecoveryShareTransaction => validateRecoveryShare(t).get
+      case t: RecoveryShareTransaction => t.round match {
+        case RecoveryRound.Randomness => validateRandomnessRecoveryTransaction(t).get
+        case RecoveryRound.DecryptionR1 => validateDecryptionRecoveryShare(t).get
+        case RecoveryRound.DecryptionR2 => validateDecryptionRecoveryShare(t).get
+      }
       case t: DKGr1Transaction => validateDKGTransaction(t).get
       case t: DKGr2Transaction => validateDKGTransaction(t).get
       case t: DKGr3Transaction => validateDKGTransaction(t).get
@@ -189,7 +194,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
     }
   }
 
-  def validateRecoveryShare(tx: RecoveryShareTransaction): Try[Unit] = Try {
+  def validateDecryptionRecoveryShare(tx: RecoveryShareTransaction): Try[Unit] = Try {
     require(trState.getSharedPubKey.isDefined, "Shared key is not defined in TreasuryState")
     require(trState.getProposals.nonEmpty, "Proposals are not defined")
 
@@ -216,14 +221,14 @@ class TreasuryTxValidator(val trState: TreasuryState,
     }
 
     tx.round match {
-      case DecryptionRound.R1 => validateRecoveryShareR1(tx).get
-      case DecryptionRound.R2 => validateRecoveryShareR2(tx).get
+      case RecoveryRound.DecryptionR1 => validateRecoveryShareR1(tx).get
+      case RecoveryRound.DecryptionR2 => validateRecoveryShareR2(tx).get
     }
   }
 
   def validateRecoveryShareR1(tx: RecoveryShareTransaction): Try[Unit] = Try {
     require(TreasuryManager.VOTING_DECRYPTION_R1_RECOVERY_RANGE.contains(epochHeight), "Wrong height for recovery share R1 transaction")
-    require(tx.round == DecryptionRound.R1, "Invalid decryption share R1: wrong round")
+    require(tx.round == RecoveryRound.DecryptionR1, "Invalid decryption share R1: wrong round")
 
     val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
 
@@ -239,7 +244,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
 
   def validateRecoveryShareR2(tx: RecoveryShareTransaction): Try[Unit] = Try {
     require(TreasuryManager.VOTING_DECRYPTION_R2_RECOVERY_RANGE.contains(epochHeight), "Wrong height for recovery share R2 transaction")
-    require(tx.round == DecryptionRound.R2, "Invalid decryption share R2: wrong round")
+    require(tx.round == RecoveryRound.DecryptionR2, "Invalid decryption share R2: wrong round")
 
     val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
 
@@ -368,6 +373,44 @@ class TreasuryTxValidator(val trState: TreasuryState,
       val valid = RandomnessGenManager.validateDecryptedRandomnessShare(
         TreasuryManager.cs, issuerInfo.get.proxyKey, encryptedRandomness.get._2, tx.decryptedRandomness)
       require(valid, "Randomness decryption share is invalid")
+    }
+  }
+
+  def validateRandomnessRecoveryTransaction(tx: RecoveryShareTransaction): Try[Unit] = Try {
+    require(TreasuryManager.RANDOMNESS_DECRYPTION_RECOVERY_RANGE.contains(epochHeight), "Wrong height for recovery share Rand transaction")
+    require(tx.round == RecoveryRound.Randomness, "Invalid decryption share rand: wrong round")
+
+    if (history.isDefined) {
+      val prevEpochId = trState.epochNum - 1
+      val prevCommittee = TreasuryState.generatePartiesInfo(history.get, prevEpochId).get._3.filter(_.approved)
+      val prevR1Data = TreasuryState.generateR1Data(history.get, prevEpochId).get
+
+      val id = prevCommittee.indexWhere(_.signingKey == tx.pubKey)
+      require(id >= 0, "Committee member isn't registered")
+      require(tx.openedShares.nonEmpty, "No opened shares detected")
+
+      val submitterInfo = prevCommittee(id)
+      val identifier = new SimpleIdentifier(prevCommittee.map(_.proxyKey))
+      val ids = tx.openedShares.map(_.violatorId)
+      require(ids.size == ids.distinct.size, "The transaction contains duplicated OpenedShares")
+
+      tx.openedShares.foreach { s =>
+        val submittedSharesOpt = Try(trState.getKeyRecoverySharesRandGen(s.violatorId)).toOption
+        submittedSharesOpt.foreach(ss => require(!ss._2.exists(_.receiverID == id), "The OpenedShare for Randomness has already been submitted"))
+
+        val violatorProxyKey = prevCommittee(s.violatorId).proxyKey
+        val validViolator = trState.getDisqualifiedAfterRandGenCommitteeInfo.exists(_.proxyKey == violatorProxyKey)
+        require(validViolator, "Invalid OpenedShare: the target is not disqualified in RandGen")
+
+        val valid = DistrKeyGen.validateRecoveryKeyShare(
+          TreasuryManager.cs,
+          identifier,
+          submitterInfo.proxyKey,
+          violatorProxyKey,
+          prevR1Data,
+          s.openedShare).isSuccess
+        require(valid, "Invalid OpenedShare RandGen")
+      }
     }
   }
 

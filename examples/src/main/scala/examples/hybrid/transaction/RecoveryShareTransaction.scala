@@ -3,9 +3,8 @@ package examples.hybrid.transaction
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
 import examples.hybrid.TreasuryManager
-import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
-import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound.DecryptionRound
-import examples.hybrid.transaction.RecoveryShareTransaction.OpenedShareWithId
+import examples.hybrid.transaction.RecoveryShareTransaction.RecoveryRound.RecoveryRound
+import examples.hybrid.transaction.RecoveryShareTransaction.{OpenedShareWithId, RecoveryRound}
 import io.circe.Json
 import io.circe.syntax._
 import scorex.core.ModifierTypeId
@@ -25,7 +24,7 @@ import scala.util.Try
   *
   * @param openedShares (id, openedShare) id of violator and corresponding opened share of his private key
   */
-case class RecoveryShareTransaction(round: DecryptionRound,
+case class RecoveryShareTransaction(round: RecoveryRound,
                                     openedShares: Seq[OpenedShareWithId],
                                     override val epochID: Long,
                                     override val pubKey: PublicKey25519Proposition, // previously registered committee public key
@@ -65,10 +64,15 @@ object RecoveryShareTransaction {
 
   case class OpenedShareWithId(violatorId: Int, openedShare: OpenedShare)
 
+  object RecoveryRound extends Enumeration {
+    type RecoveryRound = Value
+    val DecryptionR1, DecryptionR2, Randomness = Value
+  }
+
   val TransactionTypeId: scorex.core.ModifierTypeId = RecoveryShareTxTypeId
 
   def create(privKey: PrivateKey25519,
-             round: DecryptionRound,
+             round: RecoveryRound,
              openedShares: Seq[OpenedShareWithId],
              epochID: Long): Try[RecoveryShareTransaction] = Try {
     val timestamp = System.currentTimeMillis()
@@ -99,7 +103,7 @@ object RecoveryShareTransactionCompanion extends Serializer[RecoveryShareTransac
   }
 
   def parseBytes(bytes: Array[Byte]): Try[RecoveryShareTransaction] = Try {
-    val round = DecryptionRound(bytes(0))
+    val round = RecoveryRound(bytes(0))
     val sharesSize = Ints.fromByteArray(bytes.slice(1,5))
     var s = 5
     val openedShares: Seq[OpenedShareWithId] = (0 until sharesSize).map { _ =>
