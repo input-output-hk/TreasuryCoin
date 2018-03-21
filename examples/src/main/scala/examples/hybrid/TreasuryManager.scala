@@ -13,8 +13,8 @@ object TreasuryManager {
   val PROPOSAL_SUBMISSION_RANGE =             4 until 20
   val VOTER_REGISTER_RANGE =                  4 until 14
   val EXPERT_REGISTER_RANGE =                 14 until 24
-  val SEED_DECRYPTION_RANGE =                 24 until 34
-  val SEED_DECRYPTION_RECOVERY_RANGE =        34 until 44
+  val RANDOMNESS_DECRYPTION_RANGE =           24 until 34
+  val RANDOMNESS_DECRYPTION_RECOVERY_RANGE =  34 until 44
   val DISTR_KEY_GEN_R1_RANGE =                44 until 56
   val DISTR_KEY_GEN_R2_RANGE =                56 until 68
   val DISTR_KEY_GEN_R3_RANGE =                68 until 80

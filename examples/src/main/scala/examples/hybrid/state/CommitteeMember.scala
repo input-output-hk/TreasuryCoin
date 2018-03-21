@@ -554,7 +554,7 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
       case _ => false
     }
 
-    val isValid = Try(new TreasuryTxValidator(view.trState, view.history.height)).flatMap(_.validate(trsryTx)).isSuccess
+    val isValid = Try(new TreasuryTxValidator(view.trState, view.history.height, Some(view.history))).flatMap(_.validate(trsryTx)).isSuccess
     !pending && isValid
   }
 

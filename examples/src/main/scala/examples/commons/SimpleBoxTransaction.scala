@@ -96,6 +96,7 @@ object SimpleBoxTransactionCompanion extends Serializer[SimpleBoxTransaction] {
       case t: DKGr4Transaction => Bytes.concat(Array(m.transactionTypeId), DKGr4TransactionCompanion.toBytes(t))
       case t: DKGr5Transaction => Bytes.concat(Array(m.transactionTypeId), DKGr5TransactionCompanion.toBytes(t))
       case t: RandomnessTransaction => Bytes.concat(Array(m.transactionTypeId), RandomnessTransactionCompanion.toBytes(t))
+      case t: RandomnessDecryptionTransaction => Bytes.concat(Array(m.transactionTypeId), RandomnessDecryptionTransactionCompanion.toBytes(t))
     }
   }
 
@@ -115,6 +116,7 @@ object SimpleBoxTransactionCompanion extends Serializer[SimpleBoxTransaction] {
       case DKGr4Transaction.TransactionTypeId => DKGr4TransactionCompanion.parseBytes(bytes.drop(1))
       case DKGr5Transaction.TransactionTypeId => DKGr5TransactionCompanion.parseBytes(bytes.drop(1))
       case RandomnessTransaction.TransactionTypeId => RandomnessTransactionCompanion.parseBytes(bytes.drop(1))
+      case RandomnessDecryptionTransaction.TransactionTypeId => RandomnessDecryptionTransactionCompanion.parseBytes(bytes.drop(1))
       case _ => Failure(new MatchError("Unknown transaction type id"))
     }
   }

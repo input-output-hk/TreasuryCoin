@@ -76,7 +76,9 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
       "decryption shares R2"  -> state.getDecryptionSharesR2.map(member => s"Committee id ${member._1}. Number of submitted shares: ${member._2.size}").asJson,
       "voting result"         -> state.getTally.map(p => s"Proposal ${p._1}: {yes: ${p._2.yes}, no: ${p._2.no}, abstain ${p._2.abstain}}").asJson,
       "coinbase payments"     -> state.getPayments.getOrElse(Seq()).map(p => s"Address: ${p._1.address}, value: ${p._2}").asJson,
-      "randomness submission" -> state.getSubmittedRandomnessForNextEpoch.map(r => s"Committee id ${r._1}. Encrypted randomness: 111111").asJson
+      "randomness submission" -> state.getSubmittedRandomnessForNextEpoch.map(r => s"Committee id ${r._1}. Encrypted randomness: 111111").asJson,
+      "randomness decryption" -> state.getDecryptedRandomness.map(r => s"Committee id ${r._1}. Decrypted randomness: 111111").asJson,
+      "randomness"            -> Base58.encode(state.getRandomness).asJson
     ).asJson
   }
 

@@ -55,9 +55,9 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   private var votersInfo: List[VoterInfo] = List()
   private var committeeInfo: List[CommitteeInfo] = List()
 
-  private var randomness: Array[Byte] = Array.fill[Byte](32)(234.toByte) // TODO: change with a real randomness
+  private var randomness: Array[Byte] = Array.fill[Byte](8)(1.toByte)
   private var submittedRandomnessForNextEpoch: Map[Int, Ciphertext] = Map() // committee member id -> encrypted randomness
-  private var decryptedRandomness: Map[Int, Point] = Map() // committee member id -> random point
+  private var decryptedRandomness: Map[PublicKey25519Proposition, Point] = Map() // committee member signing pub key -> random point
   private var keyRecoverySharesRandGen: mutable.Map[Int, Seq[OpenedShare]] = mutable.Map() // recoveredCommitteeMemberId -> opened shares
 
   private var sharedPublicKey: Option[PubKey] = None
@@ -105,6 +105,8 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def getRecoveredKeys = recoveredKeysOfDisqualifiedCommitteeMembers
 
   def getSubmittedRandomnessForNextEpoch = submittedRandomnessForNextEpoch
+  def getDecryptedRandomness = decryptedRandomness
+  def getRandomness = randomness
 
   def getSigningKeys(role: Role): List[PublicKey25519Proposition] = role match {
     case Role.Committee => getCommitteeInfo.map(_.signingKey)
@@ -216,6 +218,9 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         require(id >= 0, "Committee member isn't found")
         submittedRandomnessForNextEpoch += (id -> t.encryptedRandomness)
       }
+      case t: RandomnessDecryptionTransaction => Try {
+        decryptedRandomness += (t.pubKey -> t.decryptedRandomness.randomness)
+      }
       case t: PaymentTransaction => Try(log.info(s"Payment tx was applied ${tx.json}"))
     }
   }
@@ -262,7 +267,8 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   private def updateState(epochHeight: Int): TreasuryState = {
     epochHeight match {
-      case TreasuryManager.EXPERT_REGISTER_RANGE.end =>
+      case TreasuryManager.RANDOMNESS_DECRYPTION_RECOVERY_RANGE.end =>
+        updateRandomness()
         selectApprovedCommittee()
       case TreasuryManager.DISTR_KEY_GEN_R5_RANGE.end =>
         retrieveSharedPublicKey() match {
@@ -290,6 +296,15 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     }
 
     this
+  }
+
+  private def updateRandomness(): Unit = {
+    val randBytes = decryptedRandomness.values.foldLeft(Array[Byte]()) { (acc, r) =>
+      Bytes.concat(acc, r.getEncoded(true))
+    }
+    if (randBytes.nonEmpty)
+      randomness = Blake2b256(randBytes)
+    else log.error("No Randomness is detected! The constant salt will be used")
   }
 
   private def selectApprovedCommittee(): Unit = {
@@ -504,8 +519,8 @@ object TreasuryState {
     require(epochId >= 0 && epochId < currentEpochNum, "Parties info can be requested only for past epochs. Use getInfo methods directly for the current epoch.")
 
     val count = (currentEpochNum - epochId) * TreasuryManager.EPOCH_LEN + currentEpochHeight + 1
-    // we should take all registration blocks
-    val epochBlocksIds = history.lastBlockIds(history.bestBlock, count).take(TreasuryManager.EXPERT_REGISTER_RANGE.end)
+    // we should take all registration blocks and first block after registration (cause at this point approved CMs are selected)
+    val epochBlocksIds = history.lastBlockIds(history.bestBlock, count).take(TreasuryManager.EXPERT_REGISTER_RANGE.end + 1)
 
     val trState = TreasuryState(epochId)
 

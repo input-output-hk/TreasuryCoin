@@ -12,7 +12,7 @@ import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
 import examples.hybrid.transaction._
 import scorex.core.utils.ScorexLogging
 import treasury.crypto.core.SimpleIdentifier
-import treasury.crypto.decryption.DecryptionManager
+import treasury.crypto.decryption.{DecryptionManager, RandomnessGenManager}
 import treasury.crypto.keygen.DistrKeyGen
 import treasury.crypto.voting.ballots.{ExpertBallot, VoterBallot}
 import treasury.crypto.voting.{Expert, RegularVoter, Voter}
@@ -24,7 +24,7 @@ import scala.util.{Success, Try}
   * TreasuryState, HybridHistory and HBoxStoredState. Inconsistent version of TreasuryState and HBoxStoredState (which
   * actually may happens during TreasuryState regeneration) will lead to failures during the PaymentTransaction verification.
   * Thus HybridHistory and HBoxStoredState are optional arguments and could be skipped. In this case deposits paybacks in
-  * PaymentTransaction will not be verified, but it should be suitable in some cases (for instance, during TreasuryState
+  * PaymentTransaction will not be verified, as well as RandomnessDecryption, but it should be suitable in some cases (for instance, during TreasuryState
   * regeneration, but not updating)
   *
   * @param trState TreasuryState
@@ -64,6 +64,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
       case t: DKGr4Transaction => validateDKGTransaction(t).get
       case t: DKGr5Transaction => validateDKGTransaction(t).get
       case t: RandomnessTransaction => validateRandomnessTransaction(t).get
+      case t: RandomnessDecryptionTransaction => validateRandomnessDecryptionTransaction(t).get
       case t: PaymentTransaction => validatePayment(t).get
     }
   }
@@ -341,12 +342,33 @@ class TreasuryTxValidator(val trState: TreasuryState,
   }
 
   def validateRandomnessTransaction(tx: RandomnessTransaction): Try[Unit] = Try {
-    require(TreasuryManager.RANDOMNESS_SUBMISSION_RANGE.contains(epochHeight), "Wrong height for seed transaction")
+    require(TreasuryManager.RANDOMNESS_SUBMISSION_RANGE.contains(epochHeight), "Wrong height for randomness transaction")
 
     val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
     require(id >= 0, "Committee member isn't registered")
     require(!trState.getAllDisqualifiedCommitteeInfo.exists(_.signingKey == tx.pubKey), "Committee member is disqualified")
     require(!trState.getSubmittedRandomnessForNextEpoch.contains(id), "The committee member has already submitted seed tx")
+  }
+
+  def validateRandomnessDecryptionTransaction(tx: RandomnessDecryptionTransaction): Try[Unit] = Try {
+    require(TreasuryManager.RANDOMNESS_DECRYPTION_RANGE.contains(epochHeight), "Wrong height for randomness decryption transaction")
+    require(trState.epochNum > 0, "Randomness decryption should not happen in the zero epoch")
+
+    if (history.isDefined) {
+      val prevEpochId = trState.epochNum - 1
+      val prevCommitte = TreasuryState.generatePartiesInfo(history.get, prevEpochId).get._3.filter(_.approved)
+      val prevRandomnessSumbmission = TreasuryState.generateRandomnessSubmission(history.get, prevEpochId).get
+
+      val issuerInfo = prevCommitte.find(_.signingKey == tx.pubKey)
+      require(issuerInfo.isDefined, "Committee member isn't registered")
+      require(!trState.getDecryptedRandomness.contains(tx.pubKey), "The committee member has already submitted randomness decryption tx")
+
+      val encryptedRandomness = prevRandomnessSumbmission.find(_._1 == issuerInfo.get.signingKey)
+      require(encryptedRandomness.isDefined, "The committee member hasn't submitted RandomnessTransaction in the previoius epoch")
+      val valid = RandomnessGenManager.validateDecryptedRandomnessShare(
+        TreasuryManager.cs, issuerInfo.get.proxyKey, encryptedRandomness.get._2, tx.decryptedRandomness)
+      require(valid, "Randomness decryption share is invalid")
+    }
   }
 
   def validatePayment(tx: PaymentTransaction): Try[Unit] = Try {
