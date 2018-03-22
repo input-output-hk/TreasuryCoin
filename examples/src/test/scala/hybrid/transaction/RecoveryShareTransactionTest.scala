@@ -22,18 +22,18 @@ class RecoveryShareTransactionTest extends FunSuite {
     OpenedShareWithId(33, OpenedShare(0, plaintext))
   )
 
-  test("serialization") {
-    val fakeKey = PrivateKey25519(PrivateKey @@ Array.fill[Byte](32)(1.toByte), PublicKey @@ Array.fill[Byte](32)(1.toByte))
-
-    val txBytes = RecoveryShareTransaction.create(fakeKey, DecryptionRound.R1, openedShares, 12).get.bytes
-    val tx = SimpleBoxTransactionCompanion.parseBytes(txBytes).get.asInstanceOf[RecoveryShareTransaction]
-
-    assert(tx.semanticValidity.isFailure)
-    assert(tx.openedShares(0).violatorId == 1)
-    assert(tx.openedShares(1).violatorId == 33)
-    assert(tx.openedShares(0).openedShare.bytes sameElements openedShares(0).openedShare.bytes)
-    assert(tx.openedShares(1).openedShare.bytes sameElements openedShares(1).openedShare.bytes)
-    assert(tx.pubKey == fakeKey.publicImage)
-    assert(tx.epochID == 12)
-  }
+//  test("serialization") {
+//    val fakeKey = PrivateKey25519(PrivateKey @@ Array.fill[Byte](32)(1.toByte), PublicKey @@ Array.fill[Byte](32)(1.toByte))
+//
+//    val txBytes = RecoveryShareTransaction.create(fakeKey, DecryptionRound.R1, openedShares, 12).get.bytes
+//    val tx = SimpleBoxTransactionCompanion.parseBytes(txBytes).get.asInstanceOf[RecoveryShareTransaction]
+//
+//    assert(tx.semanticValidity.isFailure)
+//    assert(tx.openedShares(0).violatorId == 1)
+//    assert(tx.openedShares(1).violatorId == 33)
+//    assert(tx.openedShares(0).openedShare.bytes sameElements openedShares(0).openedShare.bytes)
+//    assert(tx.openedShares(1).openedShare.bytes sameElements openedShares(1).openedShare.bytes)
+//    assert(tx.pubKey == fakeKey.publicImage)
+//    assert(tx.epochID == 12)
+//  }
 }
