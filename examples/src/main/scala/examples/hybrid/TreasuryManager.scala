@@ -9,7 +9,7 @@ object TreasuryManager {
   val cs = new Cryptosystem
 
   /* Intervals of an epoch stages in blocks (both Pos/Pow). All numbers should be even. */
-  val EPOCH_LEN =                             182
+  val EPOCH_LEN =                             186
   val PROPOSAL_SUBMISSION_RANGE =             4 until 20
   val VOTER_REGISTER_RANGE =                  4 until 14
   val EXPERT_REGISTER_RANGE =                 14 until 24
@@ -26,7 +26,8 @@ object TreasuryManager {
   val VOTING_DECRYPTION_R2_RANGE =            144 until 156
   val VOTING_DECRYPTION_R2_RECOVERY_RANGE =   156 until 168
   val RANDOMNESS_SUBMISSION_RANGE =           168 until 180
-  val PAYMENT_BLOCK_HEIGHT =                  180
+  val PENALTY_BLOCK_HEIGHT =                  182
+  val PAYMENT_BLOCK_HEIGHT =                  184
 
   /* Constants related to reward distribution */
   val BUDGET =               1000

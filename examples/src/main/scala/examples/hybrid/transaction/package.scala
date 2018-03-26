@@ -20,4 +20,5 @@ package object transaction {
   val PaymentTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 71.toByte
   val RandomnessTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 72.toByte
   val RandomnessDecryptionTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 73.toByte
+  val PenaltyTxTypeId: scorex.core.ModifierTypeId = scorex.core.ModifierTypeId @@ 74.toByte
 }

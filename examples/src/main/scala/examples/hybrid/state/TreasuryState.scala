@@ -230,6 +230,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         decryptedRandomness += (t.pubKey -> t.decryptedRandomness.randomness)
       }
       case t: PaymentTransaction => Try(log.info(s"Payment tx was applied ${tx.json}"))
+      case t: PenaltyTransaction => Try(log.info(s"Penalty tx was applied ${tx.json}"))
     }
   }
 
@@ -259,8 +260,11 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       case b:PosBlock => {
         val trTxs = b.transactions.collect{case t:TreasuryTransaction => t}
 
-        if ((blockHeight % TreasuryManager.EPOCH_LEN) == TreasuryManager.PAYMENT_BLOCK_HEIGHT)
+        val epochHeight = blockHeight % TreasuryManager.EPOCH_LEN
+        if (epochHeight == TreasuryManager.PAYMENT_BLOCK_HEIGHT)
           require(trTxs.count(t => t.isInstanceOf[PaymentTransaction]) == 1, "Invalid block: PaymentTransaction is absent")
+        if (epochHeight == TreasuryManager.PENALTY_BLOCK_HEIGHT)
+          require(trTxs.count(t => t.isInstanceOf[PenaltyTransaction]) == 1, "Invalid block: PenaltyTransaction is absent")
 
         val validator = new TreasuryTxValidator(this, blockHeight, Some(history), state)
         trTxs.foreach(validator.validate(_).get)
@@ -469,6 +473,18 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
           tallyResult = tallyResult + (i -> tally.get)
       }
     }
+  }
+
+  def getPenalties: Try[Seq[PublicKey25519NoncedBox]] = Try {
+    val disqualifiedCommittee = getAllDisqualifiedCommitteeInfo
+    val absentDuringRandGenCommittee = getApprovedCommitteeInfo.indices
+      .filter(i => !getSubmittedRandomnessForNextEpoch.contains(i))
+      .map(i => getApprovedCommitteeInfo(i))
+      .filter(ci => !disqualifiedCommittee.exists(_.depositBox == ci.depositBox))
+
+    val absentExperts = getExpertsInfo.indices.filter(i => !getExpertsBallots.contains(i)).map(i => getExpertsInfo(i))
+
+    disqualifiedCommittee.map(_.depositBox) ++ absentDuringRandGenCommittee.map(_.depositBox) ++ absentExperts.map(_.depositBox)
   }
 
   def getPayments: Try[Seq[(PublicKey25519Proposition, Value)]] = Try {

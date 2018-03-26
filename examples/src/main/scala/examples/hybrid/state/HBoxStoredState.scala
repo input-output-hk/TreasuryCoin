@@ -5,7 +5,7 @@ import java.io.File
 import com.google.common.primitives.Longs
 import examples.commons._
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
-import examples.hybrid.transaction.PaymentTransaction
+import examples.hybrid.transaction.{PaymentTransaction, PenaltyTransaction}
 import io.iohk.iodb.{ByteArrayWrapper, LSMStore}
 import scorex.core.VersionTag
 import scorex.core.settings.ScorexSettings
@@ -67,12 +67,17 @@ case class HBoxStoredState(store: LSMStore, override val version: VersionTag) ex
   override def validate(tx: SimpleBoxTransaction): Try[Unit] = {
     tx match {
       case t: PaymentTransaction => validatePaymentTx(t)
+      case t: PenaltyTransaction => validatePenaltyTx(t)
       case _ => super.validate(tx)
     }
   }
 
   def validatePaymentTx(transaction: PaymentTransaction): Try[Unit] = Try {
-    // TODO: add implementation
+    // TODO: do we need to check something here? actually all validation takes place in TreasuryTxValidator
+  }
+
+  def validatePenaltyTx(transaction: PenaltyTransaction): Try[Unit] = Try {
+    // TODO: do we need to check something here? actually all validation takes place in TreasuryTxValidator
   }
 
   override def applyChanges(changes: BoxStateChanges[PublicKey25519Proposition, PublicKey25519NoncedBox],

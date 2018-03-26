@@ -9,7 +9,7 @@ import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.settings.HybridSettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryTxValidator}
-import examples.hybrid.transaction.{PaymentTransaction, TreasuryTransaction}
+import examples.hybrid.transaction.{PaymentTransaction, PenaltyTransaction, TreasuryTransaction}
 import examples.hybrid.wallet.HWallet
 import scorex.core.NodeViewHolder.CurrentView
 import scorex.core.transaction.state.PrivateKey25519
@@ -135,15 +135,21 @@ object PosForger extends ScorexLogging {
 
         val paymentTx =
           if ((blockHeight % TreasuryManager.EPOCH_LEN) == TreasuryManager.PAYMENT_BLOCK_HEIGHT) {
-            // Mandatory PaymentTransaction at the particular height
+            // Mandatory PaymentTransaction at the specific height
             PaymentTransaction.create(view.trState, view.history, view.state).toOption
+          } else None
+
+        val penaltyTx =
+          if ((blockHeight % TreasuryManager.EPOCH_LEN) == TreasuryManager.PENALTY_BLOCK_HEIGHT) {
+            // Mandatory PenaltyTransaction at the specific height
+            PenaltyTransaction.create(view.trState, view.history, view.state).toOption
           } else None
 
         // currently we allow only 1 treasury tx per block (cause they may be too heavy).
         // TODO: if more than 1 tx is allowed then probably we also need to check that treasury txs from pool are consistent with each other (no duplicates, etc.)
         val treasuryTx = view.pool.takeTreasuryTxs(50).find(t => treasuryTxValidatorTry.flatMap(_.validate(t)).isSuccess)
 
-        val allTxs = txs ++ paymentTx.toIterable ++ treasuryTx.toIterable
+        val allTxs = txs ++ paymentTx.toIterable ++ penaltyTx.toIterable ++ treasuryTx.toIterable
 
         PosForgingInfo(pairCompleted, bestPowBlock, diff, boxKeys, allTxs)
     }

@@ -71,6 +71,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
       case t: RandomnessTransaction => validateRandomnessTransaction(t).get
       case t: RandomnessDecryptionTransaction => validateRandomnessDecryptionTransaction(t).get
       case t: PaymentTransaction => validatePayment(t).get
+      case t: PenaltyTransaction => validatePenalty(t).get
     }
   }
 
@@ -425,6 +426,13 @@ class TreasuryTxValidator(val trState: TreasuryState,
       val depositPaybacks = trState.getDepositPaybacks(history.get, state.get).getOrElse(Seq())
       require(depositPaybacks.equals(tx.depositPayback), "Deposit paybacks are invalid")
     }
+  }
+
+  def validatePenalty(tx: PenaltyTransaction): Try[Unit] = Try {
+    require(TreasuryManager.PENALTY_BLOCK_HEIGHT == epochHeight, "Wrong height for penalty transaction")
+
+    val penalties = trState.getPenalties.getOrElse(Seq())
+    require(penalties.equals(tx.depositsToDestroy), "Penalties are invalid")
   }
 }
 
