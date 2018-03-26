@@ -104,6 +104,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
   def validateProposal(tx: ProposalTransaction): Try[Unit] = Try {
     require(TreasuryManager.PROPOSAL_SUBMISSION_RANGE.contains(epochHeight), "Wrong height for proposal transaction")
     // TODO: add validation
+    require(!trState.getProposals.exists(_.name == tx.name), "The proposal is already submitted")
   }
 
   def validateBallot(tx: BallotTransaction): Try[Unit] = Try {
@@ -115,7 +116,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
       case VoterType.Voter =>
         val id = trState.getVotersInfo.indexWhere(_.signingKey == tx.pubKey)
         require(id >= 0, "Voter is not registered")
-        require(trState.getVotersBallots.contains(id) == false, "The voter has already voted")
+        require(!trState.getVotersBallots.contains(id), "The voter has already voted")
         tx.ballots.foreach(b => require(b.isInstanceOf[VoterBallot], "Incompatible ballot"))
         val expertsNum = trState.getExpertsInfo.size
         val stake = BigInteger.valueOf(trState.getVotersInfo(id).depositBox.value)

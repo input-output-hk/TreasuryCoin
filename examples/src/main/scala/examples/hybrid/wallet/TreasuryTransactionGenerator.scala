@@ -51,7 +51,7 @@ class TreasuryTransactionGenerator(viewHolderRef: ActorRef) extends Actor with S
       val pubkey = wallet.publicKeys.toSeq.head
       // Here randomization of proposal name is used, because for absolutely equal proposals
       // the indexOf returns the same index, which plays the role of proposal ID
-      // (it returns the first occurence of element, in case if some elements are equal).
+      // (it returns the first occurrence of an element, in case if some elements are equal).
       // TODO: should be changed the proposal ID computation
       val tx = ProposalTransaction.create(wallet, s"TestProposal_${java.util.UUID.randomUUID()}", Value @@ 10L, pubkey, trState.epochNum).get
       new TreasuryTxValidator(trState, history.height).validate(tx).get

@@ -4,13 +4,13 @@ import java.math.BigInteger
 
 import akka.actor.{ActorRef, ActorRefFactory}
 import akka.http.scaladsl.server.Route
-import examples.commons.SimpleBoxTransactionMemPool
+import examples.commons.{SimpleBoxTransactionMemPool, Value}
 import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDataFromCurrentViewWithTreasuryState}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.{HBoxStoredState, Proposal, TreasuryState, TreasuryTxValidator}
-import examples.hybrid.transaction.{BallotTransaction, TreasuryTransaction}
+import examples.hybrid.transaction.{BallotTransaction, ProposalTransaction, TreasuryTransaction}
 import examples.hybrid.transaction.BallotTransaction.VoterType
 import examples.hybrid.wallet.HWallet
 import io.circe.Json
@@ -34,7 +34,7 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
   extends ApiRouteWithFullView[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool] {
 
   override val route = pathPrefix("treasury") {
-    infoRoute ~ epochIdInfoRoute ~ ballotCast
+    infoRoute ~ epochIdInfoRoute ~ ballotCast ~ proposalCast
   }
 
   type NodeView = CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool]
@@ -172,7 +172,7 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
         }
       }
 
-      def IsValidBallotTx(txToValidate: BallotTransaction): Boolean = {
+      def isValidBallotTx(txToValidate: BallotTransaction): Boolean = {
 
         val pending = view.pool.unconfirmed.values.exists {
           case tx: BallotTransaction => tx.pubKey == txToValidate.pubKey
@@ -193,7 +193,7 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
           Failure(new Exception("Voter keys are undefined"))
 
       ballotTx match {
-        case Success(tx: BallotTransaction) => if (IsValidBallotTx(tx)) Some(tx) else None
+        case Success(tx: BallotTransaction) if isValidBallotTx(tx) => Some(tx)
         case _ => None
       }
     }
@@ -283,6 +283,72 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
 
                 Map("status" -> (if(success) "ok" else "err")).asJson
 
+              } match {
+                case Success(resp) => SuccessApiResponse(resp)
+                case Failure(e) => ApiException(e)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private def createProposalTx (
+                               proposal: (String, Int),
+                               view: NodeView,
+                             ): Option[ProposalTransaction] = {
+
+    def isValidProposalTx(txToValidate: ProposalTransaction): Boolean = {
+
+      val pending = view.pool.unconfirmed.values.exists {
+        case tx: ProposalTransaction => tx.name == txToValidate.name
+        case _ => false
+      }
+      val isValid = Try(new TreasuryTxValidator(view.trState, view.history.height)).flatMap(_.validate(txToValidate)).isSuccess
+      !pending && isValid
+    }
+
+    val submittedProposals = view.trState.getProposals
+
+    // proposal with the specified name hasn't been submitted yet
+    if(!submittedProposals.exists(_.name == proposal)) {
+      val wallet = view.vault
+      val pubkey = wallet.publicKeys.toSeq.head
+      ProposalTransaction.create(wallet, s"${proposal._1}", Value @@ proposal._2.toLong, pubkey, view.trState.epochNum) match {
+        case Success(tx: ProposalTransaction) if isValidProposalTx(tx) => Some(tx)
+        case _ => None
+      }
+    } else None
+  }
+
+  def proposalCast: Route = path("proposal") {
+    post{
+      entity(as[String]) { body =>
+        withAuth {
+          postJsonRoute {
+            parse(body) match {
+              case Left(failure) => ApiException(failure.getCause)
+              case Right(json) => Try {
+
+                val view = getCurrentView.get
+
+                json.as[Map[String, Int]] match {
+                  case Right(proposals) =>
+                    proposals.map {
+                      p => {
+                        p._1 -> {
+                          createProposalTx(p, view) match {
+                            case Some(tx) => nodeViewHolderRef ! LocallyGeneratedTransaction[PublicKey25519Proposition, TreasuryTransaction](tx); "submitted"
+                            case None => "rejected"
+                          }
+                        }
+                      }
+                    }.asJson
+
+                  case Left(decodingErr) =>
+                    Map("status" -> decodingErr.message).asJson
+                }
               } match {
                 case Success(resp) => SuccessApiResponse(resp)
                 case Failure(e) => ApiException(e)
