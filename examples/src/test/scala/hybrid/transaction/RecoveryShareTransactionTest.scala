@@ -2,9 +2,8 @@ package hybrid.transaction
 
 import examples.commons.SimpleBoxTransactionCompanion
 import examples.hybrid.TreasuryManager
-import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
 import examples.hybrid.transaction.RecoveryShareTransaction
-import examples.hybrid.transaction.RecoveryShareTransaction.OpenedShareWithId
+import examples.hybrid.transaction.RecoveryShareTransaction.{OpenedShareWithId, RecoveryRound}
 import org.scalatest.FunSuite
 import scorex.core.transaction.state.PrivateKey25519
 import scorex.crypto.signatures.{PrivateKey, PublicKey}
@@ -25,7 +24,7 @@ class RecoveryShareTransactionTest extends FunSuite {
   test("serialization") {
     val fakeKey = PrivateKey25519(PrivateKey @@ Array.fill[Byte](32)(1.toByte), PublicKey @@ Array.fill[Byte](32)(1.toByte))
 
-    val txBytes = RecoveryShareTransaction.create(fakeKey, DecryptionRound.R1, openedShares, 12).get.bytes
+    val txBytes = RecoveryShareTransaction.create(fakeKey, RecoveryRound.DecryptionR1, openedShares, 12).get.bytes
     val tx = SimpleBoxTransactionCompanion.parseBytes(txBytes).get.asInstanceOf[RecoveryShareTransaction]
 
     assert(tx.semanticValidity.isFailure)
