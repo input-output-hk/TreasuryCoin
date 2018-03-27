@@ -520,11 +520,13 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       }
     }
 
-    val committee = getDecryptionSharesR2.map(v => getApprovedCommitteeInfo(v._1).paybackAddr)
-    if (committee.size > 0) {
-      val paymentPerCommittee = Value @@ (TreasuryManager.COMMITTEE_BUDGET / committee.size).round
+    /* If a valid rand submission from a committee is existed, it means that he has also successfully accomplished
+     * all previous stages and hasn't been disqualified */
+    val payedCommittee = getSubmittedRandomnessForNextEpoch.map(v => getApprovedCommitteeInfo(v._1).paybackAddr)
+    if (payedCommittee.size > 0) {
+      val paymentPerCommittee = Value @@ (TreasuryManager.COMMITTEE_BUDGET / payedCommittee.size).round
       if (paymentPerCommittee > 0)
-        payments = payments ++ committee.map(v => (v, paymentPerCommittee))
+        payments = payments ++ payedCommittee.map(v => (v, paymentPerCommittee))
     }
 
     payments
