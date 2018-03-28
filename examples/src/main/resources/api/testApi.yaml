@@ -400,3 +400,28 @@ paths:
             application/json:
               schema:
                 type: string
+
+
+  /treasury/proposal:
+    post:
+      summary: Casting the proposal transactions (distinct for each proposal)
+      operationId: proposalCast
+      tags:
+        - treasury
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: string
+              example: {"ProposalName": "1000", "ProposalName2": "2000"}
+
+      responses:
+        200:
+          description: Status of the proposal transaction casting
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                type: string
