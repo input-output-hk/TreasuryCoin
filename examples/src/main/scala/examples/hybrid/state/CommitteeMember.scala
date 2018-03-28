@@ -113,6 +113,18 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
   }
 
   private def getTx(view: NodeView): Option[TreasuryTransaction] = {
+
+    def logResult(tx: Option[TreasuryTransaction], dataName: String): Option[TreasuryTransaction] = {
+      tx match {
+        case Some(_) =>
+          log.info(s"$dataName transaction is generated successfully")
+
+        case _ =>
+          log.info(s"[ERROR] $dataName transaction wasn't generated!")
+      }
+      tx
+    }
+
     import examples.hybrid.TreasuryManager._
     val epochHeight = view.history.height % TreasuryManager.EPOCH_LEN
 
@@ -127,77 +139,27 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
 
         case h if DISTR_KEY_GEN_R1_RANGE.contains(h) && !roundDataIsPosted(1, view) && dkgOpt.get.getRoundsPassed == 0 =>
 
-          val tx = round1DkgTx(dkgOpt, view)
-
-          tx match {
-            case Some(_) =>
-              log.info(s"R1Data transaction is generated successfully")
-              tx
-
-            case _ =>
-              log.info(s"[ERROR] R1Data transaction wasn't generated!")
-              None
-          }
+          logResult(round1DkgTx(dkgOpt, view), "R1Data")
 
         case h if DISTR_KEY_GEN_R2_RANGE.contains(h) && !roundDataIsPosted(2, view) && dkgOpt.get.getRoundsPassed == 1 =>
 
           val r1DataSeq = view.trState.getDKGr1Data.values.toSeq
-          val tx = round2DkgTx(r1DataSeq, dkgOpt, view)
-
-          tx match {
-            case Some(_) =>
-              log.info(s"R2Data transaction is generated successfully")
-              tx
-
-            case _ =>
-              log.info(s"[ERROR] R2Data transaction wasn't generated!")
-              None
-          }
+          logResult(round2DkgTx(r1DataSeq, dkgOpt, view), "R2Data")
 
         case h if DISTR_KEY_GEN_R3_RANGE.contains(h) && !roundDataIsPosted(3, view) && dkgOpt.get.getRoundsPassed == 2 =>
 
           val r2DataSeq = view.trState.getDKGr2Data.values.toSeq
-          val tx = round3DkgTx(r2DataSeq, dkgOpt, view)
-
-          tx match {
-            case Some(_) =>
-              log.info(s"R3Data transaction is generated successfully")
-              tx
-
-            case _ =>
-              log.info(s"[ERROR] R3Data transaction wasn't generated!")
-              None
-          }
+          logResult(round3DkgTx(r2DataSeq, dkgOpt, view), "R3Data")
 
         case h if DISTR_KEY_GEN_R4_RANGE.contains(h) && !roundDataIsPosted(4, view) && dkgOpt.get.getRoundsPassed == 3 =>
 
           val r3DataSeq = view.trState.getDKGr3Data.values.toSeq
-          val tx = round4DkgTx(r3DataSeq, dkgOpt, view)
-
-          tx match {
-            case Some(_) =>
-              log.info(s"R4Data transaction is generated successfully")
-              tx
-
-            case _ =>
-              log.info(s"[ERROR] R4Data transaction wasn't generated!")
-              None
-          }
+          logResult(round4DkgTx(r3DataSeq, dkgOpt, view), "R4Data")
 
         case h if DISTR_KEY_GEN_R5_RANGE.contains(h) && !roundDataIsPosted(5, view) && dkgOpt.get.getRoundsPassed == 4 =>
 
           val r4DataSeq = view.trState.getDKGr4Data.values.toSeq
-          val tx = round5DkgTx(r4DataSeq, dkgOpt, view)
-
-          tx match {
-            case Some(_) =>
-              log.info(s"R5Data transaction is generated successfully")
-              tx
-
-            case _ =>
-              log.info(s"[ERROR] R5Data transaction wasn't generated!")
-              None
-          }
+          logResult(round5DkgTx(r4DataSeq, dkgOpt, view), "R5Data")
 
         case h if h >= DISTR_KEY_GEN_R5_RANGE.end && sharedPublicKeyOpt.isEmpty && dkgOpt.get.getRoundsPassed == 5 =>
 
