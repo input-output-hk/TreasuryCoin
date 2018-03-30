@@ -40,7 +40,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
   type P = PublicKey25519Proposition
   type TX = SimpleBoxTransaction
 
-  private var treasuryState = TreasuryState.generate(history).get
+  private var treasuryState = TreasuryState.generate(history, history.bestBlock.id).get
 
   override val modifierSerializers: Map[ModifierTypeId, Serializer[_ <: NodeViewModifier]] =
     Map(PosBlock.ModifierTypeId -> PosBlockCompanion,

@@ -648,24 +648,28 @@ object TreasuryState {
   }
 
   /**
-    * Generate TreasuryState for the current epoch. Note that state is optional because it is needed only to validate
-    * PaymentTransaction. In cases when it is not needed state can be None.
+    * Generate TreasuryState for an epoch to which `endBlock` belongs. Note that `state` is optional because
+    * it is needed only to validate PaymentTransaction. In cases when it is not needed state can be None.
     *
     * @param history history
+    * @param endBlock the id of the block in the history until which an epoch should be reconstructed
     * @param state minimal state
     * @return
     */
-  def generate(history: HybridHistory, state: Option[HBoxStoredState] = None): Try[TreasuryState] = Try {
+  def generate(history: HybridHistory, endBlock: ModifierId, state: Option[HBoxStoredState] = None): Try[TreasuryState] = Try {
     CommitteeMember.stopMember()
+    println("Generating current treasury state ...")
 
-    val currentHeight = history.storage.height.toInt
-    val epochNum = currentHeight / TreasuryManager.EPOCH_LEN
-    val currentEpochHeight = currentHeight % TreasuryManager.EPOCH_LEN
+    val height = history.storage.heightOf(endBlock).get.toInt
+    val epochNum = height / TreasuryManager.EPOCH_LEN
+    val epochHeight = height % TreasuryManager.EPOCH_LEN
 
-    val epochBlocksIds = history.lastBlockIds(history.bestBlock, currentEpochHeight + 1)
+    val epochBlocksIds = history.lastBlockIds(history.modifierById(endBlock).get, epochHeight + 1)
 
     val trState = TreasuryState(epochNum)
 
+    val strings = epochBlocksIds.map(Base58.encode(_) + "\n")
+    println(s"Applying blocks for endBlock: ${Base58.encode(endBlock)} \n ${strings}")
     /* parse all blocks in the current epoch and extract all treasury transactions */
     epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history, state).get)
     trState
