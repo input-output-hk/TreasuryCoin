@@ -84,7 +84,7 @@ case class HWallet(seed: ByteStr, store: LSMStore, treasuryStore: LSMStore)
     val from: IndexedSeq[(PrivateKey25519, Nonce, Value)] = boxes()
       .filter(b => !boxesIdsToExclude.exists(_ sameElements b.box.id)).sortBy(_.createdAt).takeWhile { b =>
       s = s + b.box.value
-      s < amount + b.box.value
+      s < amount + fee + b.box.value
     }.flatMap { b =>
       secretByPublicImage(b.box.proposition).map(s => (s, b.box.nonce, b.box.value))
     }.toIndexedSeq
