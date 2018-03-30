@@ -72,7 +72,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     import examples.hybrid.TreasuryManager._
     val epochHeight = view.history.height % TreasuryManager.EPOCH_LEN
 
-    epochHeight match {
+    val txsTry: Try[Seq[TreasuryTransaction]] = epochHeight match {
       case h if VOTER_REGISTER_RANGE.contains(h) => generateRegisterTx(Role.Voter, view)
       case h if EXPERT_REGISTER_RANGE.contains(h) => generateRegisterTx(Role.Expert, view)
       case h if RANDOMNESS_DECRYPTION_RANGE.contains(h) => generateRandomnessDecryptionTx(view)
@@ -83,11 +83,16 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       case h if VOTING_DECRYPTION_R2_RANGE.contains(h) => generateC1ShareR2(view)
       case h if VOTING_DECRYPTION_R2_RECOVERY_RANGE.contains(h) => generateRecoveryShare(RecoveryRound.DecryptionR2, view)
       case h if RANDOMNESS_SUBMISSION_RANGE.contains(h) => generateRandomnessTx(view)
-      case _ => Seq()
+      case _ => Try(Seq())
     }
+
+    txsTry.recoverWith { case e =>
+      log.error("Can't create treasury tx: ", e)
+      Try(Seq())
+    }.get
   }
 
-  private def generateRegisterTx(role: Role, view: NodeView): Seq[TreasuryTransaction] = {
+  private def generateRegisterTx(role: Role, view: NodeView): Try[Seq[TreasuryTransaction]] = Try {
     // TODO: consider a better way to check if a node has already been registered for the role
     val tx = role match {
       case Role.Expert =>
@@ -108,7 +113,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
   }
 
   /* It is only for testing purposes. Normally Ballot transactions should be created manually by a voter */
-  private def generateBallotTx(view: NodeView): Seq[BallotTransaction] = {
+  private def generateBallotTx(view: NodeView): Try[Seq[BallotTransaction]] = Try {
     val myVoterKey = view.vault.treasurySigningPubKeys(Role.Voter, view.trState.epochNum).headOption
     val voterBallot = if (myVoterKey.isDefined &&
         view.trState.getSharedPubKey.isDefined &&
@@ -117,8 +122,12 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       val stake = view.trState.getVotersInfo.find(_.signingKey == myVoterKey.get).get.depositBox.value
       val voter = new RegularVoter(TreasuryManager.cs, numberOfExperts, view.trState.getSharedPubKey.get, BigInteger.valueOf(stake))
       var ballots = List[Ballot]()
-      for (i <- view.trState.getProposals.indices)
-        ballots = voter.produceDelegatedVote(i, 0) :: ballots
+      for (i <- view.trState.getProposals.indices) {
+        if (numberOfExperts > 0)
+          ballots = voter.produceDelegatedVote(i, 0) :: ballots
+        else
+          ballots = voter.produceVote(i, VoteCases.Yes) :: ballots
+      }
 
       val privKey = view.vault.treasurySigningSecretByPubKey(view.trState.epochNum, myVoterKey.get).get.privKey
       Seq(BallotTransaction.create(privKey, VoterType.Voter, ballots, view.trState.epochNum).get)
@@ -149,7 +158,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     }
   }
 
-  private def generateC1ShareR1(view: NodeView): Seq[DecryptionShareTransaction] = {
+  private def generateC1ShareR1(view: NodeView): Try[Seq[DecryptionShareTransaction]] = Try {
     val secrets = checkCommitteeMemberRegistration(view)
     if (secrets.isDefined) {
       val (signingSecret, proxySecret) = secrets.get
@@ -175,7 +184,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     } else Seq()
   }
 
-  private def generateRecoveryShare(round: RecoveryRound, view: NodeView): Seq[RecoveryShareTransaction] = Try {
+  private def generateRecoveryShare(round: RecoveryRound, view: NodeView): Try[Seq[RecoveryShareTransaction]] = Try {
     val secrets = checkCommitteeMemberRegistration(view)
     if (secrets.isDefined) {
       val (signingSecret, proxySecret) = secrets.get
@@ -209,9 +218,9 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
 
       } else Seq()
     } else Seq()
-  }.getOrElse(Seq())
+  }
 
-  private def generateC1ShareR2(view: NodeView): Seq[DecryptionShareTransaction] = {
+  private def generateC1ShareR2(view: NodeView): Try[Seq[DecryptionShareTransaction]] = Try {
     val secrets = checkCommitteeMemberRegistration(view)
     if (secrets.isDefined) {
       val (signingSecret, proxySecret) = secrets.get
@@ -237,7 +246,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     } else Seq()
   }
 
-  private def generateRandomnessTx(view: NodeView): Seq[RandomnessTransaction] = {
+  private def generateRandomnessTx(view: NodeView): Try[Seq[RandomnessTransaction]] = Try {
     val secrets = checkCommitteeMemberRegistration(view)
     if (secrets.isDefined) {
       val (signingSecret, proxySecret) = secrets.get
@@ -263,7 +272,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     * @param view
     * @return
     */
-  private def generateRandomnessDecryptionTx(view: NodeView): Seq[RandomnessDecryptionTransaction] = {
+  private def generateRandomnessDecryptionTx(view: NodeView): Try[Seq[RandomnessDecryptionTransaction]] = Try {
     val prevEpochId = view.trState.epochNum - 1
     val secrets = checkCommitteeMemberRegistration(view, Some(prevEpochId))
     if (prevEpochId >= 0 && secrets.isDefined) {
@@ -295,7 +304,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     * @param view
     * @return
     */
-  private def generateRandomnessRecoveryShare(view: NodeView): Seq[RecoveryShareTransaction] = Try {
+  private def generateRandomnessRecoveryShare(view: NodeView): Try[Seq[RecoveryShareTransaction]] = Try {
     val prevEpochId = view.trState.epochNum - 1
     val secrets = checkCommitteeMemberRegistration(view, Some(prevEpochId))
     if (prevEpochId >= 0 && secrets.isDefined) {
@@ -329,7 +338,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
 
       } else Seq()
     } else Seq()
-  }.getOrElse(Seq())
+  }
 
   /**
     *  Check if a current node is registered as a committee member in a particualar epoch
