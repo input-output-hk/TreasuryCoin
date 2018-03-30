@@ -191,7 +191,7 @@ trait NodeViewHolder[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
       context.system.eventStream.publish(DownloadRequest(tid, id))
     }
 
-  private def trimChainSuffix(suffix: IndexedSeq[PMOD], rollbackPoint: ModifierId): IndexedSeq[PMOD] = {
+  protected def trimChainSuffix(suffix: IndexedSeq[PMOD], rollbackPoint: ModifierId): IndexedSeq[PMOD] = {
     val idx = suffix.indexWhere(_.id.sameElements(rollbackPoint))
     if (idx == -1) IndexedSeq() else suffix.drop(idx)
   }
@@ -224,8 +224,7 @@ trait NodeViewHolder[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
     todo: write tests for this case
        */
 
-  @tailrec
-  protected final def updateState(history: HIS,
+  protected def updateState(history: HIS,
                           state: MS,
                           progressInfo: ProgressInfo[PMOD],
                           suffixApplied: IndexedSeq[PMOD]): (HIS, Try[MS], Seq[PMOD]) = {

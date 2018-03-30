@@ -8,7 +8,7 @@ import examples.hybrid.history.{HybridHistory, HybridSyncInfo}
 import examples.hybrid.settings.HybridMiningSettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryState, TreasuryTxValidator}
 import examples.hybrid.wallet.HWallet
-import scorex.core.LocalInterface.ReceivableMessages.{NewOpenSurface, StartingPersistentModifierApplication}
+import scorex.core.LocalInterface.ReceivableMessages.{NewOpenSurface, RollbackFailed, StartingPersistentModifierApplication}
 import scorex.core.NodeViewHolder._
 import scorex.core.consensus.History.ProgressInfo
 import scorex.core.network.NodeViewSynchronizer.ReceivableMessages._
@@ -22,6 +22,7 @@ import scorex.core.{ModifierTypeId, NodeViewHolder, NodeViewModifier, VersionTag
 import scorex.crypto.encode.Base58
 import scorex.crypto.signatures.PublicKey
 
+import scala.annotation.tailrec
 import scala.util.{Failure, Success, Try}
 
 
@@ -39,6 +40,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
 
   type P = PublicKey25519Proposition
   type TX = SimpleBoxTransaction
+  type PMOD = HybridBlock
 
   private var treasuryState = TreasuryState.generate(history, history.bestBlock.id).get
 
@@ -110,80 +112,97 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
     }
   }
 
-//  override def pmodModify(pmod: HybridBlock): Unit = {
-//    if (!history().contains(pmod.id)) {
-//      context.system.eventStream.publish(StartingPersistentModifierApplication(pmod))
-//
-//      log.info(s"Apply modifier ${pmod.encodedId} of type ${pmod.modifierTypeId} to nodeViewHolder")
-//
-//      history().append(pmod) match {
-//        case Success((historyBeforeStUpdate, progressInfo)) =>
-//          log.debug(s"Going to apply modifications to the state: $progressInfo")
-//          context.system.eventStream.publish(SyntacticallySuccessfulModifier(pmod))
-//          context.system.eventStream.publish(NewOpenSurface(historyBeforeStUpdate.openSurfaceIds()))
-//
-//          if (progressInfo.toApply.nonEmpty) {
-//            updateTreasuryState(history, minimalState, treasuryState, progressInfo) match {
-//              case Success(newTreasuryState) =>
-//                val (newHistory, newStateTry) = updateState(historyBeforeStUpdate, minimalState(), progressInfo)
-//                newStateTry match {
-//                  case Success(newMinState) =>
-//                    val newMemPool = updateMemPool(progressInfo, memoryPool(), newMinState)
-//
-//                    //we consider that vault always able to perform a rollback needed
-//                    val newVault = if (progressInfo.chainSwitchingNeeded) {
-//                      vault().rollback(VersionTag @@ progressInfo.branchPoint.get).get.scanPersistent(progressInfo.toApply)
-//                    } else {
-//                      vault().scanPersistent(progressInfo.toApply)
-//                    }
-//
-//                    /* if everything is ok we can finally update treasury state */
-//                    treasuryState = newTreasuryState
-//                    updateNodeView(Some(newHistory), Some(newMinState), Some(newVault), Some(newMemPool))
-//                    log.info(s"Persistent modifier ${pmod.encodedId} applied successfully")
-//
-//                  case Failure(e) =>
-//                    // TODO: do we need rollback for TreasuryState here? Because it has been already updated with a failed block
-//                    log.warn(s"Can`t apply persistent modifier (id: ${pmod.encodedId}, contents: $pmod) to minimal state", e)
-//                    updateNodeView(updatedHistory = Some(newHistory))
-//                    context.system.eventStream.publish(SemanticallyFailedModification(pmod, e))
-//                }
-//
-//              case Failure(e) =>
-//                log.warn(s"Persistent modifier (id: ${pmod.encodedId}) is not valid against the treasury state", e)
-//                //updateNodeView(updatedHistory = Some(newHistory))
-//                context.system.eventStream.publish(SyntacticallyFailedModification(pmod, e))
-//            }
-//          } else {
-//            requestDownloads(progressInfo)
-//            updateNodeView(updatedHistory = Some(historyBeforeStUpdate))
-//          }
-//        case Failure(e) =>
-//          log.warn(s"Can`t apply persistent modifier (id: ${pmod.encodedId}, contents: $pmod) to history", e)
-//          context.system.eventStream.publish(SyntacticallyFailedModification(pmod, e))
-//      }
-//    } else {
-//      log.warn(s"Trying to apply modifier ${pmod.encodedId} that's already in history")
-//    }
-//  }
-//
-//  private def updateTreasuryState(his: HybridHistory,
-//                                  state: HBoxStoredState,
-//                                  trState: TreasuryState,
-//                                  progressInfo: ProgressInfo[HybridBlock]): Try[TreasuryState] = Try {
-//    val epochNum = his.storage.heightOf(progressInfo.toApply.get.id).get / TreasuryManager.EPOCH_LEN
-//
-//    if (trState.epochNum != epochNum) { // new epoch has been started, reset treasury state
-//      // TODO: potentially TreasuryState.generate without PaymentTransaction verification could lead to invalid payments being accepted
-//      TreasuryState.generate(his).get
-//    } else if (progressInfo.chainSwitchingNeeded) {
-//      trState.rollback(VersionTag @@ progressInfo.branchPoint.get)
-//        .flatMap(_.apply(progressInfo.toApply.get, his, Some(state))) // apply block after rollback
-//        .getOrElse(TreasuryState.generate(his).get)      // regenerate it entirely in case of failed rollback
-//    } else {
-//      trState.apply(progressInfo.toApply.get, his, Some(state)).get
-//    }
-//  }
+  @tailrec
+  override final def updateState(history: HIS,
+                        state: MS,
+                        progressInfo: ProgressInfo[PMOD],
+                        suffixApplied: IndexedSeq[PMOD]): (HIS, Try[MS], Seq[PMOD]) = {
+    requestDownloads(progressInfo)
+
+    case class UpdateInformation(history: HIS,
+                                 state: MS,
+                                 trState: TreasuryState,
+                                 failedMod: Option[PMOD],
+                                 alternativeProgressInfo: Option[ProgressInfo[PMOD]],
+                                 suffix: IndexedSeq[PMOD])
+
+    val (stateToApplyTry: Try[MS], suffixTrimmed: IndexedSeq[PMOD]) = if (progressInfo.chainSwitchingNeeded) {
+      val branchingPoint = VersionTag @@ progressInfo.branchPoint.get     //todo: .get
+      if (!state.version.sameElements(branchingPoint)){
+        state.rollbackTo(branchingPoint) -> trimChainSuffix(suffixApplied, branchingPoint)
+      } else Success(state) -> IndexedSeq()
+    } else Success(state) -> suffixApplied
+
+    val epochNum = progressInfo.toApply.headOption
+      .flatMap(b => history.storage.heightOf(b.id))
+      .map(_ / TreasuryManager.EPOCH_LEN).getOrElse(-1)
+    val trStateToApplyTry: Try[TreasuryState] =
+      if ((epochNum != -1) && (treasuryState.epochNum != epochNum)) { // new epoch has been started, reset treasury state
+        TreasuryState.generate(history, progressInfo.toApply.head.id)
+      } else if (progressInfo.chainSwitchingNeeded) {
+        val branchingPoint = VersionTag @@ progressInfo.branchPoint.get     //todo: .get
+        treasuryState.rollback(branchingPoint).orElse(TreasuryState.generate(history, progressInfo.branchPoint.get))
+      } else Try(treasuryState)
+
+    (stateToApplyTry, trStateToApplyTry) match {
+      case (Success(stateToApply), Success(trStateToApply)) =>
+
+        val u0 = UpdateInformation(history, stateToApply, trStateToApply, None, None, suffixTrimmed)
+
+        val uf = progressInfo.toApply.foldLeft(u0) {case (u, modToApply) =>
+          if(u.failedMod.isEmpty) {
+            u.trState.apply(modToApply, u.history) match {
+              case Success(trStateAfterApply) =>
+                u.state.applyModifier(modToApply) match {
+                  case Success(stateAfterApply) =>
+                    val newHis = history.reportModifierIsValid(modToApply)
+                    context.system.eventStream.publish(SemanticallySuccessfulModifier(modToApply))
+                    //updateState(newHis, stateAfterApply, newProgressInfo, suffixTrimmed :+ modToApply)
+                    treasuryState = trStateAfterApply
+                    UpdateInformation(newHis, stateAfterApply, trStateAfterApply, None, None, u.suffix :+ modToApply)
+                  case Failure(e) =>
+                    val (newHis, newProgressInfo) = history.reportModifierIsInvalid(modToApply, progressInfo)
+                    context.system.eventStream.publish(SemanticallyFailedModification(modToApply, e))
+                    //updateState(newHis, stateToApply, newProgressInfo, suffixTrimmed)
+                    val lastValidMod = modToApply match {
+                      case b: PowBlock => b.prevPosId
+                      case b: PosBlock => b.parentId
+                    }
+                    treasuryState = treasuryState.rollback(VersionTag @@ lastValidMod)
+                      .orElse(TreasuryState.generate(history, lastValidMod))
+                      .getOrElse(treasuryState)
+                    UpdateInformation(newHis, u.state, u.trState, Some(modToApply), Some(newProgressInfo), u.suffix)
+                }
+              case Failure(e) =>
+                val (newHis, newProgressInfo) = history.reportModifierIsInvalid(modToApply, progressInfo)
+                context.system.eventStream.publish(SemanticallyFailedModification(modToApply, e))
+                //updateState(newHis, stateToApply, newProgressInfo, suffixTrimmed)
+                UpdateInformation(newHis, u.state, u.trState, Some(modToApply), Some(newProgressInfo), u.suffix)
+            }
+          } else u
+        }
+
+        uf.failedMod match {
+          case Some(mod) => updateState(uf.history, uf.state, uf.alternativeProgressInfo.get, uf.suffix)
+          case None => (uf.history, Success(uf.state), uf.suffix)
+        }
+      case (Failure(e), Success(_)) =>
+        log.error("Rollback failed for HBoxStoredState: ", e)
+        context.system.eventStream.publish(RollbackFailed)
+        //todo: what to return here? the situation is totally wrong
+        ???
+      case (Success(_), Failure(e)) =>
+        log.error("Rollback failed for TreasuryState: ", e)
+        context.system.eventStream.publish(RollbackFailed)
+        //todo: what to return here? the situation is totally wrong
+        ???
+      case (Failure(e1), Failure(e2)) =>
+        log.error("Rollback failed for both TreasuryState and HBoxStoredState: ", e1)
+        context.system.eventStream.publish(RollbackFailed)
+        //todo: what to return here? the situation is totally wrong
+        ???
+    }
+  }
 
   override def getCurrentInfo: Receive = {
     super.getCurrentInfo orElse {
