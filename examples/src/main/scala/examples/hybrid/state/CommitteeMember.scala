@@ -11,7 +11,7 @@ import examples.hybrid.state.CommitteeMember.{HistoryModified, TxInfo}
 import examples.hybrid.transaction.DKG._
 import examples.hybrid.transaction._
 import examples.hybrid.wallet.HWallet
-import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.LocallyGeneratedTransaction
+import scorex.core.NodeViewHolder.ReceivableMessages.LocallyGeneratedTransaction
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.transaction.state.PrivateKey25519
 import scorex.core.utils.ScorexLogging

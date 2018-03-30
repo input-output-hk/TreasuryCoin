@@ -58,12 +58,12 @@ class HybridApp(val settingsFilename: String) extends Application {
   val forger: ActorRef = PosForgerRef(hybridSettings, nodeViewHolderRef)
   val treasuryTxsForger: ActorRef = TreasuryTxForgerRef(nodeViewHolderRef, hybridSettings.treasurySettings)
 
-  override val localInterface: ActorRef = HLocalInterfaceRef(nodeViewHolderRef, miner, forger, treasuryTxsForger, hybridSettings.mining)
+  val localInterface: ActorRef = HLocalInterfaceRef(nodeViewHolderRef, miner, forger, treasuryTxsForger, hybridSettings.mining)
 
   override val nodeViewSynchronizer: ActorRef =
     actorSystem.actorOf(NodeViewSynchronizerRef.props[P, TX, HybridSyncInfo, HybridSyncInfoMessageSpec.type,
                                                       PMOD, HybridHistory, SimpleBoxTransactionMemPool]
-                                                     (networkControllerRef, nodeViewHolderRef, localInterface,
+                                                     (networkControllerRef, nodeViewHolderRef,
                                                       HybridSyncInfoMessageSpec, settings.network, timeProvider))
 
 //  if (settings.network.nodeName.startsWith("generatorNode")) {

@@ -17,7 +17,7 @@ import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound.De
 import examples.hybrid.transaction.RecoveryShareTransaction.RecoveryRound.RecoveryRound
 import examples.hybrid.transaction.RecoveryShareTransaction.{OpenedShareWithId, RecoveryRound}
 import examples.hybrid.wallet.{HWallet, TreasuryCommitteeSecret, TreasurySigningSecret}
-import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.LocallyGeneratedTransaction
+import scorex.core.NodeViewHolder.ReceivableMessages.LocallyGeneratedTransaction
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 import treasury.crypto.core.{SimpleIdentifier, VoteCases}

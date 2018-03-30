@@ -8,8 +8,6 @@ import examples.hybrid.history.{HybridHistory, HybridSyncInfo}
 import examples.hybrid.settings.HybridMiningSettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryState, TreasuryTxValidator}
 import examples.hybrid.wallet.HWallet
-import scorex.core.LocalInterface.ReceivableMessages.{NewOpenSurface, RollbackFailed, StartingPersistentModifierApplication}
-import scorex.core.NodeViewHolder._
 import scorex.core.consensus.History.ProgressInfo
 import scorex.core.network.NodeViewSynchronizer.ReceivableMessages._
 import scorex.core.serialization.Serializer
@@ -26,9 +24,11 @@ import scala.annotation.tailrec
 import scala.util.{Failure, Success, Try}
 
 
-class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMiningSettings, timeProvider: NetworkTimeProvider) extends NodeViewHolder[PublicKey25519Proposition,
-  SimpleBoxTransaction,
-  HybridBlock] {
+class HybridNodeViewHolder(settings: ScorexSettings,
+                           minerSettings: HybridMiningSettings,
+                           timeProvider: NetworkTimeProvider)
+  extends NodeViewHolder[PublicKey25519Proposition, SimpleBoxTransaction, HybridBlock] {
+
   override val networkChunkSize: Int = settings.network.networkChunkSize
 
   override type SI = HybridSyncInfo

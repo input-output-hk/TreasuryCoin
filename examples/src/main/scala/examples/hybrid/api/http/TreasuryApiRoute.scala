@@ -16,7 +16,7 @@ import examples.hybrid.wallet.HWallet
 import io.circe.Json
 import io.circe.parser.parse
 import io.circe.syntax._
-import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.LocallyGeneratedTransaction
+import scorex.core.NodeViewHolder.ReceivableMessages.LocallyGeneratedTransaction
 import scorex.core.api.http.{ApiException, ApiRouteWithFullView, SuccessApiResponse}
 import scorex.core.settings.RESTApiSettings
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition

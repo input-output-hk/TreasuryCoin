@@ -34,15 +34,13 @@ trait NodeViewHolder[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
 
   import NodeViewHolder._
   import NodeViewHolder.ReceivableMessages._
-  import scorex.core.network.NodeViewSynchronizer.ReceivableMessages.{
-    RequestFromLocal, ChangedHistory,
-    ChangedMempool, ChangedVault,
-    SuccessfulTransaction, FailedTransaction,
-    SyntacticallySuccessfulModifier, SyntacticallyFailedModification,
-    SemanticallySuccessfulModifier, SemanticallyFailedModification
-  }
-  import scorex.core.LocalInterface.ReceivableMessages.{ChangedState, RollbackFailed, NewOpenSurface, StartingPersistentModifierApplication}
-  import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.{LocallyGeneratedTransaction, LocallyGeneratedModifier}
+  import scorex.core.network.NodeViewSynchronizer.ReceivableMessages.{RequestFromLocal, ChangedHistory,
+                                                                      ChangedMempool, ChangedVault,
+                                                                      SuccessfulTransaction, FailedTransaction,
+                                                                      SyntacticallySuccessfulModifier, SyntacticallyFailedModification,
+                                                                      SemanticallySuccessfulModifier, SemanticallyFailedModification,
+                                                                      ChangedState, RollbackFailed, NewOpenSurface, StartingPersistentModifierApplication}
+  //import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.{LocallyGeneratedTransaction, LocallyGeneratedModifier}
 
   type SI <: SyncInfo
   type HIS <: History[PMOD, SI, HIS]
@@ -196,7 +194,7 @@ trait NodeViewHolder[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
     if (idx == -1) IndexedSeq() else suffix.drop(idx)
   }
 
-  /*
+  /**
 
     Assume that history knows the following blocktree:
 
@@ -221,8 +219,12 @@ trait NodeViewHolder[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
 
     In this case history should be informed about the bad modifier and it should retarget state
 
-    todo: write tests for this case
-       */
+    //todo: improve the comment below
+
+    We assume that we apply modifiers sequentially (on a single modifier coming from the network or generated locally),
+    and in case of failed application of some modifier in a progressInfo, rollback point in an alternative should be not
+    earlier than a rollback point of an initial progressInfo.
+   **/
 
   protected def updateState(history: HIS,
                           state: MS,
@@ -418,6 +420,8 @@ object NodeViewHolder {
     case class CompareViews(source: ConnectedPeer, modifierTypeId: ModifierTypeId, modifierIds: Seq[ModifierId])
     case class ModifiersFromRemote(source: ConnectedPeer, modifierTypeId: ModifierTypeId, remoteObjects: Seq[Array[Byte]])
 
+    case class LocallyGeneratedTransaction[P <: Proposition, TX <: Transaction[P]](tx: TX)
+    case class LocallyGeneratedModifier[PMOD <: PersistentNodeViewModifier](pmod: PMOD)
   }
 
   // fixme: No actor is expecting this ModificationApplicationStarted and DownloadRequest messages
