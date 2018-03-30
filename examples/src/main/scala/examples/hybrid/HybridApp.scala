@@ -71,7 +71,7 @@ class HybridApp(val settingsFilename: String) extends Application {
 //    val generator: ActorRef = SimpleBoxTransactionGeneratorRef(nodeViewHolderRef)
 //    generator ! StartGeneration(10 seconds)
 
-  if (settings.network.nodeName.startsWith("node1")) {
+  if (settings.network.nodeName.startsWith("generatorNode")) {
     log.info("Starting treasury transactions generation")
     val generator: ActorRef = actorSystem.actorOf(Props(new TreasuryTransactionGenerator(nodeViewHolderRef)))
     generator ! TreasuryTransactionGenerator.StartGeneration(15 seconds)

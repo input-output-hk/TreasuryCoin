@@ -224,8 +224,8 @@ object HWallet {
     val trFile = treasuryWalletFile(settings)
     trFile.mkdirs()
 
-    val boxesStorage = new LSMStore(wFile, maxJournalEntryCount = 10000)
-    val treasuryStorage = new LSMStore(trFile, keySize = 8, maxJournalEntryCount = 10000)
+    val boxesStorage = new LSMStore(wFile, maxJournalEntryCount = 10000, keepVersions = 100) //todo: configurable kV
+    val treasuryStorage = new LSMStore(trFile, keySize = 8, maxJournalEntryCount = 10000, keepVersions = 100)
 
     Runtime.getRuntime.addShutdownHook(new Thread() {
       override def run(): Unit = {
