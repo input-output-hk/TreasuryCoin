@@ -2,6 +2,7 @@ package scorex.core
 
 import akka.actor.{Actor, ActorRef}
 import scorex.core.consensus.{HistoryReader, SyncInfo}
+import scorex.core.network.NodeViewSynchronizer.ReceivableMessages.{ChangedHistory, ChangedMempool, ChangedVault, NodeViewHolderEvent}
 import scorex.core.transaction.box.proposition.Proposition
 import scorex.core.transaction.state.StateReader
 import scorex.core.transaction.{MempoolReader, Transaction}
@@ -14,33 +15,15 @@ trait LocalInterface[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
   extends Actor with ScorexLogging {
 
   import scorex.core.LocalInterface.ReceivableMessages._
-  import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.{LocallyGeneratedModifier, LocallyGeneratedTransaction}
-  import scorex.core.NodeViewHolder.ReceivableMessages.Subscribe
-  import scorex.core.network.NodeViewSynchronizer.ReceivableMessages._
+  import scorex.core.network.NodeViewSynchronizer.ReceivableMessages.{SuccessfulTransaction, FailedTransaction, SyntacticallySuccessfulModifier,
+                                                                      SyntacticallyFailedModification, SemanticallySuccessfulModifier,
+                                                                      SemanticallyFailedModification}
+  import scorex.core.LocallyGeneratedModifiersMessages.ReceivableMessages.{LocallyGeneratedTransaction, LocallyGeneratedModifier}
 
   val viewHolderRef: ActorRef
 
   override def preStart(): Unit = {
-    val events = Seq(
-      NodeViewHolder.EventType.SuccessfulTransaction,
-      NodeViewHolder.EventType.FailedTransaction,
-
-      NodeViewHolder.EventType.StartingPersistentModifierApplication,
-      NodeViewHolder.EventType.SyntacticallyFailedPersistentModifier,
-      NodeViewHolder.EventType.SemanticallyFailedPersistentModifier,
-      NodeViewHolder.EventType.SuccessfulSyntacticallyValidModifier,
-      NodeViewHolder.EventType.SuccessfulSemanticallyValidModifier,
-
-      NodeViewHolder.EventType.OpenSurfaceChanged,
-      NodeViewHolder.EventType.StateChanged,
-      NodeViewHolder.EventType.FailedRollback,
-
-      NodeViewHolder.EventType.StateChanged,
-      NodeViewHolder.EventType.HistoryChanged,
-      NodeViewHolder.EventType.MempoolChanged,
-      NodeViewHolder.EventType.VaultChanged
-    )
-    viewHolderRef ! Subscribe(events)
+    context.system.eventStream.subscribe(self, classOf[NodeViewHolderEvent])
   }
 
   private def viewHolderEvents: Receive = {

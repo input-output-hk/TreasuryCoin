@@ -98,28 +98,28 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
             log.debug(s"Unconfirmed transaction $tx added to the memory pool")
             val newVault = vault().scanOffchain(tx)
             updateNodeView(updatedVault = Some(newVault), updatedMempool = Some(newPool))
-            notifySubscribers(EventType.SuccessfulTransaction, SuccessfulTransaction[P, TX](tx))
+            context.system.eventStream.publish(SuccessfulTransaction[P, TX](tx))
 
           case Failure(e) =>
-            notifySubscribers(EventType.FailedTransaction, FailedTransaction[P, TX](tx, e))
+            context.system.eventStream.publish(FailedTransaction[P, TX](tx, e))
         }
 
       case Some(e) =>
-        notifySubscribers(EventType.FailedTransaction, FailedTransaction[P, TX](tx, e))
+        context.system.eventStream.publish(FailedTransaction[P, TX](tx, e))
     }
   }
 
   override def pmodModify(pmod: HybridBlock): Unit = {
     if (!history().contains(pmod.id)) {
-      notifySubscribers(EventType.StartingPersistentModifierApplication, StartingPersistentModifierApplication(pmod))
+      context.system.eventStream.publish(StartingPersistentModifierApplication(pmod))
 
       log.info(s"Apply modifier ${pmod.encodedId} of type ${pmod.modifierTypeId} to nodeViewHolder")
 
       history().append(pmod) match {
         case Success((historyBeforeStUpdate, progressInfo)) =>
           log.debug(s"Going to apply modifications to the state: $progressInfo")
-          notifySubscribers(EventType.SuccessfulSyntacticallyValidModifier, SyntacticallySuccessfulModifier(pmod))
-          notifySubscribers(EventType.OpenSurfaceChanged, NewOpenSurface(historyBeforeStUpdate.openSurfaceIds()))
+          context.system.eventStream.publish(SyntacticallySuccessfulModifier(pmod))
+          context.system.eventStream.publish(NewOpenSurface(historyBeforeStUpdate.openSurfaceIds()))
 
           if (progressInfo.toApply.nonEmpty) {
             updateTreasuryState(history, minimalState, treasuryState, progressInfo) match {
@@ -145,13 +145,13 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
                     // TODO: do we need rollback for TreasuryState here? Because it has been already updated with a failed block
                     log.warn(s"Can`t apply persistent modifier (id: ${pmod.encodedId}, contents: $pmod) to minimal state", e)
                     updateNodeView(updatedHistory = Some(newHistory))
-                    notifySubscribers(EventType.SemanticallyFailedPersistentModifier, SemanticallyFailedModification(pmod, e))
+                    context.system.eventStream.publish(SemanticallyFailedModification(pmod, e))
                 }
 
               case Failure(e) =>
                 log.warn(s"Persistent modifier (id: ${pmod.encodedId}) is not valid against the treasury state", e)
                 //updateNodeView(updatedHistory = Some(newHistory))
-                notifySubscribers(EventType.SemanticallyFailedPersistentModifier, SemanticallyFailedModification(pmod, e))
+                context.system.eventStream.publish(SyntacticallyFailedModification(pmod, e))
             }
           } else {
             requestDownloads(progressInfo)
@@ -159,7 +159,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
           }
         case Failure(e) =>
           log.warn(s"Can`t apply persistent modifier (id: ${pmod.encodedId}, contents: $pmod) to history", e)
-          notifySubscribers(EventType.SyntacticallyFailedPersistentModifier, SyntacticallyFailedModification(pmod, e))
+          context.system.eventStream.publish(SyntacticallyFailedModification(pmod, e))
       }
     } else {
       log.warn(s"Trying to apply modifier ${pmod.encodedId} that's already in history")
