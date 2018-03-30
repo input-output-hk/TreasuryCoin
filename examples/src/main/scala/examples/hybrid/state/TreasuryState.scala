@@ -272,8 +272,12 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     }
   }
 
-  def rollback(to: VersionTag): Try[TreasuryState] = Try {
-    if (to sameElements version) this
+  def rollback(to: VersionTag, history: HybridHistory): Try[TreasuryState] = Try {
+    val posBlockVersion = history.modifierById(ModifierId @@ to).get match {
+      case b: PosBlock => b.id
+      case b: PowBlock => b.prevPosId
+    }
+    if (posBlockVersion sameElements version) this
     else throw new UnsupportedOperationException("Deep rollback is not supported")
   }
 

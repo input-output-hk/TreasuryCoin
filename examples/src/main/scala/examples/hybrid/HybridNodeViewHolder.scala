@@ -141,7 +141,7 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
         TreasuryState.generate(history, progressInfo.toApply.head.id)
       } else if (progressInfo.chainSwitchingNeeded) {
         val branchingPoint = VersionTag @@ progressInfo.branchPoint.get     //todo: .get
-        treasuryState.rollback(branchingPoint).orElse(TreasuryState.generate(history, progressInfo.branchPoint.get))
+        treasuryState.rollback(branchingPoint, history).orElse(TreasuryState.generate(history, progressInfo.branchPoint.get))
       } else Try(treasuryState)
 
     (stateToApplyTry, trStateToApplyTry) match {
@@ -168,8 +168,8 @@ class HybridNodeViewHolder(settings: ScorexSettings, minerSettings: HybridMining
                       case b: PowBlock => b.prevPosId
                       case b: PosBlock => b.parentId
                     }
-                    treasuryState = treasuryState.rollback(VersionTag @@ lastValidMod)
-                      .orElse(TreasuryState.generate(history, lastValidMod))
+                    treasuryState = treasuryState.rollback(VersionTag @@ lastValidMod, u.history)
+                      .orElse(TreasuryState.generate(u.history, lastValidMod))
                       .getOrElse(treasuryState)
                     UpdateInformation(newHis, u.state, u.trState, Some(modToApply), Some(newProgressInfo), u.suffix)
                 }
