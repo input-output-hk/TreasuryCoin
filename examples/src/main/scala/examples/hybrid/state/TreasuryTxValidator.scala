@@ -320,7 +320,10 @@ class TreasuryTxValidator(val trState: TreasuryState,
           DistrKeyGen.checkR3Data(
             t.r3Data,
             memberIdentifier,
-            committeeMembersPubKeys).isSuccess,
+            committeeMembersPubKeys,
+            trState.cs,
+            trState.getDKGr1Data.values.toSeq,
+            trState.getDKGr2Data.values.toSeq).isSuccess,
           s"Incorrect R3 data from member ${t.r3Data.issuerID}"
         )
       case t: DKGr4Transaction =>
@@ -332,6 +335,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
             trState.cs,
             trState.crs_h,
             trState.getDKGr1Data.values.toSeq,
+            trState.getDKGr2Data.values.toSeq,
             trState.getDKGr3Data.values.toSeq).isSuccess,
           s"Incorrect R4 data from member ${t.r4Data.issuerID}"
         )
@@ -342,7 +346,10 @@ class TreasuryTxValidator(val trState: TreasuryState,
             memberIdentifier,
             committeeMembersPubKeys,
             trState.cs,
-            trState.getDKGr1Data.values.toSeq).isSuccess,
+            trState.getDKGr1Data.values.toSeq,
+            trState.getDKGr2Data.values.toSeq,
+            trState.getDKGr3Data.values.toSeq,
+            trState.getDKGr4Data.values.toSeq).isSuccess,
           s"Incorrect R5 data from member ${t.r5_1Data.issuerID}"
         )
     }
