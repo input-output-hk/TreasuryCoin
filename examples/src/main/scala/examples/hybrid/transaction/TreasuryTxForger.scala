@@ -64,7 +64,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
         viewHolderRef ! LocallyGeneratedTransaction[PublicKey25519Proposition, TreasuryTransaction](tx)
       }
 
-    case SuccessfullStateModification =>
+    case ForgeTreasuryTransactions =>
       viewHolderRef ! getRequiredData
   }
 
@@ -376,7 +376,7 @@ object TreasuryTxForger {
 
   case class GeneratorInfo(txs: Seq[TreasuryTransaction])
 
-  case object SuccessfullStateModification
+  case object ForgeTreasuryTransactions
 }
 
 object TreasuryTxForgerRef {
