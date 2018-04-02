@@ -40,7 +40,7 @@ object TreasuryManager {
   val VOTER_DEPOSIT_RANGE = 10 to 1000
   val EXPERT_DEPOSIT_RANGE = 100 to 100 // fixed deposit
   val COMMITTEE_DEPOSIT_RANGE = 100 to 100
-  val DEPOSIT_LOCK_PERIOD = 0 // in epochs
+  val DEPOSIT_LOCK_PERIOD = 1 // should be at least 1 otherwise RandGen penalties should be disabled (cause they are possible only in the next epoch)
   val VOTER_DEPOSIT_ADDR = PublicKey25519Proposition(PublicKey @@ Array.fill[Byte](Curve25519.KeyLength)(0.toByte)) // actually it's a proof of burn address
   val COMMITTEE_DEPOSIT_ADDR = PublicKey25519Proposition(PublicKey @@ Array.fill[Byte](Curve25519.KeyLength)(1.toByte)) // actually it's a proof of burn address
 
