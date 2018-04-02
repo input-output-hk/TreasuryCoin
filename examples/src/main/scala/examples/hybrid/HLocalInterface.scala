@@ -3,11 +3,11 @@ package examples.hybrid
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.settings.HybridMiningSettings
-import examples.hybrid.state.CommitteeMember.HistoryModified
+import examples.hybrid.state.CommitteeMember.StateModified
 import examples.hybrid.state.CommitteeMember
-import examples.hybrid.transaction.TreasuryTxForger.SuccessfullStateModification
+import examples.hybrid.transaction.TreasuryTxForger.ForgeTreasuryTransactions
 import scorex.core.network.NodeViewSynchronizer.Events.{BetterNeighbourAppeared, NoBetterNeighbour, NodeViewSynchronizerEvent}
-import scorex.core.network.NodeViewSynchronizer.ReceivableMessages.{NodeViewHolderEvent, RollbackFailed, SemanticallySuccessfulModifier}
+import scorex.core.network.NodeViewSynchronizer.ReceivableMessages.{ChangedState, NodeViewHolderEvent, RollbackFailed, SemanticallySuccessfulModifier}
 import scorex.core.utils.ScorexLogging
 
 class HLocalInterface(viewHolderRef: ActorRef,
@@ -44,11 +44,6 @@ class HLocalInterface(viewHolderRef: ActorRef,
               posForgerRef ! StopForging
               powMinerRef ! StartMining
             }
-            treasuryTxsForgerRef ! SuccessfullStateModification
-            CommitteeMember.getMember(viewHolderRef) match {
-              case Some(cm) => cm ! HistoryModified
-              case None =>
-            }
         }
       }
     }
@@ -62,6 +57,13 @@ class HLocalInterface(viewHolderRef: ActorRef,
       powMinerRef ! StopMining
       posForgerRef ! StopForging
       block = true
+
+    case ChangedState(_) =>
+      treasuryTxsForgerRef ! ForgeTreasuryTransactions
+      CommitteeMember.getMember(viewHolderRef) match {
+        case Some(cm) => cm ! StateModified
+        case None =>
+      }
   }
 }
 

@@ -155,12 +155,14 @@ class HybridNodeViewHolder(settings: ScorexSettings,
               case Success(trStateAfterApply) =>
                 u.state.applyModifier(modToApply) match {
                   case Success(stateAfterApply) =>
+                    log.info(s"Successfull modifier: ${modToApply.encodedId}")
                     val newHis = history.reportModifierIsValid(modToApply)
                     context.system.eventStream.publish(SemanticallySuccessfulModifier(modToApply))
                     //updateState(newHis, stateAfterApply, newProgressInfo, suffixTrimmed :+ modToApply)
                     treasuryState = trStateAfterApply
                     UpdateInformation(newHis, stateAfterApply, trStateAfterApply, None, None, u.suffix :+ modToApply)
                   case Failure(e) =>
+                    log.error("Invalid modifier for HBoxStoreState", e)
                     val (newHis, newProgressInfo) = history.reportModifierIsInvalid(modToApply, progressInfo)
                     context.system.eventStream.publish(SemanticallyFailedModification(modToApply, e))
                     //updateState(newHis, stateToApply, newProgressInfo, suffixTrimmed)
@@ -174,6 +176,7 @@ class HybridNodeViewHolder(settings: ScorexSettings,
                     UpdateInformation(newHis, u.state, u.trState, Some(modToApply), Some(newProgressInfo), u.suffix)
                 }
               case Failure(e) =>
+                log.error("Invalid modifier for TreasuryState", e)
                 val (newHis, newProgressInfo) = history.reportModifierIsInvalid(modToApply, progressInfo)
                 context.system.eventStream.publish(SemanticallyFailedModification(modToApply, e))
                 //updateState(newHis, stateToApply, newProgressInfo, suffixTrimmed)

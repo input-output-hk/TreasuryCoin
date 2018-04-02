@@ -7,7 +7,7 @@ import examples.hybrid.HybridNodeViewHolder.{CurrentViewWithTreasuryState, GetDa
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager._
 import examples.hybrid.history.HybridHistory
-import examples.hybrid.state.CommitteeMember.{HistoryModified, TxInfo}
+import examples.hybrid.state.CommitteeMember.{StateModified, TxInfo}
 import examples.hybrid.transaction.DKG._
 import examples.hybrid.transaction._
 import examples.hybrid.wallet.HWallet
@@ -57,7 +57,7 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
           log.info(s"Hasn't generated tx")
       }
 
-    case HistoryModified => viewHolderRef ! getTransaction
+    case StateModified => viewHolderRef ! getTransaction
   }
 
   def roundDataIsPosted(roundNum: Int, view: NodeView): Boolean = {
@@ -517,7 +517,7 @@ object CommitteeMember {
 
   case class TxInfo(tx: Option[TreasuryTransaction])
 
-  case object HistoryModified
+  case object StateModified
 
   private var committeeMember: Option[ActorRef] = None
   implicit val system = ActorSystem()
