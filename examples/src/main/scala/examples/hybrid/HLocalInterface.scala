@@ -49,7 +49,7 @@ class HLocalInterface(override val viewHolderRef: ActorRef,
 
   override def onChangedHistory(r: HistoryReader[_ <: PersistentNodeViewModifier, _ <: SyncInfo]): Unit = {
 
-    CommitteeMember.manage(viewHolderRef) match {
+    CommitteeMember.getMember(viewHolderRef) match {
       case Some(cm) => cm ! HistoryModified
       case None =>
     }

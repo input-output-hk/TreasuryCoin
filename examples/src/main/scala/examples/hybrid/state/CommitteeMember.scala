@@ -522,23 +522,12 @@ object CommitteeMember {
   private var committeeMember: Option[ActorRef] = None
   implicit val system = ActorSystem()
 
-  def manage(viewHolderRef: ActorRef): Option[ActorRef] = {
+  def getMember(viewHolderRef: ActorRef): Option[ActorRef] = {
+    dispatchMember(viewHolderRef)
+    committeeMember.synchronized(committeeMember)
+  }
 
-    def getCurrentView: Try[NodeView] = Try {
-
-      def f(view: NodeView): NodeView = view
-
-      import akka.pattern.ask
-      import scala.concurrent.duration._
-
-      implicit val duration: Timeout = 20 seconds
-
-      Await.result(viewHolderRef ? GetDataFromCurrentViewWithTreasuryState[HybridHistory,
-        HBoxStoredState,
-        HWallet,
-        SimpleBoxTransactionMemPool,
-        NodeView](f), 5.seconds).asInstanceOf[NodeView]
-    }
+  private def dispatchMember(viewHolderRef: ActorRef): Unit = {
 
     def isRegisteredAsCommitteeMember(view: NodeView): Boolean = {
 
@@ -552,32 +541,45 @@ object CommitteeMember {
       }
     }
 
-    val currentView = getCurrentView
+    def f(view: NodeView): NodeView = view
 
-    import examples.hybrid.TreasuryManager._
-    val epochHeight = currentView.get.history.height % TreasuryManager.EPOCH_LEN
+    import akka.pattern.ask
+    import scala.concurrent.duration._
 
-    println(s"epochHeight: ${epochHeight}")
+    implicit val duration: Timeout = 20.seconds
 
-    if (currentView.isSuccess &&
-        isRegisteredAsCommitteeMember(currentView.get)) {
+    import scala.concurrent._
+    import ExecutionContext.Implicits.global
 
-      val history = currentView.get.history
+    (viewHolderRef ? GetDataFromCurrentViewWithTreasuryState[HybridHistory,
+      HBoxStoredState,
+      HWallet,
+      SimpleBoxTransactionMemPool,
+      NodeView](f)).onComplete {
+      case Success(v) =>
+        val view = v.asInstanceOf[NodeView]
+        println(s"epochHeight: ${view.history.height % TreasuryManager.EPOCH_LEN}")
+        if (isRegisteredAsCommitteeMember(view)){
+          startOrStopMember(view, viewHolderRef)
+        }
+      case _ =>
+    }
+  }
 
-//      import examples.hybrid.TreasuryManager._
-//      val epochHeight = history.height % TreasuryManager.EPOCH_LEN
-//
-//      println(s"epochHeight: ${epochHeight}")
+  private def startOrStopMember(view: NodeView, viewHolderRef: ActorRef): Unit = {
 
-      if (epochHeight >= DISTR_KEY_GEN_R1_RANGE.start &&
-          epochHeight <  PAYMENT_BLOCK_HEIGHT) {
+    // This code can be executed asynchronously, so synchronization for the shared object committeeMember is needed
+    committeeMember.synchronized {
+      val history = view.history
+      val epochHeight = history.height % TreasuryManager.EPOCH_LEN
 
+      if (epochHeight >= DISTR_KEY_GEN_R1_RANGE.start && // epochHeight <  PAYMENT_BLOCK_HEIGHT
+          epochHeight <  DISTR_KEY_GEN_R5_RANGE.end) {
         committeeMember match {
           case None => committeeMember = Some(CommitteeMemberRef(viewHolderRef))
           case Some(_) =>
         }
       } else {
-
         committeeMember match {
           case Some(cm) =>
             cm ! PoisonPill
@@ -586,15 +588,16 @@ object CommitteeMember {
         }
       }
     }
-    committeeMember
   }
 
-  def stopMember(): Unit ={
-    committeeMember match {
-      case Some(cm) =>
-        system.stop(cm)
-        committeeMember = None
-      case None =>
+  def stopMember(): Unit = {
+    committeeMember.synchronized {
+      committeeMember match {
+        case Some(cm) =>
+          system.stop(cm)
+          committeeMember = None
+        case None =>
+      }
     }
   }
 }
