@@ -45,7 +45,7 @@ class HLocalInterface(viewHolderRef: ActorRef,
               powMinerRef ! StartMining
             }
             treasuryTxsForgerRef ! SuccessfullStateModification
-            CommitteeMember.manage(viewHolderRef) match {
+            CommitteeMember.getMember(viewHolderRef) match {
               case Some(cm) => cm ! HistoryModified
               case None =>
             }
