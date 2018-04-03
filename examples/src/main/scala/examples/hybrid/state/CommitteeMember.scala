@@ -561,8 +561,12 @@ object CommitteeMember {
         println(s"epochHeight: ${view.history.height % TreasuryManager.EPOCH_LEN}")
         if (isRegisteredAsCommitteeMember(view)){
           startOrStopMember(view, viewHolderRef)
+        } else {
+          println("Isn't registered as a Committee Member")
         }
-      case _ =>
+      case Failure(e) =>
+        println("Node View wasn't obtained")
+        e.printStackTrace()
     }
   }
 
