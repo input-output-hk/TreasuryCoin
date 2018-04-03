@@ -12,7 +12,7 @@ import scorex.crypto.hash.Sha256
 
 import scala.util.Failure
 
-//TODO: why to use IODB if there's no rollback?
+//TODO: why we are using IODB if there's no rollback?
 class HistoryStorage(storage: LSMStore,
                      settings: HybridMiningSettings) extends ScorexLogging {
 
@@ -134,7 +134,7 @@ class HistoryStorage(storage: LSMStore,
   def getPoSDifficulty(id: ModifierId): BigInt = if (id sameElements settings.GenesisParentId) {
     PosForger.InitialDifficuly
   } else {
-    BigInt(1, storage.get(blockDiffKey(id, isPos = true)).get.data)
+    BigInt(storage.get(blockDiffKey(id, isPos = true)).get.data)
   }
 
   def parentHeight(b: HybridBlock): Long = heightOf(parentId(b)).getOrElse(0L)

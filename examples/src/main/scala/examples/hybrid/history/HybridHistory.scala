@@ -276,7 +276,7 @@ class HybridHistory(val storage: HistoryStorage,
     chainBack(bestBlock, inList) match {
       case Some(chain) if chain.exists(id => idInList(id._2)) => Some(chain.take(size))
       case Some(_) =>
-        log.warn("Found chain without ids form remote")
+        log.warn("Found chain without ids from remote")
         None
       case _ => None
     }
@@ -489,6 +489,7 @@ class HybridHistory(val storage: HistoryStorage,
 
   override def reportModifierIsValid(modifier: HybridBlock): HybridHistory = {
     storage.updateValidity(modifier, Valid)
+    storage.update(modifier, None, isBest = true)
 
     new HybridHistory(storage, settings, validators, statsLogger, timeProvider)
   }
