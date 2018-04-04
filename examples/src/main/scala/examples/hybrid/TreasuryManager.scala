@@ -9,25 +9,45 @@ object TreasuryManager {
   val cs = new Cryptosystem
 
   /* Intervals of an epoch stages in blocks (both Pos/Pow). All numbers should be even. */
-  val EPOCH_LEN =                             186
-  val PROPOSAL_SUBMISSION_RANGE =             4 until 20
-  val VOTER_REGISTER_RANGE =                  4 until 14
-  val EXPERT_REGISTER_RANGE =                 14 until 24
-  val RANDOMNESS_DECRYPTION_RANGE =           24 until 34
-  val RANDOMNESS_DECRYPTION_RECOVERY_RANGE =  34 until 44
-  val DISTR_KEY_GEN_R1_RANGE =                44 until 56
-  val DISTR_KEY_GEN_R2_RANGE =                56 until 68
-  val DISTR_KEY_GEN_R3_RANGE =                68 until 80
-  val DISTR_KEY_GEN_R4_RANGE =                80 until 92
-  val DISTR_KEY_GEN_R5_RANGE =                92 until 104
-  val VOTING_RANGE =                          104 until 120
-  val VOTING_DECRYPTION_R1_RANGE =            120 until 132
-  val VOTING_DECRYPTION_R1_RECOVERY_RANGE =   132 until 144
-  val VOTING_DECRYPTION_R2_RANGE =            144 until 156
-  val VOTING_DECRYPTION_R2_RECOVERY_RANGE =   156 until 168
-  val RANDOMNESS_SUBMISSION_RANGE =           168 until 180
-  val PENALTY_BLOCK_HEIGHT =                  182
-  val PAYMENT_BLOCK_HEIGHT =                  184
+  val EPOCH_LEN =                             500
+  val PROPOSAL_SUBMISSION_RANGE =             10 until 70
+  val VOTER_REGISTER_RANGE =                  10 until 40
+  val EXPERT_REGISTER_RANGE =                 40 until 70
+  val RANDOMNESS_DECRYPTION_RANGE =           70 until 100
+  val RANDOMNESS_DECRYPTION_RECOVERY_RANGE =  100 until 130
+  val DISTR_KEY_GEN_R1_RANGE =                130 until 160
+  val DISTR_KEY_GEN_R2_RANGE =                160 until 190
+  val DISTR_KEY_GEN_R3_RANGE =                190 until 220
+  val DISTR_KEY_GEN_R4_RANGE =                220 until 250
+  val DISTR_KEY_GEN_R5_RANGE =                250 until 280
+  val VOTING_RANGE =                          280 until 330
+  val VOTING_DECRYPTION_R1_RANGE =            330 until 360
+  val VOTING_DECRYPTION_R1_RECOVERY_RANGE =   360 until 390
+  val VOTING_DECRYPTION_R2_RANGE =            390 until 420
+  val VOTING_DECRYPTION_R2_RECOVERY_RANGE =   420 until 450
+  val RANDOMNESS_SUBMISSION_RANGE =           450 until 480
+  val PENALTY_BLOCK_HEIGHT =                  484
+  val PAYMENT_BLOCK_HEIGHT =                  488
+
+//  val EPOCH_LEN =                             186
+//  val PROPOSAL_SUBMISSION_RANGE =             4 until 20
+//  val VOTER_REGISTER_RANGE =                  4 until 14
+//  val EXPERT_REGISTER_RANGE =                 14 until 24
+//  val RANDOMNESS_DECRYPTION_RANGE =           24 until 34
+//  val RANDOMNESS_DECRYPTION_RECOVERY_RANGE =  34 until 44
+//  val DISTR_KEY_GEN_R1_RANGE =                44 until 56
+//  val DISTR_KEY_GEN_R2_RANGE =                56 until 68
+//  val DISTR_KEY_GEN_R3_RANGE =                68 until 80
+//  val DISTR_KEY_GEN_R4_RANGE =                80 until 92
+//  val DISTR_KEY_GEN_R5_RANGE =                92 until 104
+//  val VOTING_RANGE =                          104 until 120
+//  val VOTING_DECRYPTION_R1_RANGE =            120 until 132
+//  val VOTING_DECRYPTION_R1_RECOVERY_RANGE =   132 until 144
+//  val VOTING_DECRYPTION_R2_RANGE =            144 until 156
+//  val VOTING_DECRYPTION_R2_RECOVERY_RANGE =   156 until 168
+//  val RANDOMNESS_SUBMISSION_RANGE =           168 until 180
+//  val PENALTY_BLOCK_HEIGHT =                  182
+//  val PAYMENT_BLOCK_HEIGHT =                  184
 
   /* Constants related to reward distribution */
   val BUDGET =               1000

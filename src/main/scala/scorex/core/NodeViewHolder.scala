@@ -316,6 +316,7 @@ trait NodeViewHolder[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
                 context.system.eventStream.publish(SemanticallyFailedModification(pmod, e))
             }
           } else {
+            log.info("Request downloads ...")
             requestDownloads(progressInfo)
             updateNodeView(updatedHistory = Some(historyBeforeStUpdate))
           }

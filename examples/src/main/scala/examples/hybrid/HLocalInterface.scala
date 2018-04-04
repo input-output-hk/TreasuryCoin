@@ -59,10 +59,12 @@ class HLocalInterface(viewHolderRef: ActorRef,
       block = true
 
     case ChangedState(_) =>
-      treasuryTxsForgerRef ! ForgeTreasuryTransactions
-      CommitteeMember.getMember(viewHolderRef) match {
-        case Some(cm) => cm ! StateModified
-        case None =>
+      if (!block) {
+        treasuryTxsForgerRef ! ForgeTreasuryTransactions
+        CommitteeMember.getMember(viewHolderRef) match {
+          case Some(cm) => cm ! StateModified
+          case None =>
+        }
       }
   }
 }
