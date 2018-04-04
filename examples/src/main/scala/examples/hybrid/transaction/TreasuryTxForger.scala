@@ -173,11 +173,11 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
           val c1Shares = view.trState.getProposals.indices.map { i =>
             val ballots = view.trState.getExpertBallotsForProposal(i) ++ view.trState.getVoterBallotsForProposal(i)
             val manager = new DecryptionManager(TreasuryManager.cs, ballots)
-            manager.decryptC1ForDelegations(id, i, proxySecret.privKey)
+            manager.decryptC1ForDelegations(id, i, proxySecret.secretKey)
           }
 
           val tx = DecryptionShareTransaction.create(signingSecret.privKey, DecryptionRound.R1, c1Shares, view.trState.epochNum).get
-          val valid = Try(new TreasuryTxValidator(view.trState, view.history.height + 1)).flatMap(_.validate(tx))
+          val valid = Try(new TreasuryTxValidator(view.trState, view.history.height + 1, Some(view.history))).flatMap(_.validate(tx))
           if(valid.isSuccess) Seq(tx) else Seq()
         } else Seq()
       } else Seq()
@@ -235,11 +235,11 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
           val c1Shares = view.trState.getProposals.indices.map { i =>
             val ballots = view.trState.getExpertBallotsForProposal(i) ++ view.trState.getVoterBallotsForProposal(i)
             val manager = new DecryptionManager(TreasuryManager.cs, ballots)
-            manager.decryptC1ForChoices(id, i, proxySecret.privKey, view.trState.getDelegations.get(i))
+            manager.decryptC1ForChoices(id, i, proxySecret.secretKey, view.trState.getDelegations.get(i))
           }
 
           val tx = DecryptionShareTransaction.create(signingSecret.privKey, DecryptionRound.R2, c1Shares, view.trState.epochNum).get
-          val valid = Try(new TreasuryTxValidator(view.trState, view.history.height + 1)).flatMap(_.validate(tx))
+          val valid = Try(new TreasuryTxValidator(view.trState, view.history.height + 1, Some(view.history))).flatMap(_.validate(tx))
           if(valid.isSuccess) Seq(tx) else Seq()
         } else Seq()
       } else Seq()
@@ -257,8 +257,9 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
       }.isDefined
 
       if (!pending) {
-        val seed = RandomnessGenManager.getRand(TreasuryManager.cs, proxySecret.privKey.toByteArray)
-        val encryptedSeed = RandomnessGenManager.encryptRandomnessShare(TreasuryManager.cs, proxySecret.pubKey, seed)
+        val seed = RandomnessGenManager.getRand(TreasuryManager.cs, proxySecret.secretKey.toByteArray)
+        val pubKey = TreasuryManager.cs.basePoint.multiply(proxySecret.secretKey)
+        val encryptedSeed = RandomnessGenManager.encryptRandomnessShare(TreasuryManager.cs, pubKey, seed)
 
         val tx = RandomnessTransaction.create(signingSecret.privKey, encryptedSeed, view.trState.epochNum).get
         val valid = Try(new TreasuryTxValidator(view.trState, view.history.height + 1, Some(view.history))).flatMap(_.validate(tx))
@@ -289,7 +290,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
         val myEncryptedRandomness = randomnessSubmissionOpt.flatMap(_.find(_._1 == mySigningPubKey))
         if (myEncryptedRandomness.isDefined) {
           val decryptedRandomness = RandomnessGenManager.decryptRandomnessShare(
-            TreasuryManager.cs, proxySecret.privKey, myEncryptedRandomness.get._2)
+            TreasuryManager.cs, proxySecret.secretKey, myEncryptedRandomness.get._2)
 
           val tx = RandomnessDecryptionTransaction.create(signingSecret.privKey, decryptedRandomness, view.trState.epochNum).get
           val valid = Try(new TreasuryTxValidator(view.trState, view.history.height + 1, Some(view.history))).flatMap(_.validate(tx))

@@ -151,7 +151,8 @@ case class HWallet(seed: ByteStr, store: LSMStore, treasuryStore: LSMStore)
   def generateNewTreasuryCommitteeSecret(epochId: Long): PubKey = {
     val prevTrSecrets = treasurySecrets(epochId)
     val (priv, pub) = TreasuryManager.cs.createKeyPair // TODO: keys should be generated from on a particular seed that includes role,epochId,nonce
-    val newTrSecret = TreasuryCommitteeSecret(priv, pub, epochId)
+    val secretKey = TreasuryManager.cs.getRand
+    val newTrSecret = TreasuryCommitteeSecret(priv, pub, secretKey, epochId)
     val allTrSecrets: Set[TreasurySecret] = Set(newTrSecret) ++ prevTrSecrets
     treasuryStore.update(ByteArrayWrapper(priv.toByteArray),
       Seq(),

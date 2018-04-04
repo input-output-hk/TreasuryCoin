@@ -43,11 +43,12 @@ case class TreasurySigningSecret(role: Role, privKey: PrivateKey25519, override 
   * Committee secret is a pair of keys that is used by committee member to maintain voting procedure. These keys are used for
   * distributed key generation, tally and etc. They could also be referred as "proxy key" throughout the documentation.
   * The public key of the pair is registered with a special CommitteeRegistrationTransaction at the beginning of each epoch.
-  * @param privKey A private key provided by treasury-crypto library
-  * @param pubKey A public key provided by treasury-crypto library
-  * @param epochId
+  * @param privKey A private key (from transport key-pair) provided by treasury-crypto library
+  * @param pubKey A public key (from transport key-pair) provided by treasury-crypto library
+  * @param secretKey A secret key, which should be used for a shared public key generation in the DKG protocol
+  * @param epochId ID of an epoch, in which the specified set of keys should be used
   */
-case class TreasuryCommitteeSecret(privKey: PrivKey, pubKey: PubKey, override val epochId: Long) extends TreasurySecret {
+case class TreasuryCommitteeSecret(privKey: PrivKey, pubKey: PubKey, secretKey: PrivKey, override val epochId: Long) extends TreasurySecret {
   override val secretType = Type.CommitteeSecret
 }
 
@@ -91,22 +92,31 @@ object TreasuryCommitteeSecretSerializer extends Serializer[TreasuryCommitteeSec
   def toBytes(s: TreasuryCommitteeSecret): Array[Byte] = {
     val privBytes = s.privKey.toByteArray
     val pubBytes = s.pubKey.getEncoded(true)
+    val secretBytes = s.secretKey.toByteArray
     Bytes.concat(
       Longs.toByteArray(s.epochId),
       Ints.toByteArray(privBytes.length),
       privBytes,
       Ints.toByteArray(pubBytes.length),
-      pubBytes)
+      pubBytes,
+      Ints.toByteArray(secretBytes.length),
+      secretBytes)
   }
 
   def parseBytes(bytes: Array[Byte]): Try[TreasuryCommitteeSecret] = Try {
-    val epochID = Longs.fromByteArray(bytes.slice(0,8))
-    val privSize = Ints.fromByteArray(bytes.slice(8,12))
-    val privKey = new PrivKey(bytes.slice(12,privSize+12))
-    val pubSize = Ints.fromByteArray(bytes.slice(privSize+12,privSize+16))
-    val pubKey = TreasuryManager.cs.decodePoint(bytes.slice(privSize+16,privSize+16+pubSize))
 
-    TreasuryCommitteeSecret(privKey, pubKey, epochID)
+    var offset = 0
+    def offsetPlus (i: Int): Int = { offset += i; offset }
+
+    val epochID    = Longs.fromByteArray(bytes.slice(offset, offsetPlus(8)))
+    val privSize   = Ints.fromByteArray (bytes.slice(offset, offsetPlus(4)))
+    val privKey    = new PrivKey        (bytes.slice(offset, offsetPlus(privSize)))
+    val pubSize    = Ints.fromByteArray (bytes.slice(offset, offsetPlus(4)))
+    val pubKey     = TreasuryManager.cs.decodePoint(bytes.slice(offset, offsetPlus(pubSize)))
+    val secretSize = Ints.fromByteArray (bytes.slice(offset, offsetPlus(4)))
+    val secretKey  = new PrivKey        (bytes.slice(offset, offsetPlus(secretSize)))
+
+    TreasuryCommitteeSecret(privKey, pubKey, secretKey, epochID)
   }
 }
 

@@ -16,7 +16,7 @@ import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.transaction.state.PrivateKey25519
 import scorex.core.utils.ScorexLogging
 import scorex.crypto.encode.Base58
-import treasury.crypto.core.{KeyPair, PubKey, SimpleIdentifier}
+import treasury.crypto.core.{KeyPair, PrivKey, PubKey, SimpleIdentifier}
 import treasury.crypto.keygen.datastructures.round1.R1Data
 import treasury.crypto.keygen.datastructures.round2.R2Data
 import treasury.crypto.keygen.datastructures.round3.R3Data
@@ -300,7 +300,8 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
   }
 
   private var dkgOpt: Option[DistrKeyGen] = None
-  private var ownKeyPairOpt: Option[KeyPair] = None
+  private var ownSecretKeyOpt: Option[PrivKey] = None   // secret key
+  private var ownKeyPairOpt: Option[KeyPair] = None     // transport key-pair
   private var ownSigningKeyPairOpt: Option[PrivateKey25519] = None
   private var sharedPublicKeyOpt: Option[PubKey] = None
   private var dkgViolatorsSecretKeys: Option[Array[SecretKey]] = None
@@ -322,7 +323,9 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
     }
 
     ownKeyPairOpt = view.vault.treasuryCommitteeSecrets(view.trState.epochNum) match {
-      case keyPair if keyPair.nonEmpty => Some(keyPair.head.privKey, keyPair.head.pubKey)
+      case keyPair if keyPair.nonEmpty =>
+        ownSecretKeyOpt = Some(keyPair.head.secretKey)
+        Some(keyPair.head.privKey, keyPair.head.pubKey)
       case _ => None
     }
 
@@ -336,7 +339,7 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
               new DistrKeyGen(cs,
                 crs_h,
                 (ownKeyPair._1, ownKeyPair._2),
-                ownKeyPair._1, // Use transport private key also as own secret key in DKG protocol
+                ownSecretKeyOpt.get, // ownSecretKeyOpt always initializes together with ownKeyPairOpt
                 committeeMembersPubKeys,
                 memberIdentifier,
                 roundsData)
@@ -562,10 +565,10 @@ object CommitteeMember {
         if (isRegisteredAsCommitteeMember(view)){
           startOrStopMember(view, viewHolderRef)
         } else {
-          println("Isn't registered as a Committee Member")
+          println("CommitteeMember: dispatchMember: Isn't registered as a Committee Member")
         }
       case Failure(e) =>
-        println("Node View wasn't obtained")
+        println("CommitteeMember: dispatchMember: Node View wasn't obtained")
         e.printStackTrace()
     }
   }

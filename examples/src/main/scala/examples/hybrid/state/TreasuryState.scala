@@ -324,14 +324,14 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   private def recoverRandomness(history: HybridHistory): Unit = Try {
     val prevCommittee = TreasuryState.generatePartiesInfo(history, epochNum - 1).get._3.filter(_.approved)
-    val randomnessSubmisstion = TreasuryState.generateRandomnessSubmission(history, epochNum - 1).get
+    val randomnessSubmission = TreasuryState.generateRandomnessSubmission(history, epochNum - 1).get
 
     keyRecoverySharesRandGen.foreach { s =>
       val violatorInfo = prevCommittee(s._1)
-      val privKeyOpt = DistrKeyGen.recoverPrivateKeyByOpenedShares(cs, prevCommittee.size, s._2, Some(violatorInfo.proxyKey))
+      val privKeyOpt = DistrKeyGen.recoverPrivateKeyByOpenedShares(cs, prevCommittee.size, s._2)
       privKeyOpt match {
         case Success(privKey) =>
-          val encryptedRandomness = randomnessSubmisstion.find(_._1 == violatorInfo.signingKey).get._2
+          val encryptedRandomness = randomnessSubmission.find(_._1 == violatorInfo.signingKey).get._2
           recoveredRandomness +:= RandomnessGenManager.decryptRandomnessShare(TreasuryManager.cs, privKey, encryptedRandomness).randomness
         case Failure(e) => log.error("Failed key recovery", e)
       }
@@ -374,10 +374,12 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
           getDKGr5Data.values.toSeq
         )
         DistrKeyGen.getSharedPublicKey(cs, committeeMembersPubKeys, memberIdentifier, roundsData) match {
-          case Success(sharedPubKey) =>
-            sharedPublicKey = Some(cs.decodePoint(sharedPubKey))
-            log.info(s"Shared public key is: ${Base58.encode(sharedPublicKey.get.getEncoded(true))}")
-
+          case Success(sharedPubKeyEncoded) =>
+            val sharedPubKey = cs.decodePoint(sharedPubKeyEncoded)
+            if (!sharedPubKey.equals(cs.infinityPoint)){
+              sharedPublicKey = Some(sharedPubKey)
+              log.info(s"Shared public key is: ${Base58.encode(sharedPublicKey.get.getEncoded(true))}")
+            }
           case Failure(e) => log.error(e.getMessage)
         }
       } else log.warn("No committee members found!")
@@ -612,6 +614,36 @@ object TreasuryState {
       }
     }
     r1Data
+  }
+
+  /**
+    * Recovers info about R3Data submissions for old epochs.
+    * It is done by parsing R3Data blocks for the required epoch.
+    *
+    * @param history history
+    * @param epochId epochid
+    * @return Success(seq) where seq is a sequence of R3Data
+    */
+  def generateR3Data(history: HybridHistory, epochId: Int): Try[Seq[R3Data]] = Try {
+    val currentHeight = history.storage.height.toInt
+    val currentEpochNum = currentHeight / TreasuryManager.EPOCH_LEN
+    val currentEpochHeight = currentHeight % TreasuryManager.EPOCH_LEN
+    require(epochId >= 0 && epochId < currentEpochNum, "R3Data can be generated only for past epochs. Use getR3Data methods directly for the current epoch.")
+
+    val count = (currentEpochNum - epochId) * TreasuryManager.EPOCH_LEN + currentEpochHeight + 1
+    // we should take all R3Data blocks
+    val epochBlocksIds = history.lastBlockIds(history.bestBlock, count)
+      .take(TreasuryManager.DISTR_KEY_GEN_R3_RANGE.end)
+      .drop(TreasuryManager.DISTR_KEY_GEN_R3_RANGE.start)
+
+    /* extract R3Data */
+    var r3Data: Seq[R3Data] = Seq()
+    epochBlocksIds.foreach { blockId =>
+      history.modifierById(blockId).get.transactions.collect {case t: DKGr3Transaction => t}.foreach { t =>
+        r3Data :+= t.r3Data
+      }
+    }
+    r3Data
   }
 
   /**
