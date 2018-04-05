@@ -9,25 +9,25 @@ object TreasuryManager {
   val cs = new Cryptosystem
 
   /* Intervals of an epoch stages in blocks (both Pos/Pow). All numbers should be even. */
-  val EPOCH_LEN =                             500
+  val EPOCH_LEN =                             780
   val PROPOSAL_SUBMISSION_RANGE =             10 until 70
-  val VOTER_REGISTER_RANGE =                  10 until 40
-  val EXPERT_REGISTER_RANGE =                 40 until 70
-  val RANDOMNESS_DECRYPTION_RANGE =           70 until 100
-  val RANDOMNESS_DECRYPTION_RECOVERY_RANGE =  100 until 130
-  val DISTR_KEY_GEN_R1_RANGE =                130 until 160
-  val DISTR_KEY_GEN_R2_RANGE =                160 until 190
-  val DISTR_KEY_GEN_R3_RANGE =                190 until 220
-  val DISTR_KEY_GEN_R4_RANGE =                220 until 250
-  val DISTR_KEY_GEN_R5_RANGE =                250 until 280
-  val VOTING_RANGE =                          280 until 330
-  val VOTING_DECRYPTION_R1_RANGE =            330 until 360
-  val VOTING_DECRYPTION_R1_RECOVERY_RANGE =   360 until 390
-  val VOTING_DECRYPTION_R2_RANGE =            390 until 420
-  val VOTING_DECRYPTION_R2_RECOVERY_RANGE =   420 until 450
-  val RANDOMNESS_SUBMISSION_RANGE =           450 until 480
-  val PENALTY_BLOCK_HEIGHT =                  484
-  val PAYMENT_BLOCK_HEIGHT =                  488
+  val VOTER_REGISTER_RANGE =                  10 until 60
+  val EXPERT_REGISTER_RANGE =                 60 until 110
+  val RANDOMNESS_DECRYPTION_RANGE =           110 until 160
+  val RANDOMNESS_DECRYPTION_RECOVERY_RANGE =  160 until 210
+  val DISTR_KEY_GEN_R1_RANGE =                210 until 260
+  val DISTR_KEY_GEN_R2_RANGE =                260 until 310
+  val DISTR_KEY_GEN_R3_RANGE =                310 until 360
+  val DISTR_KEY_GEN_R4_RANGE =                360 until 410
+  val DISTR_KEY_GEN_R5_RANGE =                410 until 460
+  val VOTING_RANGE =                          460 until 510
+  val VOTING_DECRYPTION_R1_RANGE =            510 until 560
+  val VOTING_DECRYPTION_R1_RECOVERY_RANGE =   560 until 610
+  val VOTING_DECRYPTION_R2_RANGE =            610 until 660
+  val VOTING_DECRYPTION_R2_RECOVERY_RANGE =   660 until 710
+  val RANDOMNESS_SUBMISSION_RANGE =           710 until 760
+  val PENALTY_BLOCK_HEIGHT =                  764
+  val PAYMENT_BLOCK_HEIGHT =                  768
 
 //  val EPOCH_LEN =                             186
 //  val PROPOSAL_SUBMISSION_RANGE =             4 until 20
