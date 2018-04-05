@@ -83,18 +83,24 @@ class HWalletSpecification extends PropSpec
   property("Treasury secrets serialization works correctly") {
     val s = w.generateNewTreasurySigningSecret(Role.Voter, 12)
     val (priv2, pub2) = TreasuryManager.cs.createKeyPair
+    val secretKey = TreasuryManager.cs.getRand
     val secrets = List(
       TreasurySigningSecret(Role.Voter, w.treasurySigningSecretByPubKey(12, s).get.privKey, 12),
-      TreasuryCommitteeSecret(priv2, pub2, 12)
+      TreasuryCommitteeSecret(priv2, pub2, secretKey, 12)
     )
 
     val bytes = TreasurySecretSerializer.batchToBytes(secrets)
     val parsedSecrets = TreasurySecretSerializer.parseBatch(bytes)
 
     parsedSecrets.length shouldBe 2
+
     parsedSecrets(0).isInstanceOf[TreasurySigningSecret] shouldBe true
     parsedSecrets(1).isInstanceOf[TreasuryCommitteeSecret] shouldBe true
+
     parsedSecrets(0).asInstanceOf[TreasurySigningSecret].privKey.publicImage.equals(s) shouldBe true
+    parsedSecrets(1).asInstanceOf[TreasuryCommitteeSecret].secretKey.equals(secretKey) shouldBe true
+    parsedSecrets(1).asInstanceOf[TreasuryCommitteeSecret].privKey.equals(priv2) shouldBe true
+    parsedSecrets(1).asInstanceOf[TreasuryCommitteeSecret].pubKey.equals(pub2) shouldBe true
   }
 
   property("Wallet should generate new treasury keys") {

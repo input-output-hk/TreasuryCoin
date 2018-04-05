@@ -12,9 +12,10 @@ import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
 import examples.hybrid.transaction.RecoveryShareTransaction.RecoveryRound
 import examples.hybrid.transaction._
 import scorex.core.utils.ScorexLogging
-import treasury.crypto.core.SimpleIdentifier
+import treasury.crypto.core.{PubKey, SimpleIdentifier}
 import treasury.crypto.decryption.{DecryptionManager, RandomnessGenManager}
 import treasury.crypto.keygen.DistrKeyGen
+import treasury.crypto.keygen.datastructures.round3.R3Data
 import treasury.crypto.voting.ballots.{ExpertBallot, VoterBallot}
 import treasury.crypto.voting.{Expert, RegularVoter, Voter}
 
@@ -165,6 +166,12 @@ class TreasuryTxValidator(val trState: TreasuryState,
     }
   }
 
+  def getPubKeyInCurrentEpoch(memberId: Int): Try[PubKey] = Try {
+    val r3Data = trState.getDKGr3Data.values.find(_.issuerID == memberId)
+    require(r3Data.isDefined, "Committee member hasn't posted R3 data in current epoch")
+    TreasuryManager.cs.decodePoint(r3Data.get.commitments.head)
+  }
+
   def validateDecryptionShareR1(tx: DecryptionShareTransaction): Try[Unit] = Try {
     require(TreasuryManager.VOTING_DECRYPTION_R1_RANGE.contains(epochHeight), "Wrong height for decryption share R1 transaction")
     require(tx.round == DecryptionRound.R1, "Invalid decryption share R1: wrong round")
@@ -176,7 +183,9 @@ class TreasuryTxValidator(val trState: TreasuryState,
     tx.c1Shares.foreach { s =>
       require(s.decryptedC1.size == expertsNum, "Invalid decryption share R1: wrong number of decrypted c1 componenets")
       val validator = new DecryptionManager(TreasuryManager.cs, trState.getBallotsForProposal(s.proposalId))
-      require(validator.validateDelegationsC1(trState.getApprovedCommitteeInfo(id).proxyKey, s).isSuccess, "Invalid decryption share R1: NIZK is not verified")
+      val issuerPubKey = getPubKeyInCurrentEpoch(id)
+      require(issuerPubKey.isSuccess, s"Can't get public key for committee member: ${id}")
+      require(validator.validateDelegationsC1(issuerPubKey.get, s).isSuccess, "Invalid decryption share R1: NIZK is not verified")
     }
   }
 
@@ -191,7 +200,9 @@ class TreasuryTxValidator(val trState: TreasuryState,
     tx.c1Shares.foreach { s =>
       require(s.decryptedC1.size == Voter.VOTER_CHOISES_NUM, "Invalid decryption share R2: wrong number of decrypted c1 componenets")
       val validator = new DecryptionManager(TreasuryManager.cs, trState.getBallotsForProposal(s.proposalId))
-      require(validator.validateChoicesC1(trState.getApprovedCommitteeInfo(id).proxyKey, s, trState.getDelegations.get(s.proposalId)).isSuccess,
+      val issuerPubKey = getPubKeyInCurrentEpoch(id)
+      require(issuerPubKey.isSuccess, s"Can't get public key for committee member: ${id}")
+      require(validator.validateChoicesC1(issuerPubKey.get, s, trState.getDelegations.get(s.proposalId)).isSuccess,
         "Invalid decryption share R2: NIZK is not verified")
     }
   }
@@ -370,17 +381,25 @@ class TreasuryTxValidator(val trState: TreasuryState,
 
     if (history.isDefined) {
       val prevEpochId = trState.epochNum - 1
-      val prevCommitte = TreasuryState.generatePartiesInfo(history.get, prevEpochId).get._3.filter(_.approved)
+      val prevCommittee = TreasuryState.generatePartiesInfo(history.get, prevEpochId).get._3.filter(_.approved)
       val prevRandomnessSumbmission = TreasuryState.generateRandomnessSubmission(history.get, prevEpochId).get
 
-      val issuerInfo = prevCommitte.find(_.signingKey == tx.pubKey)
+      val issuerInfo = prevCommittee.find(_.signingKey == tx.pubKey)
       require(issuerInfo.isDefined, "Committee member isn't registered")
       require(!trState.getDecryptedRandomness.contains(tx.pubKey), "The committee member has already submitted randomness decryption tx")
 
       val encryptedRandomness = prevRandomnessSumbmission.find(_._1 == issuerInfo.get.signingKey)
       require(encryptedRandomness.isDefined, "The committee member hasn't submitted RandomnessTransaction in the previoius epoch")
+
+      val prevR3Data = TreasuryState.generateR3Data(history.get, prevEpochId).get
+      val memberId = prevCommittee.indexWhere(_.signingKey == tx.pubKey)
+      val issuerR3Data = prevR3Data.find(_.issuerID == memberId)
+      require(issuerR3Data.isDefined, "Committee member hasn't posted R3 data in previous epoch")
+
+      val issuerPubKey = TreasuryManager.cs.decodePoint(issuerR3Data.get.commitments.head)
+
       val valid = RandomnessGenManager.validateDecryptedRandomnessShare(
-        TreasuryManager.cs, issuerInfo.get.proxyKey, encryptedRandomness.get._2, tx.decryptedRandomness)
+        TreasuryManager.cs, issuerPubKey, encryptedRandomness.get._2, tx.decryptedRandomness)
       require(valid, "Randomness decryption share is invalid")
     }
   }
