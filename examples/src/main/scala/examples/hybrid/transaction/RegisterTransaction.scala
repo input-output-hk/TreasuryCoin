@@ -117,7 +117,7 @@ object RegisterTransaction {
       to = to :+ (TreasuryManager.COMMITTEE_DEPOSIT_ADDR, Value @@ TreasuryManager.COMMITTEE_DEPOSIT_RANGE.start.toLong)
 
     val (inputs, outputs) = w.prepareOutputs(to, fee, boxesIdsToExclude).get
-    val paybackAddr = w.publicKeys.head
+    val paybackAddr = w.publicKeys.headOption.get
 
     val committeeKeyOpt = if (isCommittee) {
       Some(w.generateNewTreasuryCommitteeSecret(epochID))

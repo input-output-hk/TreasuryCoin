@@ -61,7 +61,7 @@ object TreasurySecretSerializer extends Serializer[TreasurySecret] {
     }
   }
 
-  //@tailrec
+  @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
   def parseBatch(bytes: Array[Byte]): List[TreasurySecret] =
     if (bytes.length < 4) List()
     else {

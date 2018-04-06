@@ -79,7 +79,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
   def validateRegistration(tx: RegisterTransaction): Try[Unit] = Try {
     val deposit = tx.to.filter(_._1 == TreasuryManager.VOTER_DEPOSIT_ADDR)
     require(deposit.size == 1, "Deposit should be as a single box payment")
-    val depositAmount = deposit.head._2
+    val depositAmount = deposit.headOption.get._2
 
     tx.role match {
       case Role.Expert =>
@@ -98,7 +98,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
 
       val committeeDeposit = tx.to.filter(_._1 == TreasuryManager.COMMITTEE_DEPOSIT_ADDR)
       require(committeeDeposit.size == 1, "Committee deposit should be as a single box payment")
-      require(TreasuryManager.COMMITTEE_DEPOSIT_RANGE.contains(committeeDeposit.head._2), "Insufficient deposit amount")
+      require(TreasuryManager.COMMITTEE_DEPOSIT_RANGE.contains(committeeDeposit.headOption.get._2), "Insufficient deposit amount")
     }
   }
 

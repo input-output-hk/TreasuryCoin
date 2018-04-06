@@ -138,7 +138,7 @@ class HybridNodeViewHolder(settings: ScorexSettings,
       .map(_ / TreasuryManager.EPOCH_LEN).getOrElse(-1)
     val trStateToApplyTry: Try[TreasuryState] =
       if ((epochNum != -1) && (treasuryState.epochNum != epochNum)) { // new epoch has been started, reset treasury state
-        TreasuryState.generate(history, progressInfo.toApply.head.id)
+        TreasuryState.generate(history, progressInfo.toApply.headOption.get.id)
       } else if (progressInfo.chainSwitchingNeeded) {
         val branchingPoint = VersionTag @@ progressInfo.branchPoint.get     //todo: .get
         treasuryState.rollback(branchingPoint, history).orElse(TreasuryState.generate(history, progressInfo.branchPoint.get))

@@ -119,11 +119,10 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
 
       val keys = vault.treasurySigningPubKeys(role, state.epochNum)
 
-      if (keys.nonEmpty &&
-          state.getSigningKeys(role).contains(keys.head))
-        Some(keys.head)
-      else
-        None
+      keys.headOption match {
+        case Some(key) if state.getSigningKeys(role).contains(key) => Some(key)
+        case _ => None
+      }
     }
 
     def createBallot (
@@ -321,7 +320,7 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
     // proposal with the specified name hasn't been submitted yet
     if(!submittedProposals.exists(_.name == proposal)) {
       val wallet = view.vault
-      val pubkey = wallet.publicKeys.toSeq.head
+      val pubkey = wallet.publicKeys.toSeq.headOption.get
       ProposalTransaction.create(wallet, s"${proposal._1}", Value @@ proposal._2.toLong, pubkey, view.trState.epochNum) match {
         case Success(tx: ProposalTransaction) if isValidProposalTx(tx) => Some(tx)
         case _ => None

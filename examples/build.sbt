@@ -13,7 +13,14 @@ libraryDependencies ++= Seq(
 
 mainClass in assembly := Some("examples.hybrid.HybridApp")
 
-assemblyJarName in assembly := "twinsChain.jar"
+assemblyJarName in assembly := "TreasuryCoin.jar"
+
+assemblyMergeStrategy in assembly := {
+  case "module-info.class" => MergeStrategy.first
+  case x =>
+    val oldStrategy = (assemblyMergeStrategy in assembly).value
+    oldStrategy(x)
+}
 
 parallelExecution in Test := true
 

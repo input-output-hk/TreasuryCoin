@@ -322,10 +322,10 @@ class CommitteeMember(viewHolderRef: ActorRef) extends Actor with ScorexLogging 
       case _ => None
     }
 
-    ownKeyPairOpt = view.vault.treasuryCommitteeSecrets(view.trState.epochNum) match {
-      case keyPair if keyPair.nonEmpty =>
-        ownSecretKeyOpt = Some(keyPair.head.secretKey)
-        Some(keyPair.head.privKey, keyPair.head.pubKey)
+    ownKeyPairOpt = view.vault.treasuryCommitteeSecrets(view.trState.epochNum).headOption match {
+      case Some(secret) =>
+        ownSecretKeyOpt = Some(secret.secretKey)
+        Some(secret.privKey, secret.pubKey)
       case _ => None
     }
 

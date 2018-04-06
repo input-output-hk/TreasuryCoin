@@ -226,6 +226,7 @@ trait NodeViewHolder[P <: Proposition, TX <: Transaction[P], PMOD <: PersistentN
     earlier than a rollback point of an initial progressInfo.
    **/
 
+  @SuppressWarnings(Array("org.wartremover.warts.Recursion"))
   protected def updateState(history: HIS,
                           state: MS,
                           progressInfo: ProgressInfo[PMOD],

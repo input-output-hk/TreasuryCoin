@@ -48,7 +48,7 @@ class TreasuryTransactionGenerator(viewHolderRef: ActorRef) extends Actor with S
 
   def generate(history: HybridHistory, wallet: HWallet, trState: TreasuryState): Seq[TreasuryTransaction] = Try {
     if (trState.getProposals.size < 1) {
-      val pubkey = wallet.publicKeys.toSeq.head
+      val pubkey = wallet.publicKeys.toSeq.headOption.get
       // Here randomization of proposal name is used, because for absolutely equal proposals
       // the indexOf returns the same index, which plays the role of proposal ID
       // (it returns the first occurrence of an element, in case if some elements are equal).

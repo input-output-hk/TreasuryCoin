@@ -93,7 +93,7 @@ case class HWallet(seed: ByteStr, store: LSMStore, treasuryStore: LSMStore)
 
     val charge: Seq[(PublicKey25519Proposition, Value)] =
       if (canSend > amount + fee)
-        Seq((publicKeys.head, Value @@ (canSend - amount - fee)))
+        Seq((publicKeys.headOption.get, Value @@ (canSend - amount - fee)))
       else Seq()
 
     val inputs = from.map(t => t._1 -> t._2)
