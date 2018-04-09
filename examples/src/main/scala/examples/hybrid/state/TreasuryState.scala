@@ -97,6 +97,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def getExpertsInfo = expertsInfo
   def getCommitteeInfo = committeeInfo
   def getApprovedCommitteeInfo = committeeInfo.filter(_.approved)
+  def getParticipatedCommitteeInfo = committeeInfo.filter(_.participated)
 
   def getDisqualifiedAfterDKGCommitteeInfo = disqualifiedCommitteeMembersAfterDKG
   def getDisqualifiedAfterDecryptionR1CommitteeInfo = disqualifiedCommitteeMembersAfterDecryptionR1
@@ -109,7 +110,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def getDecryptedRandomness = decryptedRandomness
   def getRecoveredRandomness = recoveredRandomness
   def getRandomness = randomness
-  def getKeyRecoverySharesRandGen = keyRecoverySharesRandGen.toSeq
+  def getKeyRecoverySharesRandGen = keyRecoverySharesRandGen
   def getDisqualifiedAfterRandGenCommitteeInfo = disqualifiedCommitteeMembersAfterRandGen
 
   def getSigningKeys(role: Role): List[PublicKey25519Proposition] = role match {
@@ -154,7 +155,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         }
         if (t.committeeProxyPubKey.isDefined) {
           val committeeDeposit = t.newBoxes.find(_.proposition == TreasuryManager.COMMITTEE_DEPOSIT_ADDR).get
-          committeeInfo = committeeInfo :+ CommitteeInfo(true, t.committeeProxyPubKey.get, t.pubKey, committeeDeposit, t.paybackAddr)
+          committeeInfo = committeeInfo :+ CommitteeInfo(true, true, t.committeeProxyPubKey.get, t.pubKey, committeeDeposit, t.paybackAddr)
         }
       }
       case t: ProposalTransaction => Try {
@@ -329,10 +330,12 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   private def recoverRandomness(history: HybridHistory): Unit = Try {
     val prevCommittee = TreasuryState.generatePartiesInfo(history, epochNum - 1).get._3.filter(_.approved)
     val randomnessSubmission = TreasuryState.generateRandomnessSubmission(history, epochNum - 1).get
+    val prevR3Data = TreasuryState.generateR3Data(history, epochNum - 1).get
 
     keyRecoverySharesRandGen.foreach { s =>
       val violatorInfo = prevCommittee(s._1)
-      val privKeyOpt = DistrKeyGen.recoverPrivateKeyByOpenedShares(cs, prevCommittee.size, s._2)
+      val violatorPubKey = TreasuryManager.cs.decodePoint(prevR3Data.find(_.issuerID == s._1).get.commitments(0))
+      val privKeyOpt = DistrKeyGen.recoverPrivateKeyByOpenedShares(cs, prevCommittee.size, s._2, Some(violatorPubKey))
       privKeyOpt match {
         case Success(privKey) =>
           val encryptedRandomness = randomnessSubmission.find(_._1 == violatorInfo.signingKey).get._2
@@ -399,17 +402,22 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       val disqualifiedOnR3 = DistrKeyGen.getDisqualifiedOnR3CommitteeMembersIDs(
         TreasuryManager.cs, proxyKeys, identifier, disqualifiedOnR1, getDKGr3Data.values.toSeq, getDKGr4Data.values.toSeq)
 
-      val disqualifiedPubKeys = disqualifiedOnR1.map(identifier.getPubKey(_).get) ++ disqualifiedOnR3.map(identifier.getPubKey(_).get)
+      val disqualifiedOnR1PubKeys = disqualifiedOnR1.map(identifier.getPubKey(_).get)
+      val disqualifiedOnR3PubKeys = disqualifiedOnR3.map(identifier.getPubKey(_).get)
+
+      val disqualifiedPubKeys = disqualifiedOnR1PubKeys ++ disqualifiedOnR3PubKeys
       disqualifiedCommitteeMembersAfterDKG ++= disqualifiedPubKeys.map(k => getApprovedCommitteeInfo.find(_.proxyKey == k).get)
 
       recoveredKeysOfDisqualifiedCommitteeMembers ++= DistrKeyGen.recoverKeysOfDisqualifiedOnR3Members(TreasuryManager.cs, proxyKeys.size,
         getDKGr5Data.values.toSeq, disqualifiedOnR1, disqualifiedOnR3)
+
+      committeeInfo = committeeInfo.map(c => c.copy(participated = !disqualifiedOnR1PubKeys.contains(c.proxyKey)))
     }
   }
 
   private def updateDisqualifiedAfterDecryptionR1(): Unit = {
     /* First check that there was ballots that should be decrypted */
-    if (getExpertsBallots.nonEmpty || getVotersBallots.nonEmpty) {
+    if ((getExpertsBallots.nonEmpty || getVotersBallots.nonEmpty) && getSharedPubKey.isDefined) {
       /* Disqualified are those who didn't submit valid c1Share and hasn't been disqualified before */
       val disqualified = getApprovedCommitteeInfo
         .filter(i => !getDecryptionSharesR1.contains(getApprovedCommitteeInfo.indexOf(i)))
@@ -434,7 +442,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   private def updateDisqualifiedAfterDecryptionR2(): Unit = {
     /* First check that there was ballots that should be decrypted */
-    if (getExpertsBallots.nonEmpty || getVotersBallots.nonEmpty) {
+    if ((getExpertsBallots.nonEmpty || getVotersBallots.nonEmpty) && getSharedPubKey.isDefined && getDelegations.isDefined) {
       /* Disqualified are those who didn't submit valid c1Share and hasn't been disqualified before */
       val disqualified = getApprovedCommitteeInfo
         .filter(i => !getDecryptionSharesR2.contains(getApprovedCommitteeInfo.indexOf(i)))
@@ -453,7 +461,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       val c1OfActiveCMs = getDecryptionSharesR1ForProposal(i).map(_.decryptedC1.map(_._1))
       val c1OfRecoveredCMs = decryptor.recoverDelegationsC1(recoveredKeysOfDisqualifiedCommitteeMembers.map(_._2))
       val allC1ForDelegations = c1OfActiveCMs ++ c1OfRecoveredCMs
-      assert(allC1ForDelegations.size == getApprovedCommitteeInfo.size)
+      assert(allC1ForDelegations.size == getParticipatedCommitteeInfo.size)
 
       (i -> decryptor.computeDelegations(allC1ForDelegations))
     }
@@ -471,7 +479,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         val allChoicesC1 = c1OfActiveMembers ++ c1OfRecoveredCMs
 
         /* We can decrypt final voting result ONLY IF we have valid decryption shares from ALL committee members */
-        assert(allChoicesC1.size == getApprovedCommitteeInfo.size)
+        assert(allChoicesC1.size == getParticipatedCommitteeInfo.size)
         assert(delegations.size == getExpertsInfo.size)
 
         val tally = decryptor.computeTally(allChoicesC1, delegations)
@@ -752,6 +760,7 @@ abstract class PartyInfo {
 }
 
 case class CommitteeInfo(approved: Boolean, // we allow only constant-size committee, so not all registered parities will become approved CM
+                         participated: Boolean, // true only if a CM successfully passed the Round 1 of DKG and submitted its share
                          proxyKey: PubKey,
                          signingKey: PublicKey25519Proposition,
                          depositBox: PublicKey25519NoncedBox,

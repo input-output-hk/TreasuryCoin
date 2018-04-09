@@ -189,10 +189,11 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     if (secrets.isDefined) {
       val (signingSecret, proxySecret) = secrets.get
 
-      val needRecover = round match {
+      val needRecover = (round match {
         case RecoveryRound.DecryptionR1 => view.trState.getDisqualifiedAfterDecryptionR1CommitteeInfo
         case RecoveryRound.DecryptionR2 => view.trState.getDisqualifiedAfterDecryptionR2CommitteeInfo
-      }
+      }).filter(_.signingKey != signingSecret.privKey.publicImage) // don't try to recover own key
+
       val pending = view.pool.unconfirmed.map(_._2).find {
         case t: RecoveryShareTransaction => (t.round == round) && (signingSecret.privKey.publicImage == t.pubKey)
         case _ => false
@@ -311,7 +312,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     if (prevEpochId >= 0 && secrets.isDefined) {
       val (signingSecret, proxySecret) = secrets.get
 
-      val disqualified = view.trState.getDisqualifiedAfterRandGenCommitteeInfo
+      val disqualified = view.trState.getDisqualifiedAfterRandGenCommitteeInfo.filter(_.signingKey != signingSecret.privKey.publicImage) // don't try to recover own key
       val pending = view.pool.unconfirmed.map(_._2).find {
         case t: RecoveryShareTransaction => (t.round == RecoveryRound.Randomness) && (signingSecret.privKey.publicImage == t.pubKey)
         case _ => false

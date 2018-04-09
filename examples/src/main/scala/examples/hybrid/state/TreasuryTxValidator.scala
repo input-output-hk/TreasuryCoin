@@ -424,7 +424,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
 
       tx.openedShares.foreach { s =>
         val submittedSharesOpt = Try(trState.getKeyRecoverySharesRandGen(s.violatorId)).toOption
-        submittedSharesOpt.foreach(ss => require(!ss._2.exists(_.receiverID == id), "The OpenedShare for Randomness has already been submitted"))
+        submittedSharesOpt.foreach(ss => require(!ss.exists(_.receiverID == id), "The OpenedShare for Randomness has already been submitted"))
 
         val violatorProxyKey = prevCommittee(s.violatorId).proxyKey
         val validViolator = trState.getDisqualifiedAfterRandGenCommitteeInfo.exists(_.proxyKey == violatorProxyKey)
