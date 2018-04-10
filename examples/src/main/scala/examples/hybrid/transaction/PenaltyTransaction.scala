@@ -77,7 +77,7 @@ object PenaltyTransaction {
   def create(trState: TreasuryState, history: HybridHistory, state: HBoxStoredState): Try[PenaltyTransaction] = Try {
     val timestamp = System.currentTimeMillis()
 
-    val depositsToDestroy = trState.getPenalties.getOrElse(Seq()).toIndexedSeq
+    val depositsToDestroy = trState.getPenalties.toIndexedSeq
 
     PenaltyTransaction(depositsToDestroy, trState.epochNum, timestamp)
   }

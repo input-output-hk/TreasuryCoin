@@ -458,7 +458,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
   def validatePenalty(tx: PenaltyTransaction): Try[Unit] = Try {
     require(TreasuryManager.PENALTY_BLOCK_HEIGHT == epochHeight, "Wrong height for penalty transaction")
 
-    val penalties = trState.getPenalties.getOrElse(Seq())
+    val penalties = trState.getPenalties
     require(penalties.equals(tx.depositsToDestroy), "Penalties are invalid")
   }
 }

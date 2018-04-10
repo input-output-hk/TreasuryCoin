@@ -489,16 +489,29 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     }
   }
 
-  def getPenalties: Try[Seq[PublicKey25519NoncedBox]] = Try {
+  def getPunishedParties: Try[Seq[PartyInfo]] = Try {
     val disqualifiedCommittee = getAllDisqualifiedCommitteeInfo
     val absentDuringRandGenCommittee = getApprovedCommitteeInfo.indices
       .filter(i => !getSubmittedRandomnessForNextEpoch.contains(i))
       .map(i => getApprovedCommitteeInfo(i))
       .filter(ci => !disqualifiedCommittee.exists(_.depositBox == ci.depositBox))
 
-    val absentExperts = getExpertsInfo.indices.filter(i => !getExpertsBallots.contains(i)).map(i => getExpertsInfo(i))
+    /* Experts should be punished only if they were supposed to vote but didn't do this.
+    *  If, for inctance, an expert didn't vote because of failed Distributed Key Generation,
+    *  then he should not be punished */
+    val absentExperts =
+      if (sharedPublicKey.isDefined)
+        getExpertsInfo.indices.filter(i => !getExpertsBallots.contains(i)).map(i => getExpertsInfo(i))
+      else Seq()
 
-    disqualifiedCommittee.map(_.depositBox) ++ absentDuringRandGenCommittee.map(_.depositBox) ++ absentExperts.map(_.depositBox)
+    disqualifiedCommittee ++ absentDuringRandGenCommittee ++ absentExperts
+  }
+
+  def getPenalties: Seq[PublicKey25519NoncedBox] = getPunishedParties match {
+    case Success(p) => p.map(_.depositBox)
+    case Failure(e) =>
+      log.error("Cant retrieve punished parties", e)
+      Seq()
   }
 
   def getPayments: Try[Seq[(PublicKey25519Proposition, Value)]] = Try {
