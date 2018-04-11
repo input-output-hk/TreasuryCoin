@@ -392,29 +392,28 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       } else log.warn("No committee members found!")
   }
 
-  private def retrieveDisqualifiedAfterDKG(): Unit = {
-    if (sharedPublicKey.isDefined) {
-      val proxyKeys = getApprovedCommitteeInfo.map(_.proxyKey)
-      val identifier = new SimpleIdentifier(proxyKeys)
+  private def retrieveDisqualifiedAfterDKG(): Try[Unit] = Try {
 
-      val disqualifiedOnR1 = DistrKeyGen.getDisqualifiedOnR1CommitteeMembersIDs(
-        TreasuryManager.cs, proxyKeys, identifier, getDKGr1Data.values.toSeq, getDKGr2Data.values.toSeq)
-      val disqualifiedOnR3 = DistrKeyGen.getDisqualifiedOnR3CommitteeMembersIDs(
-        TreasuryManager.cs, proxyKeys, identifier, disqualifiedOnR1, getDKGr3Data.values.toSeq, getDKGr4Data.values.toSeq)
+    val proxyKeys = getApprovedCommitteeInfo.map(_.proxyKey)
+    val identifier = new SimpleIdentifier(proxyKeys)
 
-      val disqualifiedOnR1PubKeys = disqualifiedOnR1.map(identifier.getPubKey(_).get)
-      val disqualifiedOnR3PubKeys = disqualifiedOnR3.map(identifier.getPubKey(_).get)
+    val disqualifiedOnR1 = DistrKeyGen.getDisqualifiedOnR1CommitteeMembersIDs(
+      TreasuryManager.cs, proxyKeys, identifier, getDKGr1Data.values.toSeq, getDKGr2Data.values.toSeq)
+    val disqualifiedOnR3 = DistrKeyGen.getDisqualifiedOnR3CommitteeMembersIDs(
+      TreasuryManager.cs, proxyKeys, identifier, disqualifiedOnR1, getDKGr3Data.values.toSeq, getDKGr4Data.values.toSeq)
 
-      val disqualifiedPubKeys = disqualifiedOnR1PubKeys ++ disqualifiedOnR3PubKeys
-      disqualifiedCommitteeMembersAfterDKG ++= disqualifiedPubKeys.map(k => getApprovedCommitteeInfo.find(_.proxyKey == k).get)
+    val disqualifiedOnR1PubKeys = disqualifiedOnR1.map(identifier.getPubKey(_).get)
+    val disqualifiedOnR3PubKeys = disqualifiedOnR3.map(identifier.getPubKey(_).get)
 
-      recoveredKeysOfDisqualifiedCommitteeMembers ++= DistrKeyGen.recoverKeysOfDisqualifiedOnR3Members(TreasuryManager.cs, proxyKeys.size,
+    val disqualifiedPubKeys = disqualifiedOnR1PubKeys ++ disqualifiedOnR3PubKeys
+    disqualifiedCommitteeMembersAfterDKG ++= disqualifiedPubKeys.map(k => getApprovedCommitteeInfo.find(_.proxyKey == k).get)
+
+    recoveredKeysOfDisqualifiedCommitteeMembers ++= DistrKeyGen.recoverKeysOfDisqualifiedOnR3Members(TreasuryManager.cs, proxyKeys.size,
         getDKGr5Data.values.toSeq, disqualifiedOnR1, disqualifiedOnR3)
 
-      committeeInfo = committeeInfo.map { c =>
-        val participated = c.approved && !disqualifiedOnR1PubKeys.contains(c.proxyKey)
-        c.copy(participated = participated)
-      }
+    committeeInfo = committeeInfo.map { c =>
+      val participated = c.approved && !disqualifiedOnR1PubKeys.contains(c.proxyKey)
+      c.copy(participated = participated)
     }
   }
 
