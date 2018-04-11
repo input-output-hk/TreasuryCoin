@@ -155,7 +155,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         }
         if (t.committeeProxyPubKey.isDefined) {
           val committeeDeposit = t.newBoxes.find(_.proposition == TreasuryManager.COMMITTEE_DEPOSIT_ADDR).get
-          committeeInfo = committeeInfo :+ CommitteeInfo(true, true, t.committeeProxyPubKey.get, t.pubKey, committeeDeposit, t.paybackAddr)
+          committeeInfo = committeeInfo :+ CommitteeInfo(false, false, t.committeeProxyPubKey.get, t.pubKey, committeeDeposit, t.paybackAddr)
         }
       }
       case t: ProposalTransaction => Try {
@@ -411,7 +411,10 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       recoveredKeysOfDisqualifiedCommitteeMembers ++= DistrKeyGen.recoverKeysOfDisqualifiedOnR3Members(TreasuryManager.cs, proxyKeys.size,
         getDKGr5Data.values.toSeq, disqualifiedOnR1, disqualifiedOnR3)
 
-      committeeInfo = committeeInfo.map(c => c.copy(participated = !disqualifiedOnR1PubKeys.contains(c.proxyKey)))
+      committeeInfo = committeeInfo.map { c =>
+        val participated = c.approved && !disqualifiedOnR1PubKeys.contains(c.proxyKey)
+        c.copy(participated = participated)
+      }
     }
   }
 
