@@ -419,8 +419,8 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   }
 
   private def updateDisqualifiedAfterDecryptionR1(): Unit = {
-    /* First check that there was ballots that should be decrypted */
-    if ((getExpertsBallots.nonEmpty || getVotersBallots.nonEmpty) && getSharedPubKey.isDefined) {
+    /* First check that there was voters ballots that should be decrypted */
+    if (getVotersBallots.nonEmpty) {
       /* Disqualified are those who didn't submit valid c1Share and hasn't been disqualified before */
       val disqualified = getApprovedCommitteeInfo
         .filter(i => !getDecryptionSharesR1.contains(getApprovedCommitteeInfo.indexOf(i)))
@@ -445,7 +445,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   private def updateDisqualifiedAfterDecryptionR2(): Unit = {
     /* First check that there was ballots that should be decrypted */
-    if ((getExpertsBallots.nonEmpty || getVotersBallots.nonEmpty) && getSharedPubKey.isDefined && getDelegations.isDefined) {
+    if ((getExpertsBallots.nonEmpty || getVotersBallots.nonEmpty) && getDelegations.isDefined) {
       /* Disqualified are those who didn't submit valid c1Share and hasn't been disqualified before */
       val disqualified = getApprovedCommitteeInfo
         .filter(i => !getDecryptionSharesR2.contains(getApprovedCommitteeInfo.indexOf(i)))
@@ -458,15 +458,18 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
   private def calculateDelegations(): Try[Unit] = Try {
     val deleg = proposals.indices.map { i =>
-      val decryptor = new DecryptionManager(TreasuryManager.cs, getBallotsForProposal(i))
+      val votertsBallots = getVoterBallotsForProposal(i)
+      if (votertsBallots.size > 0) {
+        val decryptor = new DecryptionManager(TreasuryManager.cs, votertsBallots)
 
-      /* We can calculate delegations ONLY IF we have valid decryption shares from ALL committee members */
-      val c1OfActiveCMs = getDecryptionSharesR1ForProposal(i).map(_.decryptedC1.map(_._1))
-      val c1OfRecoveredCMs = decryptor.recoverDelegationsC1(recoveredKeysOfDisqualifiedCommitteeMembers.map(_._2))
-      val allC1ForDelegations = c1OfActiveCMs ++ c1OfRecoveredCMs
-      assert(allC1ForDelegations.size == getParticipatedCommitteeInfo.size)
+        /* We can calculate delegations ONLY IF we have valid decryption shares from ALL committee members */
+        val c1OfActiveCMs = getDecryptionSharesR1ForProposal(i).map(_.decryptedC1.map(_._1))
+        val c1OfRecoveredCMs = decryptor.recoverDelegationsC1(recoveredKeysOfDisqualifiedCommitteeMembers.map(_._2))
+        val allC1ForDelegations = c1OfActiveCMs ++ c1OfRecoveredCMs
+        assert(allC1ForDelegations.size == getParticipatedCommitteeInfo.size)
 
-      (i -> decryptor.computeDelegations(allC1ForDelegations))
+        (i -> decryptor.computeDelegations(allC1ForDelegations))
+      } else (i -> Seq.fill(getExpertsInfo.size)(BigInteger.ZERO))
     }
     delegations = Some(deleg.toMap)
   }

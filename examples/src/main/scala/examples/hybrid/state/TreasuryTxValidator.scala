@@ -178,6 +178,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
 
     val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
     require(!trState.getDecryptionSharesR1.contains(id), "The committee member has already submitted decryption shares R1")
+    require(trState.getVotersBallots.size > 0, "The voter's ballots are absent. Decryption R1 should be skipped in this case")
 
     val expertsNum = trState.getExpertsInfo.size
     tx.c1Shares.foreach { s =>
