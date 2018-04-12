@@ -276,8 +276,8 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     */
   private def generateRandomnessDecryptionTx(view: NodeView): Try[Seq[RandomnessDecryptionTransaction]] = Try {
     val prevEpochId = view.trState.epochNum - 1
-    val secrets = checkCommitteeMemberRegistration(view, Some(prevEpochId))
-    if (prevEpochId >= 0 && secrets.isDefined) {
+    val secrets = if (prevEpochId >= 0) checkCommitteeMemberRegistration(view, Some(prevEpochId)) else None
+    if (secrets.isDefined) {
       val (signingSecret, proxySecret) = secrets.get
 
       val pending = view.pool.unconfirmed.map(_._2).find {
@@ -308,8 +308,8 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     */
   private def generateRandomnessRecoveryShare(view: NodeView): Try[Seq[RecoveryShareTransaction]] = Try {
     val prevEpochId = view.trState.epochNum - 1
-    val secrets = checkCommitteeMemberRegistration(view, Some(prevEpochId))
-    if (prevEpochId >= 0 && secrets.isDefined) {
+    val secrets = if (prevEpochId >= 0) checkCommitteeMemberRegistration(view, Some(prevEpochId)) else None
+    if (secrets.isDefined) {
       val (signingSecret, proxySecret) = secrets.get
 
       val disqualified = view.trState.getDisqualifiedAfterRandGenCommitteeInfo.filter(_.signingKey != signingSecret.privKey.publicImage) // don't try to recover own key

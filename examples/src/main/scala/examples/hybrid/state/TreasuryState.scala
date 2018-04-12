@@ -3,6 +3,7 @@ package examples.hybrid.state
 import java.math.BigInteger
 
 import com.google.common.primitives.Bytes
+import com.typesafe.scalalogging.Logger
 import examples.commons.{PublicKey25519NoncedBox, Value}
 import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
@@ -14,6 +15,7 @@ import examples.hybrid.transaction.DKG._
 import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
 import examples.hybrid.transaction.RecoveryShareTransaction.RecoveryRound
 import examples.hybrid.transaction._
+import org.slf4j.LoggerFactory
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
 import scorex.core.{ModifierId, VersionTag}
@@ -291,27 +293,18 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         updateRandomness()
         selectApprovedCommittee()
       case TreasuryManager.DISTR_KEY_GEN_R5_RANGE.end =>
-        retrieveSharedPublicKey() match {
-          case Success(_) =>
-          case Failure(e) => log.error("Failed to generate shared key", e)
-        }
+        retrieveSharedPublicKey()
         retrieveDisqualifiedAfterDKG()
       case TreasuryManager.VOTING_DECRYPTION_R1_RANGE.end =>
         updateDisqualifiedAfterDecryptionR1()
       case TreasuryManager.VOTING_DECRYPTION_R1_RECOVERY_RANGE.end =>
         retrieveKeysOfDisqualified(getKeyRecoverySharesR1.toMap)
-        calculateDelegations() match {
-          case Success(_) => log.info("Delegations are successfully calculated")
-          case Failure(e) => log.error("Failed to calculate delegations", e)
-        }
+        calculateDelegations()
       case TreasuryManager.VOTING_DECRYPTION_R2_RANGE.end =>
         updateDisqualifiedAfterDecryptionR2()
       case TreasuryManager.VOTING_DECRYPTION_R2_RECOVERY_RANGE.end =>
         retrieveKeysOfDisqualified(getKeyRecoverySharesR2.toMap)
-        calculateTallyResult() match {
-          case Success(_) => log.info("Tally is successfully calculated")
-          case Failure(e) => log.error("Failed to calculate Tally", e)
-        }
+        calculateTallyResult()
       case _ =>
     }
 
@@ -319,30 +312,40 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   }
 
   private def retrieveDisqualifiedAfterRandGen(history: HybridHistory): Unit = Try {
-    val prevCommittee = TreasuryState.generatePartiesInfo(history, epochNum - 1).get._3.filter(_.approved)
-    val submitters = TreasuryState.generateRandomnessSubmission(history, epochNum - 1).get.map(_._1)
-    val submittersWhoDecrypted = getDecryptedRandomness.keys
-    val disqualified = submitters.filter(s => !submittersWhoDecrypted.exists(k => k == s))
+    if (epochNum > 0) {
+      val prevCommittee = TreasuryState.generatePartiesInfo(history, epochNum - 1).get._3.filter(_.approved)
+      val submitters = TreasuryState.generateRandomnessSubmission(history, epochNum - 1).get.map(_._1)
+      val submittersWhoDecrypted = getDecryptedRandomness.keys
+      val disqualified = submitters.filter(s => !submittersWhoDecrypted.exists(k => k == s))
 
-    disqualifiedCommitteeMembersAfterRandGen = prevCommittee.filter(c => disqualified.contains(c.signingKey))
+      disqualifiedCommitteeMembersAfterRandGen = prevCommittee.filter(c => disqualified.contains(c.signingKey))
+    }
+  }.recoverWith { case t =>
+    log.error(s"Failed to retrieve disqualified after RandGen", t)
+    Failure(t)
   }
 
-  private def recoverRandomness(history: HybridHistory): Unit = Try {
-    val prevCommittee = TreasuryState.generatePartiesInfo(history, epochNum - 1).get._3.filter(_.approved)
-    val randomnessSubmission = TreasuryState.generateRandomnessSubmission(history, epochNum - 1).get
-    val prevR3Data = TreasuryState.generateR3Data(history, epochNum - 1).get
+  private def recoverRandomness(history: HybridHistory): Try[Unit] = Try {
+    if (epochNum > 0) {
+      val prevCommittee = TreasuryState.generatePartiesInfo(history, epochNum - 1).get._3.filter(_.approved)
+      val randomnessSubmission = TreasuryState.generateRandomnessSubmission(history, epochNum - 1).get
+      val prevR3Data = TreasuryState.generateR3Data(history, epochNum - 1).get
 
-    keyRecoverySharesRandGen.foreach { s =>
-      val violatorInfo = prevCommittee(s._1)
-      val violatorPubKey = TreasuryManager.cs.decodePoint(prevR3Data.find(_.issuerID == s._1).get.commitments(0))
-      val privKeyOpt = DistrKeyGen.recoverPrivateKeyByOpenedShares(cs, prevCommittee.size, s._2, Some(violatorPubKey))
-      privKeyOpt match {
-        case Success(privKey) =>
-          val encryptedRandomness = randomnessSubmission.find(_._1 == violatorInfo.signingKey).get._2
-          recoveredRandomness +:= RandomnessGenManager.decryptRandomnessShare(TreasuryManager.cs, privKey, encryptedRandomness).randomness
-        case Failure(e) => log.error("Failed key recovery", e)
+      keyRecoverySharesRandGen.foreach { s =>
+        val violatorInfo = prevCommittee(s._1)
+        val violatorPubKey = TreasuryManager.cs.decodePoint(prevR3Data.find(_.issuerID == s._1).get.commitments(0))
+        val privKeyOpt = DistrKeyGen.recoverPrivateKeyByOpenedShares(cs, prevCommittee.size, s._2, Some(violatorPubKey))
+        privKeyOpt match {
+          case Success(privKey) =>
+            val encryptedRandomness = randomnessSubmission.find(_._1 == violatorInfo.signingKey).get._2
+            recoveredRandomness +:= RandomnessGenManager.decryptRandomnessShare(TreasuryManager.cs, privKey, encryptedRandomness).randomness
+          case Failure(e) => log.error("Failed key recovery", e)
+        }
       }
     }
+  }.recoverWith { case t =>
+    log.error(s"Failed to recover randomness", t)
+    Failure(t)
   }
 
   private def updateRandomness(): Unit = {
@@ -415,6 +418,9 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       val participated = c.approved && !disqualifiedOnR1PubKeys.contains(c.proxyKey)
       c.copy(participated = participated)
     }
+  }.recoverWith { case t =>
+    log.error(s"Failed to retrieve disqualified after DKG", t)
+    Failure(t)
   }
 
   private def updateDisqualifiedAfterDecryptionR1(): Unit = {
@@ -465,12 +471,15 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         val c1OfActiveCMs = getDecryptionSharesR1ForProposal(i).map(_.decryptedC1.map(_._1))
         val c1OfRecoveredCMs = decryptor.recoverDelegationsC1(recoveredKeysOfDisqualifiedCommitteeMembers.map(_._2))
         val allC1ForDelegations = c1OfActiveCMs ++ c1OfRecoveredCMs
-        assert(allC1ForDelegations.size == getParticipatedCommitteeInfo.size)
+        require(allC1ForDelegations.size == getParticipatedCommitteeInfo.size, "Not enough decryption shares R1")
 
         (i -> decryptor.computeDelegations(allC1ForDelegations))
       } else (i -> Seq.fill(getExpertsInfo.size)(BigInteger.ZERO))
     }
     delegations = Some(deleg.toMap)
+  }.recoverWith { case t =>
+    log.error(s"Failed to calculate delegations", t)
+    Failure(t)
   }
 
   private def calculateTallyResult(): Try[Unit] = Try {
@@ -484,14 +493,17 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         val allChoicesC1 = c1OfActiveMembers ++ c1OfRecoveredCMs
 
         /* We can decrypt final voting result ONLY IF we have valid decryption shares from ALL committee members */
-        assert(allChoicesC1.size == getParticipatedCommitteeInfo.size)
-        assert(delegations.size == getExpertsInfo.size)
+        require(allChoicesC1.size == getParticipatedCommitteeInfo.size, "Not enough decryption shares R2")
+        require(delegations.size == getExpertsInfo.size)
 
         val tally = decryptor.computeTally(allChoicesC1, delegations)
         if (tally.isSuccess)
           tallyResult = tallyResult + (i -> tally.get)
       }
     }
+  }.recoverWith { case t =>
+    log.error(s"Failed to calculate tally", t)
+    Failure(t)
   }
 
   def getPunishedParties: Try[Seq[PartyInfo]] = Try {
@@ -510,14 +522,12 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       else Seq()
 
     disqualifiedCommittee ++ absentDuringRandGenCommittee ++ absentExperts
+  }.recoverWith { case t =>
+    log.error(s"Failed to get punished parties", t)
+    Failure(t)
   }
 
-  def getPenalties: Seq[PublicKey25519NoncedBox] = getPunishedParties match {
-    case Success(p) => p.map(_.depositBox)
-    case Failure(e) =>
-      log.error("Cant retrieve punished parties", e)
-      Seq()
-  }
+  def getPenalties: Seq[PublicKey25519NoncedBox] = getPunishedParties.getOrElse(Seq()).map(_.depositBox)
 
   def getPayments: Try[Seq[(PublicKey25519Proposition, Value)]] = Try {
     val approvedProposals = getTally.filter(p => p._2.yes.compareTo(p._2.no) > 0).toSeq.sortBy(_._1).map(p => getProposals(p._1))
@@ -562,6 +572,9 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     }
 
     payments
+  }.recoverWith { case t =>
+    log.error(s"Failed to get payments", t)
+    Failure(t)
   }
 
   def getDepositPaybacks(history: HybridHistory, state: HBoxStoredState):
@@ -583,6 +596,10 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     // Filter those parties whose deposits are not accessible. It can be because of the punishement or deposit renewal
     val paybackParties = partiesInfo.filter(box => state.closedBox(box.depositBox.id).isDefined)
     paybackParties.map(p => (p.depositBox, p.paybackAddr))
+
+  }.recoverWith { case t =>
+    log.error(s"Failed to get deposit paybacks", t)
+    Failure(t)
   }
 }
 
@@ -614,6 +631,11 @@ object TreasuryState {
     epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history).get)
 
     (trState.getVotersInfo, trState.getExpertsInfo, trState.getCommitteeInfo)
+
+  }.recoverWith{ case t =>
+    val logger = Logger(LoggerFactory.getLogger(getClass.getName))
+    logger.error("Failed to generate parties info", t)
+    Failure(t)
   }
 
   /**
@@ -644,6 +666,10 @@ object TreasuryState {
       }
     }
     r1Data
+  }.recoverWith{ case t =>
+    val logger = Logger(LoggerFactory.getLogger(getClass.getName))
+    logger.error("Failed to generate R1Data", t)
+    Failure(t)
   }
 
   /**
@@ -674,6 +700,10 @@ object TreasuryState {
       }
     }
     r3Data
+  }.recoverWith{ case t =>
+    val logger = Logger(LoggerFactory.getLogger(getClass.getName))
+    logger.error("Failed to generate R3Data", t)
+    Failure(t)
   }
 
   /**
@@ -707,6 +737,10 @@ object TreasuryState {
       }
     }
     submittedRandomness
+  }.recoverWith{ case t =>
+    val logger = Logger(LoggerFactory.getLogger(getClass.getName))
+    logger.error("Failed to generate randomness submission", t)
+    Failure(t)
   }
 
   /**
@@ -719,8 +753,10 @@ object TreasuryState {
     * @return
     */
   def generate(history: HybridHistory, endBlock: ModifierId, state: Option[HBoxStoredState] = None): Try[TreasuryState] = Try {
+    val logger = Logger(LoggerFactory.getLogger(getClass.getName))
+
     CommitteeMember.stopMember()
-    println("Generating current treasury state ...")
+    logger.info("Generating current treasury state ...")
 
     val height = history.storage.heightOf(endBlock).get.toInt
     val epochNum = height / TreasuryManager.EPOCH_LEN
@@ -731,10 +767,15 @@ object TreasuryState {
     val trState = TreasuryState(epochNum)
 
     val strings = epochBlocksIds.map(Base58.encode(_) + "\n")
-    println(s"Applying blocks for endBlock: ${Base58.encode(endBlock)} \n ${strings}")
+    logger.info(s"Applying blocks for endBlock: ${Base58.encode(endBlock)} \n ${strings}")
     /* parse all blocks in the current epoch and extract all treasury transactions */
     epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history, state).get)
     trState
+
+  }.recoverWith{ case t =>
+    val logger = Logger(LoggerFactory.getLogger(getClass.getName))
+    logger.error("Failed to generate treausury state", t)
+    Failure(t)
   }
 
   /**
@@ -766,6 +807,11 @@ object TreasuryState {
     /* parse all blocks in the epoch and extract all treasury transactions */
     epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history).get)
     trState
+
+  }.recoverWith{ case t =>
+    val logger = Logger(LoggerFactory.getLogger(getClass.getName))
+    logger.error(s"Failed to generate treausury state for epoch ${epochId}", t)
+    Failure(t)
   }
 }
 

@@ -39,7 +39,7 @@
 
     <root>
         <appender-ref ref="CONSOLE"/>
-        <!--<appender-ref ref="ERRFILE"/>-->
+        <appender-ref ref="ERRFILE"/>
         <!--<appender-ref ref="LOGFILE"/>-->
     </root>
 
