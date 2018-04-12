@@ -160,7 +160,7 @@ object PosForger extends ScorexLogging {
 
   }
 
-  val TransactionsPerBlock = 50
+  private val TransactionsPerBlock = 50
 
 }
 

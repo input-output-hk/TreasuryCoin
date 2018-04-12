@@ -42,7 +42,7 @@ class HybridApp(val settingsFilename: String) extends Application {
 
   override val nodeViewHolderRef: ActorRef = HybridNodeViewHolderRef(settings, hybridSettings.mining, timeProvider)
 
-  override val apiRoutes: Seq[ApiRoute] = Seq(
+  override val apiRoutes: Seq[ApiRoute] = Seq[ApiRoute](
     DebugApiRoute(settings.restApi, nodeViewHolderRef),
     WalletApiRoute(settings.restApi, nodeViewHolderRef),
     StatsApiRoute(settings.restApi, nodeViewHolderRef),
@@ -79,6 +79,6 @@ class HybridApp(val settingsFilename: String) extends Application {
 }
 
 object HybridApp extends App {
-  val settingsFilename = args.headOption.getOrElse("settings.conf")
+  private val settingsFilename = args.headOption.getOrElse("settings.conf")
   new HybridApp(settingsFilename).run()
 }
