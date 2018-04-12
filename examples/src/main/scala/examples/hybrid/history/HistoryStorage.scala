@@ -10,7 +10,7 @@ import scorex.core.consensus.{Absent, ModifierSemanticValidity, Unknown}
 import scorex.core.utils.ScorexLogging
 import scorex.crypto.hash.Sha256
 
-import scala.util.Failure
+import scala.util.{Failure, Random}
 
 //TODO: why we are using IODB if there's no rollback?
 class HistoryStorage(storage: LSMStore,
@@ -79,12 +79,12 @@ class HistoryStorage(storage: LSMStore,
     }.getOrElse(Absent)
   }
 
-  def updateValidity(b: HybridBlock, status: ModifierSemanticValidity) {
+  def updateValidity(b: HybridBlock, status: ModifierSemanticValidity): Unit = {
     val version = ByteArrayWrapper(Sha256(scala.util.Random.nextString(20).getBytes("UTF-8")))
     storage.update(version, Seq(), Seq(validityKey(b) -> ByteArrayWrapper(Array(status.code))))
   }
 
-  def update(b: HybridBlock, difficulty: Option[(BigInt, BigInt)], isBest: Boolean) {
+  def update(b: HybridBlock, difficulty: Option[(BigInt, BigInt)], isBest: Boolean): Unit = {
     log.debug(s"Write new best=$isBest block ${b.encodedId}")
     val typeByte = b match {
       case _: PowBlock =>
@@ -110,7 +110,7 @@ class HistoryStorage(storage: LSMStore,
     }
 
     storage.update(
-      ByteArrayWrapper(b.id),
+      ByteArrayWrapper(Random.nextString(20).getBytes),
       Seq(),
       blockDiff ++
         blockH ++
