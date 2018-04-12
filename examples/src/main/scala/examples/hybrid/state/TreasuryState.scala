@@ -607,7 +607,7 @@ object TreasuryState {
 
     val count = (currentEpochNum - epochId) * TreasuryManager.EPOCH_LEN + currentEpochHeight + 1
     // we should take all registration blocks and first block after registration (cause at this point approved CMs are selected)
-    val epochBlocksIds = history.lastBlockIds(history.bestBlock, count).take(TreasuryManager.EXPERT_REGISTER_RANGE.end + 1)
+    val epochBlocksIds = history.lastBlockIds(history.bestBlock, count).take(TreasuryManager.RANDOMNESS_DECRYPTION_RECOVERY_RANGE.end + 1)
 
     val trState = TreasuryState(epochId)
 
