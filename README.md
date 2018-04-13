@@ -1,60 +1,72 @@
-Scorex 2 - The modular blockchain framework [![Build Status](https://travis-ci.org/ScorexFoundation/Scorex.svg?branch=master)](https://travis-ci.org/ScorexFoundation/Scorex) [![Coverage Status](https://coveralls.io/repos/github/ScorexFoundation/Scorex/badge.svg?branch=scoverage-reports)](https://coveralls.io/github/ScorexFoundation/Scorex?branch=scoverage-reports)
+Treasury coin
 ====================================================================================================================================================================================
+Treasury coin is an experimental implementation of the perspective treasury system
+described in [A Treasury System for Cryptocurrencies: Enabling Better Collaborative Intelligence](https://link)
 
-[![Join the chat at https://gitter.im/input-output-hk/Scorex](https://badges.gitter.im/input-output-hk/Scorex.svg)](https://gitter.im/input-output-hk/Scorex?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-
-Scorex and Scorex 2
+Scorex
 -------------------
+This repository is a fork of the Scorex platform upon which the treausury system was
+built. Specifically, the "Hybrid" example was modified to integrate treasury.
 
-It is experimental and still raw new major release of the Scorex. Previous
-version with documentation could be found at [https://github.com/input-output-hk/Scorex](https://github.com/input-output-hk/Scorex).
+More information about Scorex and how to work with it can be found in
+[https://github.com/ScorexFoundation/Scorex/](https://github.com/ScorexFoundation/Scorex/) 
+
+Note that Scorex framework is still raw and not production ready.
 
 
 Motivation
-----------
+-------------------
+Modern cryptocurrencies are complex systems that require continuous maintenance.
+Even though it is usually proclaimed that such systems are completely decentralized
+and no one in full possession, all existing cryptocurrency systems have core team 
+of members that, at least, controls the development effort.
 
- Bitcoin Core source code contains more 100K lines of code(80K of C++ only), Nxt is more than 45K
- line of Java code. All parts of the design(network/transactional/consensus protocols) are mixed in a hard way.
- So researchers and developers are not in good start positions to make experiments.
+It becomes crucial how this core team is funded, because in most cases a music is
+played by those who pays money. If a core team is payed by some standalone investor
+most likely they will follow his wishes that are not necesseraly beneficial for a 
+cryptocurrency general well-being.
 
- In opposite, Scorex core is less than 4K lines of Scala code. Abstract core concepts allow to implement a broad range
- of systems, including ones with multiple types of blocks and non-linear history.
+Treasury system aims to solve this problem by providing means for establishing 
+collaborative consensus among all cryptocurency stakeholders about financing a system.
+The source of funds is usually some part of block reward, but not restricted to be
+only this one.
 
-Features
+
+Treasury implementation
 --------
+The treasury system is built upon Hybrid example in Scorex. It introduces new transaction
+types and separate Treasury state to facilitate voting protocol and proposals funding.
 
-* Compact, functional code
-* Modular design with fine granularity
-* Scala language
-* Asynchronous network layer on top of TCP
-* JSON API
-* Command line client for the JSON API
-* Cryptographic primitives externalized into [separate scrypto framework](https://github.com/input-output-hk/scrypto)
-* Few examples out-of-box
+All cryptography needed for the voting protocol is implemented in a separate library 
+[https://github.com/input-output-hk/treasury-crypto](https://github.com/input-output-hk/treasury-crypto)
+which is currently in a private repository. 
+
+The following features are implemented:
+* Proposals submission
+* Voters/Experts/Committe members registration
+* Locked deposits for all actors in the system
+* Random selection of the committee
+* Distributed key generation
+* Ballots casting
+* Joint decryption with recovery in case of faulty committee members
+* Randomness generation
+* Reward payments and deposit paybacks
+* Penalties for faulty actors
+* etc.
+
+Current status
+-------------
+The system was successfully tested with local testnet of up to 15 nodes. But still it
+can't be considered as production ready.
 
 Documentation
 -------------
 
-[Please refer to the tutorial](https://github.com/ScorexFoundation/ScorexTutorial)
+[Scorex tutorial](https://github.com/ScorexFoundation/ScorexTutorial)
+[Treasury paper](https://link)
 
-
-Examples
---------
-
-There are two examples of blockchain systems built with Scorex. Details are available in 
-the [dedicated readme](examples/README.md).
-
-
-
-Contributions
--------------
-
-Contributions are welcome! Please take a look into [issues](https://github.com/ScorexFoundation/ScorexTutorial/issues).
- Testing codebase is very small at the moment, so writing a test is not just good for start, but useful for the product as well.
 
 License
 -------
 
-To the extent possible under law, the authors have dedicated all copyright and related and neighboring
-rights to this software to the public domain worldwide. This software is distributed without any warranty.
-You can find applied CC0 license legalcode in the [COPYING](COPYING)
+TODO
