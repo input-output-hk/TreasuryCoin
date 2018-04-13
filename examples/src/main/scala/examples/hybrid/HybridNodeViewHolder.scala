@@ -151,7 +151,7 @@ class HybridNodeViewHolder(settings: ScorexSettings,
 
         val uf = progressInfo.toApply.foldLeft(u0) {case (u, modToApply) =>
           if(u.failedMod.isEmpty) {
-            u.trState.apply(modToApply, u.history) match {
+            u.trState.apply(modToApply, u.history, true, Some(stateToApply)) match {
               case Success(trStateAfterApply) =>
                 u.state.applyModifier(modToApply) match {
                   case Success(stateAfterApply) =>

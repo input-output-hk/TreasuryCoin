@@ -237,8 +237,9 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     }
   }
 
-  def apply(block: HybridBlock, history: HybridHistory, state: Option[HBoxStoredState] = None): Try[TreasuryState] = Try {
-    validate(block, history, state).get
+  def apply(block: HybridBlock, history: HybridHistory, withValidation: Boolean, state: Option[HBoxStoredState] = None): Try[TreasuryState] = Try {
+    if (withValidation)
+      validate(block, history, state).get
 
     block match {
       case b:PosBlock => {
@@ -628,7 +629,7 @@ object TreasuryState {
     val trState = TreasuryState(epochId)
 
     /* reconstruct necessary part of the TreasuryState */
-    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history).get)
+    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history, false).get)
 
     (trState.getVotersInfo, trState.getExpertsInfo, trState.getCommitteeInfo)
 
@@ -769,7 +770,7 @@ object TreasuryState {
     val strings = epochBlocksIds.map(Base58.encode(_) + "\n")
     logger.info(s"Applying blocks for endBlock: ${Base58.encode(endBlock)} \n ${strings}")
     /* parse all blocks in the current epoch and extract all treasury transactions */
-    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history, state).get)
+    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history, true, state).get)
     trState
 
   }.recoverWith{ case t =>
@@ -805,7 +806,7 @@ object TreasuryState {
     val trState = TreasuryState(epochId)
 
     /* parse all blocks in the epoch and extract all treasury transactions */
-    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history).get)
+    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history, false).get)
     trState
 
   }.recoverWith{ case t =>
