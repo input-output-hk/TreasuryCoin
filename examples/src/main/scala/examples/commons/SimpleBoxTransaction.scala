@@ -5,7 +5,7 @@ import examples.commons.SimpleBoxTransaction._
 import examples.hybrid.transaction.committee.DKG._
 import examples.hybrid.transaction._
 import examples.hybrid.transaction.committee._
-import examples.hybrid.transaction.mandatory.{PaymentTransaction, PaymentTransactionCompanion, PenaltyTransaction, PenaltyTransactionCompanion}
+import examples.hybrid.transaction.mandatory._
 import examples.hybrid.wallet.HWallet
 import io.circe.{Encoder, Json}
 import io.circe.syntax._
@@ -100,6 +100,7 @@ object SimpleBoxTransactionCompanion extends Serializer[SimpleBoxTransaction] {
       case t: DKGr5Transaction => Bytes.concat(Array(m.transactionTypeId), DKGr5TransactionCompanion.toBytes(t))
       case t: RandomnessSubmissionTransaction => Bytes.concat(Array(m.transactionTypeId), RandomnessSubmissionTransactionCompanion.toBytes(t))
       case t: RandomnessDecryptionTransaction => Bytes.concat(Array(m.transactionTypeId), RandomnessDecryptionTransactionCompanion.toBytes(t))
+      case t: RandomnessTransaction => Bytes.concat(Array(m.transactionTypeId), RandomnessTransactionCompanion.toBytes(t))
     }
   }
 
@@ -121,6 +122,7 @@ object SimpleBoxTransactionCompanion extends Serializer[SimpleBoxTransaction] {
       case DKGr5Transaction.TransactionTypeId => DKGr5TransactionCompanion.parseBytes(bytes.drop(1))
       case RandomnessSubmissionTransaction.TransactionTypeId => RandomnessSubmissionTransactionCompanion.parseBytes(bytes.drop(1))
       case RandomnessDecryptionTransaction.TransactionTypeId => RandomnessDecryptionTransactionCompanion.parseBytes(bytes.drop(1))
+      case RandomnessTransaction.TransactionTypeId => RandomnessTransactionCompanion.parseBytes(bytes.drop(1))
       case _ => Failure(new MatchError("Unknown transaction type id"))
     }
   }

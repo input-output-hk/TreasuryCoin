@@ -12,7 +12,7 @@ import examples.hybrid.transaction.committee.DecryptionShareTransaction.Decrypti
 import examples.hybrid.transaction.committee.RecoveryShareTransaction.RecoveryRound
 import examples.hybrid.transaction._
 import examples.hybrid.transaction.committee.{DecryptionShareTransaction, RandomnessDecryptionTransaction, RandomnessSubmissionTransaction, RecoveryShareTransaction}
-import examples.hybrid.transaction.mandatory.{PaymentTransaction, PenaltyTransaction}
+import examples.hybrid.transaction.mandatory.{PaymentTransaction, PenaltyTransaction, RandomnessTransaction}
 import scorex.core.utils.ScorexLogging
 import treasury.crypto.core.{PubKey, SimpleIdentifier}
 import treasury.crypto.decryption.{DecryptionManager, RandomnessGenManager}
@@ -75,6 +75,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
       case t: RandomnessDecryptionTransaction => validateRandomnessDecryptionTransaction(t).get
       case t: PaymentTransaction => validatePayment(t).get
       case t: PenaltyTransaction => validatePenalty(t).get
+      case t: RandomnessTransaction => validateRandomness(t).get
     }
   }
 
@@ -463,6 +464,11 @@ class TreasuryTxValidator(val trState: TreasuryState,
 
     val penalties = trState.getPenalties
     require(penalties.equals(tx.depositsToDestroy), "Penalties are invalid")
+  }
+
+  def validateRandomness(tx: RandomnessTransaction): Try[Unit] = Try {
+    require(TreasuryManager.RANDOMNESS_BLOCK_HEIGHT == epochHeight, "Wrong height for randomness transaction")
+    require(tx.randomness sameElements trState.getRandomness, "Randomness is invalid")
   }
 }
 

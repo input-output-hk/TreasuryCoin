@@ -5,7 +5,7 @@ import java.io.File
 import com.google.common.primitives.Longs
 import examples.commons._
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
-import examples.hybrid.transaction.mandatory.{PaymentTransaction, PenaltyTransaction}
+import examples.hybrid.transaction.mandatory.{PaymentTransaction, PenaltyTransaction, RandomnessTransaction}
 import io.iohk.iodb.{ByteArrayWrapper, LSMStore}
 import scorex.core.VersionTag
 import scorex.core.settings.ScorexSettings
@@ -71,6 +71,7 @@ case class HBoxStoredState(store: LSMStore, override val version: VersionTag) ex
     tx match {
       case t: PaymentTransaction => validatePaymentTx(t)
       case t: PenaltyTransaction => validatePenaltyTx(t)
+      case t: RandomnessTransaction => validateRandomnessTx(t)
       case _ => super.validate(tx)
     }
   }
@@ -80,6 +81,10 @@ case class HBoxStoredState(store: LSMStore, override val version: VersionTag) ex
   }
 
   def validatePenaltyTx(transaction: PenaltyTransaction): Try[Unit] = Try {
+    // TODO: do we need to check something here? actually all validation takes place in TreasuryTxValidator
+  }
+
+  def validateRandomnessTx(transaction: RandomnessTransaction): Try[Unit] = Try {
     // TODO: do we need to check something here? actually all validation takes place in TreasuryTxValidator
   }
 

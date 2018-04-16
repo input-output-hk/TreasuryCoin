@@ -3,7 +3,7 @@ package examples.hybrid.transaction.committee
 import com.google.common.primitives.{Bytes, Longs}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
 import examples.hybrid.TreasuryManager
-import examples.hybrid.transaction.{RandomnessTxTypeId, SignedTreasuryTransaction}
+import examples.hybrid.transaction.{RandomnessSubmissionTxTypeId, SignedTreasuryTransaction}
 import io.circe.Json
 import io.circe.syntax._
 import scorex.core.ModifierTypeId
@@ -54,7 +54,7 @@ case class RandomnessSubmissionTransaction(encryptedRandomness: Ciphertext,
 
 object RandomnessSubmissionTransaction {
 
-  val TransactionTypeId: scorex.core.ModifierTypeId = RandomnessTxTypeId
+  val TransactionTypeId: scorex.core.ModifierTypeId = RandomnessSubmissionTxTypeId
 
   def create(privKey: PrivateKey25519,
              ciphertext: Ciphertext,

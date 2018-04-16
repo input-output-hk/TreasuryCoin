@@ -16,7 +16,7 @@ import examples.hybrid.transaction.committee.DecryptionShareTransaction.Decrypti
 import examples.hybrid.transaction.committee.RecoveryShareTransaction.RecoveryRound
 import examples.hybrid.transaction._
 import examples.hybrid.transaction.committee.{DecryptionShareTransaction, RandomnessDecryptionTransaction, RandomnessSubmissionTransaction, RecoveryShareTransaction}
-import examples.hybrid.transaction.mandatory.{PaymentTransaction, PenaltyTransaction}
+import examples.hybrid.transaction.mandatory.{PaymentTransaction, PenaltyTransaction, RandomnessTransaction}
 import org.slf4j.LoggerFactory
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
@@ -236,6 +236,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       }
       case t: PaymentTransaction => Try(log.info(s"Payment tx was applied ${tx.json}"))
       case t: PenaltyTransaction => Try(log.info(s"Penalty tx was applied ${tx.json}"))
+      case t: RandomnessTransaction => Try(log.info(s"Randomness tx was applied ${tx.json}"))
     }
   }
 
@@ -271,6 +272,8 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
           require(trTxs.count(t => t.isInstanceOf[PaymentTransaction]) == 1, "Invalid block: PaymentTransaction is absent")
         if (epochHeight == TreasuryManager.PENALTY_BLOCK_HEIGHT)
           require(trTxs.count(t => t.isInstanceOf[PenaltyTransaction]) == 1, "Invalid block: PenaltyTransaction is absent")
+        if (epochHeight == TreasuryManager.RANDOMNESS_BLOCK_HEIGHT)
+          require(trTxs.count(t => t.isInstanceOf[RandomnessTransaction]) == 1, "Invalid block: RandomnessTransaction is absent")
 
         val validator = new TreasuryTxValidator(this, blockHeight, Some(history), state)
         trTxs.foreach(validator.validate(_).get)
