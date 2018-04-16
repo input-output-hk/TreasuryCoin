@@ -11,10 +11,12 @@ import examples.hybrid.TreasuryManager.Role.Role
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.BallotTransaction.VoterType
-import examples.hybrid.transaction.DKG._
-import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
-import examples.hybrid.transaction.RecoveryShareTransaction.RecoveryRound
+import examples.hybrid.transaction.committee.DKG._
+import examples.hybrid.transaction.committee.DecryptionShareTransaction.DecryptionRound
+import examples.hybrid.transaction.committee.RecoveryShareTransaction.RecoveryRound
 import examples.hybrid.transaction._
+import examples.hybrid.transaction.committee.{DecryptionShareTransaction, RandomnessDecryptionTransaction, RandomnessSubmissionTransaction, RecoveryShareTransaction}
+import examples.hybrid.transaction.mandatory.{PaymentTransaction, PenaltyTransaction}
 import org.slf4j.LoggerFactory
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
@@ -224,7 +226,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         require(id >= 0, "Committee member isn't found")
         DKGr5Data += (id -> t.r5_1Data)
       }
-      case t: RandomnessTransaction => Try {
+      case t: RandomnessSubmissionTransaction => Try {
         val id = getApprovedCommitteeInfo.indexWhere(_.signingKey == t.pubKey)
         require(id >= 0, "Committee member isn't found")
         submittedRandomnessForNextEpoch += (id -> t.encryptedRandomness)
@@ -733,7 +735,7 @@ object TreasuryState {
     /* extract Randomness data */
     var submittedRandomness: Seq[(PublicKey25519Proposition, Ciphertext)] = Seq()
     epochBlocksIds.foreach { blockId =>
-      history.modifierById(blockId).get.transactions.collect {case t: RandomnessTransaction => t}.foreach { t =>
+      history.modifierById(blockId).get.transactions.collect {case t: RandomnessSubmissionTransaction => t}.foreach { t =>
         submittedRandomness :+= (t.pubKey, t.encryptedRandomness)
       }
     }

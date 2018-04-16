@@ -12,10 +12,11 @@ import examples.hybrid.history.HybridHistory
 import examples.hybrid.settings.TreasurySettings
 import examples.hybrid.state.{HBoxStoredState, TreasuryState, TreasuryTxValidator}
 import examples.hybrid.transaction.BallotTransaction.VoterType
-import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
-import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound.DecryptionRound
-import examples.hybrid.transaction.RecoveryShareTransaction.RecoveryRound.RecoveryRound
-import examples.hybrid.transaction.RecoveryShareTransaction.{OpenedShareWithId, RecoveryRound}
+import examples.hybrid.transaction.committee.{DecryptionShareTransaction, RandomnessDecryptionTransaction, RandomnessSubmissionTransaction, RecoveryShareTransaction}
+import examples.hybrid.transaction.committee.DecryptionShareTransaction.DecryptionRound
+import examples.hybrid.transaction.committee.DecryptionShareTransaction.DecryptionRound.DecryptionRound
+import examples.hybrid.transaction.committee.RecoveryShareTransaction.RecoveryRound.RecoveryRound
+import examples.hybrid.transaction.committee.RecoveryShareTransaction.{OpenedShareWithId, RecoveryRound}
 import examples.hybrid.wallet.{HWallet, TreasuryCommitteeSecret, TreasurySigningSecret}
 import scorex.core.NodeViewHolder.ReceivableMessages.LocallyGeneratedTransaction
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
@@ -247,13 +248,13 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
     } else Seq()
   }
 
-  private def generateRandomnessTx(view: NodeView): Try[Seq[RandomnessTransaction]] = Try {
+  private def generateRandomnessTx(view: NodeView): Try[Seq[RandomnessSubmissionTransaction]] = Try {
     val secrets = checkCommitteeMemberRegistration(view)
     if (secrets.isDefined) {
       val (signingSecret, proxySecret) = secrets.get
 
       val pending = view.pool.unconfirmed.map(_._2).find {
-        case t: RandomnessTransaction => signingSecret.privKey.publicImage == t.pubKey
+        case t: RandomnessSubmissionTransaction => signingSecret.privKey.publicImage == t.pubKey
         case _ => false
       }.isDefined
 
@@ -262,7 +263,7 @@ class TreasuryTxForger(viewHolderRef: ActorRef, settings: TreasurySettings) exte
         val pubKey = TreasuryManager.cs.basePoint.multiply(proxySecret.secretKey)
         val encryptedSeed = RandomnessGenManager.encryptRandomnessShare(TreasuryManager.cs, pubKey, seed)
 
-        val tx = RandomnessTransaction.create(signingSecret.privKey, encryptedSeed, view.trState.epochNum).get
+        val tx = RandomnessSubmissionTransaction.create(signingSecret.privKey, encryptedSeed, view.trState.epochNum).get
         val valid = Try(new TreasuryTxValidator(view.trState, view.history.height + 1, Some(view.history))).flatMap(_.validate(tx))
         if(valid.isSuccess) Seq(tx) else Seq()
       } else Seq()

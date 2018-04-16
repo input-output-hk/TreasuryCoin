@@ -1,4 +1,4 @@
-package examples.hybrid.transaction.DKG
+package examples.hybrid.transaction.committee.DKG
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}

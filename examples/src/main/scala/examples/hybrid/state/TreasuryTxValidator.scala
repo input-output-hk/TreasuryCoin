@@ -7,10 +7,12 @@ import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager.Role
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.BallotTransaction.VoterType
-import examples.hybrid.transaction.DKG._
-import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
-import examples.hybrid.transaction.RecoveryShareTransaction.RecoveryRound
+import examples.hybrid.transaction.committee.DKG._
+import examples.hybrid.transaction.committee.DecryptionShareTransaction.DecryptionRound
+import examples.hybrid.transaction.committee.RecoveryShareTransaction.RecoveryRound
 import examples.hybrid.transaction._
+import examples.hybrid.transaction.committee.{DecryptionShareTransaction, RandomnessDecryptionTransaction, RandomnessSubmissionTransaction, RecoveryShareTransaction}
+import examples.hybrid.transaction.mandatory.{PaymentTransaction, PenaltyTransaction}
 import scorex.core.utils.ScorexLogging
 import treasury.crypto.core.{PubKey, SimpleIdentifier}
 import treasury.crypto.decryption.{DecryptionManager, RandomnessGenManager}
@@ -69,7 +71,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
       case t: DKGr3Transaction => validateDKGTransaction(t).get
       case t: DKGr4Transaction => validateDKGTransaction(t).get
       case t: DKGr5Transaction => validateDKGTransaction(t).get
-      case t: RandomnessTransaction => validateRandomnessTransaction(t).get
+      case t: RandomnessSubmissionTransaction => validateRandomnessSubmissionTransaction(t).get
       case t: RandomnessDecryptionTransaction => validateRandomnessDecryptionTransaction(t).get
       case t: PaymentTransaction => validatePayment(t).get
       case t: PenaltyTransaction => validatePenalty(t).get
@@ -367,7 +369,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
     }
   }
 
-  def validateRandomnessTransaction(tx: RandomnessTransaction): Try[Unit] = Try {
+  def validateRandomnessSubmissionTransaction(tx: RandomnessSubmissionTransaction): Try[Unit] = Try {
     require(TreasuryManager.RANDOMNESS_SUBMISSION_RANGE.contains(epochHeight), "Wrong height for randomness transaction")
 
     val id = trState.getApprovedCommitteeInfo.indexWhere(_.signingKey == tx.pubKey)
@@ -390,7 +392,7 @@ class TreasuryTxValidator(val trState: TreasuryState,
       require(!trState.getDecryptedRandomness.contains(tx.pubKey), "The committee member has already submitted randomness decryption tx")
 
       val encryptedRandomness = prevRandomnessSumbmission.find(_._1 == issuerInfo.get.signingKey)
-      require(encryptedRandomness.isDefined, "The committee member hasn't submitted RandomnessTransaction in the previoius epoch")
+      require(encryptedRandomness.isDefined, "The committee member hasn't submitted RandomnessSubmissionTransaction in the previoius epoch")
 
       val prevR3Data = TreasuryState.generateR3Data(history.get, prevEpochId).get
       val memberId = prevCommittee.indexWhere(_.signingKey == tx.pubKey)

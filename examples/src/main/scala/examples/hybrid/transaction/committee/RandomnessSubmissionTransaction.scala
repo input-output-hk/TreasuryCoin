@@ -1,8 +1,9 @@
-package examples.hybrid.transaction
+package examples.hybrid.transaction.committee
 
 import com.google.common.primitives.{Bytes, Longs}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
 import examples.hybrid.TreasuryManager
+import examples.hybrid.transaction.{RandomnessTxTypeId, SignedTreasuryTransaction}
 import io.circe.Json
 import io.circe.syntax._
 import scorex.core.ModifierTypeId
@@ -16,15 +17,15 @@ import treasury.crypto.core.{Ciphertext, CiphertextSerizlizer}
 
 import scala.util.Try
 
-case class RandomnessTransaction(encryptedRandomness: Ciphertext,
-                                 override val epochID: Long,
-                                 override val pubKey: PublicKey25519Proposition, // previously registered committee signing public key
-                                 override val signature: Signature25519,
-                                 override val timestamp: Long) extends SignedTreasuryTransaction(timestamp) {
+case class RandomnessSubmissionTransaction(encryptedRandomness: Ciphertext,
+                                           override val epochID: Long,
+                                           override val pubKey: PublicKey25519Proposition, // previously registered committee signing public key
+                                           override val signature: Signature25519,
+                                           override val timestamp: Long) extends SignedTreasuryTransaction(timestamp) {
 
   override type M = SimpleBoxTransaction
 
-  override val transactionTypeId: ModifierTypeId = RandomnessTransaction.TransactionTypeId
+  override val transactionTypeId: ModifierTypeId = RandomnessSubmissionTransaction.TransactionTypeId
 
   override val serializer = SimpleBoxTransactionCompanion
 
@@ -48,28 +49,28 @@ case class RandomnessTransaction(encryptedRandomness: Ciphertext,
     require(signature.isValid(pubKey, messageToSign))
   }
 
-  override def toString: String = s"RandomnessTransaction (${json.noSpaces})"
+  override def toString: String = s"RandomnessSubmissionTransaction (${json.noSpaces})"
 }
 
-object RandomnessTransaction {
+object RandomnessSubmissionTransaction {
 
   val TransactionTypeId: scorex.core.ModifierTypeId = RandomnessTxTypeId
 
   def create(privKey: PrivateKey25519,
              ciphertext: Ciphertext,
-             epochID: Long): Try[RandomnessTransaction] = Try {
+             epochID: Long): Try[RandomnessSubmissionTransaction] = Try {
     val timestamp = System.currentTimeMillis()
     val fakeSig = Signature25519(Signature @@ Array[Byte]())
-    val unsigned = RandomnessTransaction(ciphertext, epochID, privKey.publicImage, fakeSig, timestamp)
+    val unsigned = RandomnessSubmissionTransaction(ciphertext, epochID, privKey.publicImage, fakeSig, timestamp)
     val sig = PrivateKey25519Companion.sign(privKey, unsigned.messageToSign)
 
-    RandomnessTransaction(ciphertext, epochID, privKey.publicImage, sig, timestamp)
+    RandomnessSubmissionTransaction(ciphertext, epochID, privKey.publicImage, sig, timestamp)
   }
 }
 
-object RandomnessTransactionCompanion extends Serializer[RandomnessTransaction] {
+object RandomnessSubmissionTransactionCompanion extends Serializer[RandomnessSubmissionTransaction] {
 
-  def toBytes(t: RandomnessTransaction): Array[Byte] = {
+  def toBytes(t: RandomnessSubmissionTransaction): Array[Byte] = {
     Bytes.concat(
       CiphertextSerizlizer.toBytes(t.encryptedRandomness),
       Longs.toByteArray(t.epochID),
@@ -79,7 +80,7 @@ object RandomnessTransactionCompanion extends Serializer[RandomnessTransaction] 
     )
   }
 
-  def parseBytes(bytes: Array[Byte]): Try[RandomnessTransaction] = Try {
+  def parseBytes(bytes: Array[Byte]): Try[RandomnessSubmissionTransaction] = Try {
     val encryptedRandomness = CiphertextSerizlizer.parseBytes(bytes, TreasuryManager.cs).get
     var s = CiphertextSerizlizer.toBytes(encryptedRandomness).size
 
@@ -90,6 +91,6 @@ object RandomnessTransactionCompanion extends Serializer[RandomnessTransaction] 
     s = s + Curve25519.SignatureLength
     val timestamp = Longs.fromByteArray(bytes.slice(s,s+8))
 
-    RandomnessTransaction(encryptedRandomness, epochID, pubKey, sig, timestamp)
+    RandomnessSubmissionTransaction(encryptedRandomness, epochID, pubKey, sig, timestamp)
   }
 }

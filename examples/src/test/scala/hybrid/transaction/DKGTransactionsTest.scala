@@ -2,7 +2,7 @@ package hybrid.transaction
 
 import com.google.common.primitives.Longs
 import examples.commons.SimpleBoxTransactionCompanion
-import examples.hybrid.transaction.DKG._
+import examples.hybrid.transaction.committee.DKG._
 import org.scalatest.FunSuite
 import scorex.core.transaction.state.PrivateKey25519Companion
 import treasury.crypto.core.Cryptosystem

@@ -5,7 +5,7 @@ import java.io.File
 import com.google.common.primitives.Longs
 import examples.commons._
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
-import examples.hybrid.transaction.{PaymentTransaction, PenaltyTransaction}
+import examples.hybrid.transaction.mandatory.{PaymentTransaction, PenaltyTransaction}
 import io.iohk.iodb.{ByteArrayWrapper, LSMStore}
 import scorex.core.VersionTag
 import scorex.core.settings.ScorexSettings

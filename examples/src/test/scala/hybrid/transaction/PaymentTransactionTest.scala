@@ -1,7 +1,7 @@
 package hybrid.transaction
 
 import examples.commons.{PublicKey25519NoncedBox, SimpleBoxTransactionCompanion, Value}
-import examples.hybrid.transaction.PaymentTransaction
+import examples.hybrid.transaction.mandatory.PaymentTransaction
 import hybrid.HybridGenerators
 import org.scalatest.FunSuite
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition

@@ -1,8 +1,9 @@
-package examples.hybrid.transaction
+package examples.hybrid.transaction.committee
 
 import com.google.common.primitives.{Bytes, Longs}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
 import examples.hybrid.TreasuryManager
+import examples.hybrid.transaction.{RandomnessDecryptionTxTypeId, SignedTreasuryTransaction}
 import io.circe.Json
 import io.circe.syntax._
 import scorex.core.ModifierTypeId
@@ -12,7 +13,6 @@ import scorex.core.transaction.proof.Signature25519
 import scorex.core.transaction.state.{PrivateKey25519, PrivateKey25519Companion}
 import scorex.crypto.encode.Base58
 import scorex.crypto.signatures.{Curve25519, PublicKey, Signature}
-import treasury.crypto.core.{Ciphertext, CiphertextSerizlizer}
 import treasury.crypto.decryption.{DecryptedRandomnessShare, DecryptedRandomnessShareSerializer}
 
 import scala.util.Try

@@ -1,9 +1,9 @@
-package examples.hybrid.transaction.DKG
+package examples.hybrid.transaction.committee.DKG
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
 import examples.hybrid.TreasuryManager
-import examples.hybrid.transaction.{DKGr4TxTypeId, SignedTreasuryTransaction}
+import examples.hybrid.transaction.{DKGr1TxTypeId, SignedTreasuryTransaction}
 import io.circe.Json
 import io.circe.syntax._
 import scorex.core.ModifierTypeId
@@ -13,11 +13,11 @@ import scorex.core.transaction.proof.Signature25519
 import scorex.core.transaction.state.{PrivateKey25519, PrivateKey25519Companion}
 import scorex.crypto.encode.Base58
 import scorex.crypto.signatures.{Curve25519, PublicKey, Signature}
-import treasury.crypto.keygen.datastructures.round4.{R4Data, R4DataSerializer}
+import treasury.crypto.keygen.datastructures.round1.{R1Data, R1DataSerializer}
 
 import scala.util.Try
 
-case class DKGr4Transaction( r4Data: R4Data,
+case class DKGr1Transaction( r1Data: R1Data,
                              override val epochID: Long,
                              override val pubKey: PublicKey25519Proposition, // previously registered committee public key
                              override val signature: Signature25519,
@@ -25,7 +25,7 @@ case class DKGr4Transaction( r4Data: R4Data,
 
   override type M = SimpleBoxTransaction
 
-  override val transactionTypeId: ModifierTypeId = DKGr4Transaction.TransactionTypeId
+  override val transactionTypeId: ModifierTypeId = DKGr1Transaction.TransactionTypeId
 
   override val serializer = SimpleBoxTransactionCompanion
 
@@ -37,7 +37,7 @@ case class DKGr4Transaction( r4Data: R4Data,
 
     Bytes.concat(
       pubKey.bytes,
-      r4Data.bytes,
+      r1Data.bytes,
       Longs.toByteArray(epochID),
       superBytes)
   }
@@ -49,32 +49,32 @@ case class DKGr4Transaction( r4Data: R4Data,
     require(signature.isValid(pubKey, messageToSign))
   }
 
-  override def toString: String = s"DKGr4Transaction (${json.noSpaces})"
+  override def toString: String = s"DKGr1Transaction (${json.noSpaces})"
 }
 
-object DKGr4Transaction {
+object DKGr1Transaction {
 
-  val TransactionTypeId: scorex.core.ModifierTypeId = DKGr4TxTypeId
+  val TransactionTypeId: scorex.core.ModifierTypeId = DKGr1TxTypeId
 
   def create(privKey: PrivateKey25519,
-             r4Data: R4Data,
-             epochID: Long): Try[DKGr4Transaction] = Try {
+             r1Data: R1Data,
+             epochID: Long): Try[DKGr1Transaction] = Try {
     val timestamp = System.currentTimeMillis()
     val fakeSig = Signature25519(Signature @@ Array[Byte]())
-    val unsigned = DKGr4Transaction(r4Data, epochID, privKey.publicImage, fakeSig, timestamp)
+    val unsigned = DKGr1Transaction(r1Data, epochID, privKey.publicImage, fakeSig, timestamp)
     val sig = PrivateKey25519Companion.sign(privKey, unsigned.messageToSign)
 
-    DKGr4Transaction(r4Data, epochID, privKey.publicImage, sig, timestamp)
+    DKGr1Transaction(r1Data, epochID, privKey.publicImage, sig, timestamp)
   }
 }
 
-object DKGr4TransactionCompanion extends Serializer[DKGr4Transaction] {
+object DKGr1TransactionCompanion extends Serializer[DKGr1Transaction] {
 
-  def toBytes(t: DKGr4Transaction): Array[Byte] = {
+  def toBytes(t: DKGr1Transaction): Array[Byte] = {
 
     Bytes.concat(
-      Ints.toByteArray(t.r4Data.size),
-      t.r4Data.bytes,
+      Ints.toByteArray(t.r1Data.size),
+      t.r1Data.bytes,
       Longs.toByteArray(t.epochID),
       t.pubKey.bytes,
       t.signature.bytes,
@@ -82,14 +82,14 @@ object DKGr4TransactionCompanion extends Serializer[DKGr4Transaction] {
     )
   }
 
-  def parseBytes(bytes: Array[Byte]): Try[DKGr4Transaction] = Try {
+  def parseBytes(bytes: Array[Byte]): Try[DKGr1Transaction] = Try {
 
     var offset = 0
     def offsetPlus (i: Int): Int = { offset += i; offset }
 
-    val r4DataSize = Ints.fromByteArray(bytes.slice(offset, offsetPlus(4)))
+    val r1DataSize = Ints.fromByteArray(bytes.slice(offset, offsetPlus(4)))
 
-    val r4Data = R4DataSerializer.parseBytes(bytes.slice(offset, offsetPlus(r4DataSize)), TreasuryManager.cs).get
+    val r1Data = R1DataSerializer.parseBytes(bytes.slice(offset, offsetPlus(r1DataSize)), TreasuryManager.cs).get
 
     val epochID = Longs.fromByteArray(bytes.slice(offset, offsetPlus(8)))
 
@@ -99,7 +99,6 @@ object DKGr4TransactionCompanion extends Serializer[DKGr4Transaction] {
 
     val timestamp = Longs.fromByteArray(bytes.slice(offset, offsetPlus(8)))
 
-    DKGr4Transaction(r4Data, epochID, pubKey, sig, timestamp)
+    DKGr1Transaction(r1Data, epochID, pubKey, sig, timestamp)
   }
 }
-

@@ -8,7 +8,7 @@ import examples.hybrid.TreasuryManager
 import examples.hybrid.TreasuryManager._
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.CommitteeMember.{StateModified, TxInfo}
-import examples.hybrid.transaction.DKG._
+import examples.hybrid.transaction.committee.DKG._
 import examples.hybrid.transaction._
 import examples.hybrid.wallet.HWallet
 import scorex.core.NodeViewHolder.ReceivableMessages.LocallyGeneratedTransaction
