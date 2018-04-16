@@ -1,8 +1,9 @@
-package examples.hybrid.transaction
+package examples.hybrid.transaction.committee
 
 import com.google.common.primitives.{Bytes, Longs}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
 import examples.hybrid.TreasuryManager
+import examples.hybrid.transaction.{RandomnessDecryptionTxTypeId, SignedTreasuryTransaction}
 import io.circe.Json
 import io.circe.syntax._
 import scorex.core.ModifierTypeId
@@ -12,19 +13,19 @@ import scorex.core.transaction.proof.Signature25519
 import scorex.core.transaction.state.{PrivateKey25519, PrivateKey25519Companion}
 import scorex.crypto.encode.Base58
 import scorex.crypto.signatures.{Curve25519, PublicKey, Signature}
-import treasury.crypto.core.{Ciphertext, CiphertextSerizlizer}
+import treasury.crypto.decryption.{DecryptedRandomnessShare, DecryptedRandomnessShareSerializer}
 
 import scala.util.Try
 
-case class RandomnessTransaction(encryptedRandomness: Ciphertext,
-                                 override val epochID: Long,
-                                 override val pubKey: PublicKey25519Proposition, // previously registered committee signing public key
-                                 override val signature: Signature25519,
-                                 override val timestamp: Long) extends SignedTreasuryTransaction(timestamp) {
+case class RandomnessDecryptionTransaction(decryptedRandomness: DecryptedRandomnessShare,
+                                           override val epochID: Long,
+                                           override val pubKey: PublicKey25519Proposition, // previously registered committee signing public key
+                                           override val signature: Signature25519,
+                                           override val timestamp: Long) extends SignedTreasuryTransaction(timestamp) {
 
   override type M = SimpleBoxTransaction
 
-  override val transactionTypeId: ModifierTypeId = RandomnessTransaction.TransactionTypeId
+  override val transactionTypeId: ModifierTypeId = RandomnessDecryptionTransaction.TransactionTypeId
 
   override val serializer = SimpleBoxTransactionCompanion
 
@@ -35,7 +36,7 @@ case class RandomnessTransaction(encryptedRandomness: Ciphertext,
       Longs.toByteArray(fee))
 
     Bytes.concat(
-      CiphertextSerizlizer.toBytes(encryptedRandomness),
+      decryptedRandomness.bytes,
       Longs.toByteArray(epochID),
       pubKey.bytes,
       superBytes)
@@ -48,30 +49,30 @@ case class RandomnessTransaction(encryptedRandomness: Ciphertext,
     require(signature.isValid(pubKey, messageToSign))
   }
 
-  override def toString: String = s"RandomnessTransaction (${json.noSpaces})"
+  override def toString: String = s"RandomnessDecryptionTransaction (${json.noSpaces})"
 }
 
-object RandomnessTransaction {
+object RandomnessDecryptionTransaction {
 
-  val TransactionTypeId: scorex.core.ModifierTypeId = RandomnessTxTypeId
+  val TransactionTypeId: scorex.core.ModifierTypeId = RandomnessDecryptionTxTypeId
 
   def create(privKey: PrivateKey25519,
-             ciphertext: Ciphertext,
-             epochID: Long): Try[RandomnessTransaction] = Try {
+             decryptedRandomness: DecryptedRandomnessShare,
+             epochID: Long): Try[RandomnessDecryptionTransaction] = Try {
     val timestamp = System.currentTimeMillis()
     val fakeSig = Signature25519(Signature @@ Array[Byte]())
-    val unsigned = RandomnessTransaction(ciphertext, epochID, privKey.publicImage, fakeSig, timestamp)
+    val unsigned = RandomnessDecryptionTransaction(decryptedRandomness, epochID, privKey.publicImage, fakeSig, timestamp)
     val sig = PrivateKey25519Companion.sign(privKey, unsigned.messageToSign)
 
-    RandomnessTransaction(ciphertext, epochID, privKey.publicImage, sig, timestamp)
+    RandomnessDecryptionTransaction(decryptedRandomness, epochID, privKey.publicImage, sig, timestamp)
   }
 }
 
-object RandomnessTransactionCompanion extends Serializer[RandomnessTransaction] {
+object RandomnessDecryptionTransactionCompanion extends Serializer[RandomnessDecryptionTransaction] {
 
-  def toBytes(t: RandomnessTransaction): Array[Byte] = {
+  def toBytes(t: RandomnessDecryptionTransaction): Array[Byte] = {
     Bytes.concat(
-      CiphertextSerizlizer.toBytes(t.encryptedRandomness),
+      t.decryptedRandomness.bytes,
       Longs.toByteArray(t.epochID),
       t.pubKey.bytes,
       t.signature.bytes,
@@ -79,9 +80,9 @@ object RandomnessTransactionCompanion extends Serializer[RandomnessTransaction] 
     )
   }
 
-  def parseBytes(bytes: Array[Byte]): Try[RandomnessTransaction] = Try {
-    val encryptedRandomness = CiphertextSerizlizer.parseBytes(bytes, TreasuryManager.cs).get
-    var s = CiphertextSerizlizer.toBytes(encryptedRandomness).size
+  def parseBytes(bytes: Array[Byte]): Try[RandomnessDecryptionTransaction] = Try {
+    val decryptedRand = DecryptedRandomnessShareSerializer.parseBytes(bytes, TreasuryManager.cs).get
+    var s = decryptedRand.bytes.size
 
     val epochID = Longs.fromByteArray(bytes.slice(s,s+8))
     val pubKey = PublicKey25519Proposition(PublicKey @@ bytes.slice(s+8, s+8+Curve25519.KeyLength))
@@ -90,6 +91,6 @@ object RandomnessTransactionCompanion extends Serializer[RandomnessTransaction] 
     s = s + Curve25519.SignatureLength
     val timestamp = Longs.fromByteArray(bytes.slice(s,s+8))
 
-    RandomnessTransaction(encryptedRandomness, epochID, pubKey, sig, timestamp)
+    RandomnessDecryptionTransaction(decryptedRand, epochID, pubKey, sig, timestamp)
   }
 }

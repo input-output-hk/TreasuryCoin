@@ -1,9 +1,10 @@
-package examples.hybrid.transaction
+package examples.hybrid.transaction.mandatory
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.commons._
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.state.{HBoxStoredState, TreasuryState}
+import examples.hybrid.transaction.{PaymentTxTypeId, TreasuryTransaction}
 import io.circe.Json
 import io.circe.syntax._
 import io.iohk.iodb.ByteArrayWrapper
@@ -11,7 +12,7 @@ import scorex.core.ModifierTypeId
 import scorex.core.serialization.Serializer
 import scorex.core.transaction.box.proposition.{PublicKey25519Proposition, PublicKey25519PropositionSerializer}
 import scorex.crypto.encode.Base58
-import scorex.crypto.signatures.{Curve25519, PublicKey}
+import scorex.crypto.signatures.Curve25519
 
 import scala.util.Try
 

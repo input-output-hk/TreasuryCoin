@@ -11,10 +11,12 @@ import examples.hybrid.TreasuryManager.Role.Role
 import examples.hybrid.blocks.{HybridBlock, PosBlock, PowBlock}
 import examples.hybrid.history.HybridHistory
 import examples.hybrid.transaction.BallotTransaction.VoterType
-import examples.hybrid.transaction.DKG._
-import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
-import examples.hybrid.transaction.RecoveryShareTransaction.RecoveryRound
+import examples.hybrid.transaction.committee.DKG._
+import examples.hybrid.transaction.committee.DecryptionShareTransaction.DecryptionRound
+import examples.hybrid.transaction.committee.RecoveryShareTransaction.RecoveryRound
 import examples.hybrid.transaction._
+import examples.hybrid.transaction.committee.{DecryptionShareTransaction, RandomnessDecryptionTransaction, RandomnessSubmissionTransaction, RecoveryShareTransaction}
+import examples.hybrid.transaction.mandatory.{PaymentTransaction, PenaltyTransaction, RandomnessTransaction}
 import org.slf4j.LoggerFactory
 import scorex.core.transaction.box.proposition.PublicKey25519Proposition
 import scorex.core.utils.ScorexLogging
@@ -224,7 +226,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         require(id >= 0, "Committee member isn't found")
         DKGr5Data += (id -> t.r5_1Data)
       }
-      case t: RandomnessTransaction => Try {
+      case t: RandomnessSubmissionTransaction => Try {
         val id = getApprovedCommitteeInfo.indexWhere(_.signingKey == t.pubKey)
         require(id >= 0, "Committee member isn't found")
         submittedRandomnessForNextEpoch += (id -> t.encryptedRandomness)
@@ -234,11 +236,13 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       }
       case t: PaymentTransaction => Try(log.info(s"Payment tx was applied ${tx.json}"))
       case t: PenaltyTransaction => Try(log.info(s"Penalty tx was applied ${tx.json}"))
+      case t: RandomnessTransaction => Try((randomness = t.randomness))
     }
   }
 
-  def apply(block: HybridBlock, history: HybridHistory, state: Option[HBoxStoredState] = None): Try[TreasuryState] = Try {
-    validate(block, history, state).get
+  def apply(block: HybridBlock, history: HybridHistory, withValidation: Boolean, state: Option[HBoxStoredState] = None): Try[TreasuryState] = Try {
+    if (withValidation)
+      validate(block, history, state).get
 
     block match {
       case b:PosBlock => {
@@ -268,6 +272,8 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
           require(trTxs.count(t => t.isInstanceOf[PaymentTransaction]) == 1, "Invalid block: PaymentTransaction is absent")
         if (epochHeight == TreasuryManager.PENALTY_BLOCK_HEIGHT)
           require(trTxs.count(t => t.isInstanceOf[PenaltyTransaction]) == 1, "Invalid block: PenaltyTransaction is absent")
+        if (epochHeight == TreasuryManager.RANDOMNESS_BLOCK_HEIGHT)
+          require(trTxs.count(t => t.isInstanceOf[RandomnessTransaction]) == 1, "Invalid block: RandomnessTransaction is absent")
 
         val validator = new TreasuryTxValidator(this, blockHeight, Some(history), state)
         trTxs.foreach(validator.validate(_).get)
@@ -291,6 +297,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
       case TreasuryManager.RANDOMNESS_DECRYPTION_RECOVERY_RANGE.end =>
         recoverRandomness(history)
         updateRandomness()
+      case TreasuryManager.RANDOMNESS_BLOCK_HEIGHT =>
         selectApprovedCommittee()
       case TreasuryManager.DISTR_KEY_GEN_R5_RANGE.end =>
         retrieveSharedPublicKey()
@@ -605,6 +612,8 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
 object TreasuryState {
 
+  private val logger = Logger(LoggerFactory.getLogger(getClass.getName))
+
   /**
     * Recovers info about voters/experts/committies for old epochs.
     * It is done by partial reconstruction of the TreasuryState for the required epoch.
@@ -615,6 +624,7 @@ object TreasuryState {
     */
   def generatePartiesInfo(history: HybridHistory, epochId: Int):
     Try[(Seq[VoterInfo], Seq[ExpertInfo], Seq[CommitteeInfo])] = Try {
+    logger.info(s"Generating parties info for epochId ${epochId} ...")
 
     val currentHeight = history.storage.height.toInt
     val currentEpochNum = currentHeight / TreasuryManager.EPOCH_LEN
@@ -622,18 +632,26 @@ object TreasuryState {
     require(epochId >= 0 && epochId < currentEpochNum, "Parties info can be requested only for past epochs. Use getInfo methods directly for the current epoch.")
 
     val count = (currentEpochNum - epochId) * TreasuryManager.EPOCH_LEN + currentEpochHeight + 1
-    // we should take all registration blocks and first block after registration (cause at this point approved CMs are selected)
-    val epochBlocksIds = history.lastBlockIds(history.bestBlock, count).take(TreasuryManager.RANDOMNESS_DECRYPTION_RECOVERY_RANGE.end + 1)
+    // we should take all registration blocks and block where approved CMs are selected (we don't want to apply all
+    // blocks until committe selection because it would be too heavy (requires recursive calls to all past epochs until genesis)
+    val epochBlocksIds = history.lastBlockIds(history.bestBlock, count)
+    val offset = count - epochBlocksIds.size // for the initial epoch genesis blocks (0 and 1) will not be returned, so we need to count this
+    val registrationBlockIds = epochBlocksIds.take(TreasuryManager.EXPERT_REGISTER_RANGE.end - offset)
+    val committeeSelectionBlockId = epochBlocksIds(TreasuryManager.RANDOMNESS_BLOCK_HEIGHT - offset)
+    require(
+      (history.storage.heightOf(committeeSelectionBlockId).get % TreasuryManager.EPOCH_LEN) == TreasuryManager.RANDOMNESS_BLOCK_HEIGHT,
+      "This should not happen. Wrong block was chosen in the previous line.")
 
     val trState = TreasuryState(epochId)
 
     /* reconstruct necessary part of the TreasuryState */
-    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history).get)
+    (registrationBlockIds :+ committeeSelectionBlockId).foreach { blockId =>
+      trState.apply(history.modifierById(blockId).get, history, false).get
+    }
 
     (trState.getVotersInfo, trState.getExpertsInfo, trState.getCommitteeInfo)
 
   }.recoverWith{ case t =>
-    val logger = Logger(LoggerFactory.getLogger(getClass.getName))
     logger.error("Failed to generate parties info", t)
     Failure(t)
   }
@@ -647,6 +665,8 @@ object TreasuryState {
     * @return Success(seq) where seq is a sequence of R1Data
     */
   def generateR1Data(history: HybridHistory, epochId: Int): Try[Seq[R1Data]] = Try {
+    logger.info(s"Generating R1Data for epochId ${epochId} ...")
+
     val currentHeight = history.storage.height.toInt
     val currentEpochNum = currentHeight / TreasuryManager.EPOCH_LEN
     val currentEpochHeight = currentHeight % TreasuryManager.EPOCH_LEN
@@ -667,7 +687,6 @@ object TreasuryState {
     }
     r1Data
   }.recoverWith{ case t =>
-    val logger = Logger(LoggerFactory.getLogger(getClass.getName))
     logger.error("Failed to generate R1Data", t)
     Failure(t)
   }
@@ -681,6 +700,7 @@ object TreasuryState {
     * @return Success(seq) where seq is a sequence of R3Data
     */
   def generateR3Data(history: HybridHistory, epochId: Int): Try[Seq[R3Data]] = Try {
+    logger.info(s"Generating R3Data for epochId ${epochId} ...")
     val currentHeight = history.storage.height.toInt
     val currentEpochNum = currentHeight / TreasuryManager.EPOCH_LEN
     val currentEpochHeight = currentHeight % TreasuryManager.EPOCH_LEN
@@ -701,7 +721,6 @@ object TreasuryState {
     }
     r3Data
   }.recoverWith{ case t =>
-    val logger = Logger(LoggerFactory.getLogger(getClass.getName))
     logger.error("Failed to generate R3Data", t)
     Failure(t)
   }
@@ -717,6 +736,7 @@ object TreasuryState {
     */
   def generateRandomnessSubmission(history: HybridHistory, epochId: Int):
     Try[Seq[(PublicKey25519Proposition, Ciphertext)]] = Try {
+    logger.info(s"Generating randomness submission for epochId ${epochId} ...")
 
     val currentHeight = history.storage.height.toInt
     val currentEpochNum = currentHeight / TreasuryManager.EPOCH_LEN
@@ -732,13 +752,12 @@ object TreasuryState {
     /* extract Randomness data */
     var submittedRandomness: Seq[(PublicKey25519Proposition, Ciphertext)] = Seq()
     epochBlocksIds.foreach { blockId =>
-      history.modifierById(blockId).get.transactions.collect {case t: RandomnessTransaction => t}.foreach { t =>
+      history.modifierById(blockId).get.transactions.collect {case t: RandomnessSubmissionTransaction => t}.foreach { t =>
         submittedRandomness :+= (t.pubKey, t.encryptedRandomness)
       }
     }
     submittedRandomness
   }.recoverWith{ case t =>
-    val logger = Logger(LoggerFactory.getLogger(getClass.getName))
     logger.error("Failed to generate randomness submission", t)
     Failure(t)
   }
@@ -753,8 +772,6 @@ object TreasuryState {
     * @return
     */
   def generate(history: HybridHistory, endBlock: ModifierId, state: Option[HBoxStoredState] = None): Try[TreasuryState] = Try {
-    val logger = Logger(LoggerFactory.getLogger(getClass.getName))
-
     CommitteeMember.stopMember()
     logger.info("Generating current treasury state ...")
 
@@ -769,11 +786,10 @@ object TreasuryState {
     val strings = epochBlocksIds.map(Base58.encode(_) + "\n")
     logger.info(s"Applying blocks for endBlock: ${Base58.encode(endBlock)} \n ${strings}")
     /* parse all blocks in the current epoch and extract all treasury transactions */
-    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history, state).get)
+    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history, true, state).get)
     trState
 
   }.recoverWith{ case t =>
-    val logger = Logger(LoggerFactory.getLogger(getClass.getName))
     logger.error("Failed to generate treausury state", t)
     Failure(t)
   }
@@ -786,6 +802,8 @@ object TreasuryState {
     * @return Success(TreasuryState) or Failure(e) in case it can't be derived for provided epochId
     */
   def generate(history: HybridHistory, epochId: Int): Try[TreasuryState] = Try {
+    logger.info(s"Generating treasury state for epochId ${epochId} ...")
+
     val currentHeight = history.storage.height.toInt
     val currentEpochNum = currentHeight / TreasuryManager.EPOCH_LEN
     val currentEpochHeight = currentHeight % TreasuryManager.EPOCH_LEN
@@ -805,11 +823,10 @@ object TreasuryState {
     val trState = TreasuryState(epochId)
 
     /* parse all blocks in the epoch and extract all treasury transactions */
-    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history).get)
+    epochBlocksIds.foreach(blockId => trState.apply(history.modifierById(blockId).get, history, false).get)
     trState
 
   }.recoverWith{ case t =>
-    val logger = Logger(LoggerFactory.getLogger(getClass.getName))
     logger.error(s"Failed to generate treausury state for epoch ${epochId}", t)
     Failure(t)
   }

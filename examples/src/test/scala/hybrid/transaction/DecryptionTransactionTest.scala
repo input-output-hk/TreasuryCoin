@@ -2,8 +2,8 @@ package hybrid.transaction
 
 import examples.commons.SimpleBoxTransactionCompanion
 import examples.hybrid.TreasuryManager
-import examples.hybrid.transaction.DecryptionShareTransaction
-import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
+import examples.hybrid.transaction.committee.DecryptionShareTransaction
+import examples.hybrid.transaction.committee.DecryptionShareTransaction.DecryptionRound
 import org.scalatest.FunSuite
 import scorex.core.transaction.state.PrivateKey25519
 import scorex.crypto.signatures.{PrivateKey, PublicKey}

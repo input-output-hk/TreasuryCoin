@@ -2,8 +2,8 @@ package hybrid.transaction
 
 import examples.commons.SimpleBoxTransactionCompanion
 import examples.hybrid.TreasuryManager
-import examples.hybrid.transaction.RecoveryShareTransaction
-import examples.hybrid.transaction.RecoveryShareTransaction.{OpenedShareWithId, RecoveryRound}
+import examples.hybrid.transaction.committee.RecoveryShareTransaction
+import examples.hybrid.transaction.committee.RecoveryShareTransaction.{OpenedShareWithId, RecoveryRound}
 import org.scalatest.FunSuite
 import scorex.core.transaction.state.PrivateKey25519
 import scorex.crypto.signatures.{PrivateKey, PublicKey}

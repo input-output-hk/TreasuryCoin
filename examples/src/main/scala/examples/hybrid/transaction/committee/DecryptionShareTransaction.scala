@@ -1,10 +1,11 @@
-package examples.hybrid.transaction
+package examples.hybrid.transaction.committee
 
 import com.google.common.primitives.{Bytes, Ints, Longs}
 import examples.commons.{SimpleBoxTransaction, SimpleBoxTransactionCompanion}
 import examples.hybrid.TreasuryManager
-import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound
-import examples.hybrid.transaction.DecryptionShareTransaction.DecryptionRound.DecryptionRound
+import examples.hybrid.transaction.committee.DecryptionShareTransaction.DecryptionRound
+import examples.hybrid.transaction.committee.DecryptionShareTransaction.DecryptionRound.DecryptionRound
+import examples.hybrid.transaction.{DecryptionShareTxTypeId, SignedTreasuryTransaction}
 import io.circe.Json
 import io.circe.syntax._
 import scorex.core.ModifierTypeId
