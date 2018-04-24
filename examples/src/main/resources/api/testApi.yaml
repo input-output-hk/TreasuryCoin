@@ -377,6 +377,61 @@ paths:
                   $ref: '#/components/schemas/Treasury'
 
 
+  /treasury/myregistrations:
+      get:
+        summary: Information about registered roles in the current epoch
+        operationId: myRegistrationInfoRoute
+        tags:
+          - treasury
+        responses:
+          200:
+            description: Json with treasury info or error
+            content:
+              application/json:
+                schema:
+                  type: object
+                  items:
+                    $ref: '#/components/schemas/Treasury'
+
+  /treasury/proposals:
+      get:
+        summary: Information about submitted proposals in the current epoch
+        operationId: proposalsInfoRoute
+        tags:
+          - treasury
+        responses:
+          200:
+            description: Json with treasury info or error
+            content:
+              application/json:
+                schema:
+                  type: object
+                  items:
+                    $ref: '#/components/schemas/Treasury'
+
+  /treasury/votingresults/{epochId}:
+    get:
+      summary: Info about voting results in a specified treasury epoch
+      operationId: votingResultsInfoRoute
+      tags:
+        - treasury
+      parameters:
+        - in: path
+          name: epochId
+          required: true
+          description: epoch id
+          schema:
+            type: string
+      responses:
+        200:
+          description: Json with treasury info or error
+          content:
+            application/json:
+              schema:
+                type: object
+                items:
+                  $ref: '#/components/schemas/Treasury'
+
   /treasury/ballot:
     post:
       summary: Casting the ballot transaction for all proposals

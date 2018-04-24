@@ -392,11 +392,9 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
         )
         DistrKeyGen.getSharedPublicKey(cs, committeeMembersPubKeys, memberIdentifier, roundsData) match {
           case Success(sharedPubKeyEncoded) =>
-            val sharedPubKey = cs.decodePoint(sharedPubKeyEncoded)
-            if (!sharedPubKey.equals(cs.infinityPoint)){
-              sharedPublicKey = Some(sharedPubKey)
-              log.info(s"Shared public key is: ${Base58.encode(sharedPublicKey.get.getEncoded(true))}")
-            }
+            sharedPublicKey = Some(cs.decodePoint(sharedPubKeyEncoded))
+            log.info(s"Shared public key is: ${Base58.encode(sharedPubKeyEncoded)}")
+
           case Failure(e) => log.error(e.getMessage)
         }
       } else log.warn("No committee members found!")
