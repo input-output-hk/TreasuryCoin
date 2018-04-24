@@ -34,7 +34,7 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
   extends ApiRouteWithFullView[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool] {
 
   override val route = pathPrefix("treasury") {
-    infoRoute ~ epochIdInfoRoute ~ ballotCast ~ proposalCast
+    infoRoute ~ epochIdInfoRoute ~ myRegistrationInfoRoute ~ proposalsInfoRoute ~ votingResultsInfoRoute ~ ballotCast ~ proposalCast
   }
 
   type NodeView = CurrentViewWithTreasuryState[HybridHistory, HBoxStoredState, HWallet, SimpleBoxTransactionMemPool]
@@ -104,6 +104,47 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
     val trState = getCurrentView.get.trState
     getJsonRoute {
       SuccessApiResponse(getTreasuryInfo(trState))
+    }
+  }
+
+  def myRegistrationInfoRoute: Route = path("myregistrations") {
+    val view = getCurrentView.get
+    val wallet = view.vault
+    val trState = getCurrentView.get.trState
+
+    val myExpertKey = wallet.treasurySigningPubKeys(Role.Expert, trState.epochNum).filter(k => trState.getExpertsInfo.exists(_.signingKey == k)).headOption
+    val myVoterKey = wallet.treasurySigningPubKeys(Role.Voter, trState.epochNum).filter(k => trState.getVotersInfo.exists(_.signingKey == k)).headOption
+    val myCommitteeKey = wallet.treasurySigningPubKeys(Role.Committee, trState.epochNum).filter(k => trState.getCommitteeInfo.exists(_.signingKey == k)).headOption
+
+    getJsonRoute {
+      SuccessApiResponse(Map(
+        "My Expert Registration" -> s"${myExpertKey.isDefined} (signing key: ${myExpertKey.getOrElse("None")})".asJson,
+        "My Voter Registration" -> s"${myVoterKey.isDefined} (signing key: ${myVoterKey.getOrElse("None")})".asJson,
+        "My Committee Registration" -> s"${myCommitteeKey.isDefined} (signing key: ${myCommitteeKey.getOrElse("None")})".asJson,
+      ).asJson)
+    }
+  }
+
+  def proposalsInfoRoute: Route = path("proposals") {
+    val proposals = getCurrentView.get.trState.getProposals
+
+    getJsonRoute {
+      SuccessApiResponse(Map(
+        "Submitted proposals" -> proposals.map(p => Map(s"Id: ${proposals.indexOf(p)}" -> Seq(s"Name: ${p.name}", s"Requested sum: ${p.requestedSum}", s"Recepient: ${p.recipient}"))).asJson
+      ).asJson)
+    }
+  }
+
+  def votingResultsInfoRoute: Route = path("votingresults" / IntNumber) { epochId =>
+    val trState = TreasuryState.generate(getCurrentView.get.history, epochId)
+    getJsonRoute {
+      trState match {
+        case Success(s) => SuccessApiResponse(Map(
+          "Voting results" -> s.getTally.map(p => Map(s"Id: ${p._1}, Name: ${s.getProposals(p._1).name}" -> s"{yes: ${p._2.yes}, no: ${p._2.no}, abstain ${p._2.abstain}}")).asJson
+              //state.getTally.map(p => s"Proposal ${p._1}: {yes: ${p._2.yes}, no: ${p._2.no}, abstain ${p._2.abstain}}").asJson,
+        ).asJson)
+        case Failure(e) => ApiException(e)
+      }
     }
   }
 
