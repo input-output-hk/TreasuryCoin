@@ -112,9 +112,11 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
     val wallet = view.vault
     val trState = getCurrentView.get.trState
 
-    val myExpertKey = wallet.treasurySigningPubKeys(Role.Expert, trState.epochNum).filter(k => trState.getExpertsInfo.exists(_.signingKey == k)).headOption
-    val myVoterKey = wallet.treasurySigningPubKeys(Role.Voter, trState.epochNum).filter(k => trState.getVotersInfo.exists(_.signingKey == k)).headOption
-    val myCommitteeKey = wallet.treasurySigningPubKeys(Role.Committee, trState.epochNum).filter(k => trState.getCommitteeInfo.exists(_.signingKey == k)).headOption
+    val myExpertKey = wallet.treasurySigningPubKeys(Role.Expert, trState.epochNum).find(k => trState.getExpertsInfo.exists(_.signingKey == k))
+    val myVoterKey = wallet.treasurySigningPubKeys(Role.Voter, trState.epochNum).find(k => trState.getVotersInfo.exists(_.signingKey == k))
+    val myCommitteeKey = wallet.treasurySigningSecrets(trState.epochNum)
+      .find(k => trState.getApprovedCommitteeInfo.exists(_.signingKey == k.privKey.publicImage))
+      .map(_.privKey.publicImage)
 
     getJsonRoute {
       SuccessApiResponse(Map(
