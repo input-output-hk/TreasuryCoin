@@ -24,7 +24,7 @@ trait TreasurySecret {
 object TreasurySecret {
   object Type extends Enumeration {
     type Type = Value
-    val CommitteeSecret, SigningSecret = Value
+    val CommitteeSecret, SigningSecret: Type = Value
   }
 }
 

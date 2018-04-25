@@ -7,21 +7,23 @@ import examples.hybrid.transaction.committee.DecryptionShareTransaction.Decrypti
 import org.scalatest.FunSuite
 import scorex.core.transaction.state.PrivateKey25519
 import scorex.crypto.signatures.{PrivateKey, PublicKey}
-import treasury.crypto.core.{One, VoteCases}
+import treasury.crypto.core._
 import treasury.crypto.decryption.DecryptionManager
+import treasury.crypto.keygen.datastructures.C1Share
 import treasury.crypto.voting.RegularVoter
+import treasury.crypto.voting.ballots.Ballot
 
 class DecryptionTransactionTest extends FunSuite {
 
-  val cs = TreasuryManager.cs
-  val (privKey, pubKey) = cs.createKeyPair
+  val cs: Cryptosystem = TreasuryManager.cs
+  val (privKey: PrivKey, pubKey: PubKey) = cs.createKeyPair
 
-  val numberOfExperts = 6
-  val voter = new RegularVoter(cs, numberOfExperts, pubKey, One)
-  val ballots = Array(voter.produceVote(0, VoteCases.Abstain), voter.produceVote(1, VoteCases.Abstain))
+  val numberOfExperts: Int = 6
+  val voter: RegularVoter = new RegularVoter(cs, numberOfExperts, pubKey, One)
+  val ballots: Array[Ballot] = Array(voter.produceVote(0, VoteCases.Abstain), voter.produceVote(1, VoteCases.Abstain))
 
-  val decryptor = new DecryptionManager(cs, ballots, 1)
-  val c1Shares = Array(decryptor.decryptC1ForDelegations(0, 0, privKey),
+  val decryptor: DecryptionManager = new DecryptionManager(cs, ballots, 1)
+  val c1Shares: Array[C1Share] = Array(decryptor.decryptC1ForDelegations(0, 0, privKey),
                   decryptor.decryptC1ForDelegations(1, 0, privKey))
 
   test("serialization") {

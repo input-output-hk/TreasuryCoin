@@ -62,7 +62,7 @@ object DecryptionShareTransaction {
 
   object DecryptionRound extends Enumeration {
     type DecryptionRound = Value
-    val R1, R2 = Value
+    val R1, R2: DecryptionRound = Value
   }
 
   def create(privKey: PrivateKey25519,

@@ -523,7 +523,7 @@ object CommitteeMember {
   case object StateModified
 
   private var committeeMember: Option[ActorRef] = None
-  implicit val system = ActorSystem()
+  implicit val system: ActorSystem = ActorSystem()
 
   def getMember(viewHolderRef: ActorRef): Option[ActorRef] = {
     dispatchMember(viewHolderRef)

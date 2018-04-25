@@ -63,7 +63,7 @@ class PosForger(settings: HybridSettings, viewHolderRef: ActorRef) extends Actor
 
 object PosForger extends ScorexLogging {
 
-  val InitialDifficuly = 1500000000L
+  val InitialDifficuly: Long = 1500000000L
 
   object ReceivableMessages {
     case object StartForging

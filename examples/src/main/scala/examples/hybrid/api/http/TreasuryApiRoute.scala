@@ -120,9 +120,9 @@ case class TreasuryApiRoute(override val settings: RESTApiSettings, nodeViewHold
 
     getJsonRoute {
       SuccessApiResponse(Map(
-        "My Expert Registration" -> s"${myExpertKey.isDefined} (signing key: ${myExpertKey.getOrElse("None")})".asJson,
-        "My Voter Registration" -> s"${myVoterKey.isDefined} (signing key: ${myVoterKey.getOrElse("None")})".asJson,
-        "My Committee Registration" -> s"${myCommitteeKey.isDefined} (signing key: ${myCommitteeKey.getOrElse("None")})".asJson,
+        "My Expert Registration" -> s"${myExpertKey.isDefined} (signing key: ${myExpertKey.map(_.toString).getOrElse("None")})".asJson,
+        "My Voter Registration" -> s"${myVoterKey.isDefined} (signing key: ${myVoterKey.map(_.toString).getOrElse("None")})".asJson,
+        "My Committee Registration" -> s"${myCommitteeKey.isDefined} (signing key: ${myCommitteeKey.map(_.toString).getOrElse("None")})".asJson,
       ).asJson)
     }
   }

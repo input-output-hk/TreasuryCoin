@@ -6,13 +6,14 @@ lazy val commonSettings = Seq(
     Wart.Recursion,
     Wart.TraversableOps,
     Wart.Null,
-    Wart.Product,
+    //Wart.Product,
     Wart.PublicInference,
     Wart.FinalVal,
-    Wart.IsInstanceOf,
+    //Wart.IsInstanceOf,
     Wart.JavaConversions,
-    Wart.JavaSerializable,
-    Wart.Serializable),
+    Wart.JavaSerializable
+    //Wart.Serializable
+  ),
   scalaVersion := "2.12.3",
   organization := "org.scorexfoundation",
   licenses := Seq("CC0" -> url("https://creativecommons.org/publicdomain/zero/1.0/legalcode")),

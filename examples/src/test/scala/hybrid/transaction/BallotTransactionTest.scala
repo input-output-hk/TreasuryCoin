@@ -7,13 +7,13 @@ import examples.hybrid.transaction.BallotTransaction.VoterType
 import org.scalatest.FunSuite
 import scorex.core.transaction.state.PrivateKey25519
 import scorex.crypto.signatures.{PrivateKey, PublicKey}
-import treasury.crypto.core.{One, VoteCases}
+import treasury.crypto.core._
 import treasury.crypto.voting.RegularVoter
 
 class BallotTransactionTest extends FunSuite {
 
-  val cs = TreasuryManager.cs
-  val (privKey, pubKey) = cs.createKeyPair
+  val cs: Cryptosystem = TreasuryManager.cs
+  val (privKey: PrivKey, pubKey: PubKey) = cs.createKeyPair
 
   test("serialization") {
     val numberOfExperts = 6

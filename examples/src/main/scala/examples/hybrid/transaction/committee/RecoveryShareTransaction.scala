@@ -67,7 +67,7 @@ object RecoveryShareTransaction {
 
   object RecoveryRound extends Enumeration {
     type RecoveryRound = Value
-    val DecryptionR1, DecryptionR2, Randomness = Value
+    val DecryptionR1, DecryptionR2, Randomness: RecoveryRound = Value
   }
 
   val TransactionTypeId: scorex.core.ModifierTypeId = RecoveryShareTxTypeId

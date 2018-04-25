@@ -430,9 +430,10 @@ class HybridHistory(val storage: HistoryStorage,
                            acc: Seq[(ModifierTypeId, ModifierId)] = Seq()): Option[Seq[(ModifierTypeId, ModifierId)]] = {
 
     val (sum: Seq[(ModifierTypeId, ModifierId)], newLimit: Int) =
-      if (m.isInstanceOf[PosBlock]) {
-        ((PosBlock.ModifierTypeId -> m.id) +: acc, limit-1)
-      } else (acc, limit)
+      m match {
+        case b: PosBlock => ((PosBlock.ModifierTypeId -> m.id) +: acc, limit-1)
+        case _ => (acc, limit)
+      }
 
     if (limit <= 0 || until(m)) {
       Some(sum)

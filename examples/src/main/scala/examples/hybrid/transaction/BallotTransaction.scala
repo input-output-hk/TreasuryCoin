@@ -60,7 +60,7 @@ object BallotTransaction {
 
   object VoterType extends Enumeration {
     type VoterType = Value
-    val Expert, Voter = Value
+    val Expert, Voter: VoterType = Value
   }
 
   val TransactionTypeId: scorex.core.ModifierTypeId = BallotTxTypeId

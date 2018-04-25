@@ -51,8 +51,8 @@ import scala.util.{Failure, Success, Try}
 
 case class TreasuryState(epochNum: Int) extends ScorexLogging {
 
-  val cs = TreasuryManager.cs
-  val crs_h = cs.basePoint.multiply(BigInteger.valueOf(5)) // common CRS parameter (temporary)
+  val cs: Cryptosystem = TreasuryManager.cs
+  val crs_h: Point = cs.basePoint.multiply(BigInteger.valueOf(5)) // TODO: common CRS parameter (temporary). Note that it is CRITICAL for security so should be changed for production usage
 
   private var version: VersionTag = VersionTag @@ (ModifierId @@ Array.fill(32)(0: Byte))
   private var proposals: List[Proposal] = List()
@@ -91,31 +91,31 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   private var DKGr4Data: Map[Int, R4Data] = Map()
   private var DKGr5Data: Map[Int, R5_1Data] = Map()
 
-  def getDKGr1Data = DKGr1Data
-  def getDKGr2Data = DKGr2Data
-  def getDKGr3Data = DKGr3Data
-  def getDKGr4Data = DKGr4Data
-  def getDKGr5Data = DKGr5Data
+  def getDKGr1Data: Map[Int, R1Data] = DKGr1Data
+  def getDKGr2Data: Map[Int, R2Data] = DKGr2Data
+  def getDKGr3Data: Map[Int, R3Data] = DKGr3Data
+  def getDKGr4Data: Map[Int, R4Data] = DKGr4Data
+  def getDKGr5Data: Map[Int, R5_1Data] = DKGr5Data
 
-  def getVotersInfo = votersInfo
-  def getExpertsInfo = expertsInfo
-  def getCommitteeInfo = committeeInfo
-  def getApprovedCommitteeInfo = committeeInfo.filter(_.approved)
-  def getParticipatedCommitteeInfo = committeeInfo.filter(_.participated)
+  def getVotersInfo: List[VoterInfo] = votersInfo
+  def getExpertsInfo: List[ExpertInfo] = expertsInfo
+  def getCommitteeInfo: List[CommitteeInfo] = committeeInfo
+  def getApprovedCommitteeInfo: List[CommitteeInfo] = committeeInfo.filter(_.approved)
+  def getParticipatedCommitteeInfo: List[CommitteeInfo] = committeeInfo.filter(_.participated)
 
-  def getDisqualifiedAfterDKGCommitteeInfo = disqualifiedCommitteeMembersAfterDKG
-  def getDisqualifiedAfterDecryptionR1CommitteeInfo = disqualifiedCommitteeMembersAfterDecryptionR1
-  def getDisqualifiedAfterDecryptionR2CommitteeInfo = disqualifiedCommitteeMembersAfterDecryptionR2
-  def getAllDisqualifiedCommitteeInfo = getDisqualifiedAfterDKGCommitteeInfo ++ getDisqualifiedAfterRandGenCommitteeInfo ++
-    getDisqualifiedAfterDecryptionR1CommitteeInfo ++ getDisqualifiedAfterDecryptionR2CommitteeInfo
-  def getRecoveredKeys = recoveredKeysOfDisqualifiedCommitteeMembers
+  def getDisqualifiedAfterDKGCommitteeInfo: Seq[CommitteeInfo] = disqualifiedCommitteeMembersAfterDKG
+  def getDisqualifiedAfterDecryptionR1CommitteeInfo: Seq[CommitteeInfo] = disqualifiedCommitteeMembersAfterDecryptionR1
+  def getDisqualifiedAfterDecryptionR2CommitteeInfo: Seq[CommitteeInfo] = disqualifiedCommitteeMembersAfterDecryptionR2
+  def getAllDisqualifiedCommitteeInfo: Seq[CommitteeInfo] = getDisqualifiedAfterDKGCommitteeInfo ++
+    getDisqualifiedAfterRandGenCommitteeInfo ++ getDisqualifiedAfterDecryptionR1CommitteeInfo ++ getDisqualifiedAfterDecryptionR2CommitteeInfo
+  def getRecoveredKeys: Seq[(PubKey, PrivKey)] = recoveredKeysOfDisqualifiedCommitteeMembers
 
-  def getSubmittedRandomnessForNextEpoch = submittedRandomnessForNextEpoch
-  def getDecryptedRandomness = decryptedRandomness
-  def getRecoveredRandomness = recoveredRandomness
-  def getRandomness = randomness
-  def getKeyRecoverySharesRandGen = keyRecoverySharesRandGen
-  def getDisqualifiedAfterRandGenCommitteeInfo = disqualifiedCommitteeMembersAfterRandGen
+  def getSubmittedRandomnessForNextEpoch: Map[Int, Ciphertext] = submittedRandomnessForNextEpoch
+  def getDecryptedRandomness: Map[PublicKey25519Proposition, Point] = decryptedRandomness
+  def getRecoveredRandomness: Seq[Point] = recoveredRandomness
+  def getRandomness: Array[Byte] = randomness
+  def getKeyRecoverySharesRandGen: mutable.Map[Int, Seq[OpenedShare]] = keyRecoverySharesRandGen
+  def getDisqualifiedAfterRandGenCommitteeInfo: Seq[CommitteeInfo] = disqualifiedCommitteeMembersAfterRandGen
 
   def getSigningKeys(role: Role): List[PublicKey25519Proposition] = role match {
     case Role.Committee => getCommitteeInfo.map(_.signingKey)
@@ -123,10 +123,10 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     case Role.Voter => getVotersInfo.map(_.signingKey)
   }
 
-  def getProposals = proposals
-  def getSharedPubKey = sharedPublicKey
-  def getVotersBallots = votersBallots
-  def getExpertsBallots = expertsBallots
+  def getProposals: List[Proposal] = proposals
+  def getSharedPubKey: Option[PubKey] = sharedPublicKey
+  def getVotersBallots: Map[Int, Seq[VoterBallot]] = votersBallots
+  def getExpertsBallots: Map[Int, Seq[ExpertBallot]] = expertsBallots
 
   def getVoterBallotsForProposal(proposalId: Int): Seq[VoterBallot] =
     votersBallots.flatMap(ballots => ballots._2.collect { case b if b.proposalId == proposalId => b }).toSeq
@@ -135,12 +135,12 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
   def getBallotsForProposal(proposalId: Int): Seq[Ballot] =
     getVoterBallotsForProposal(proposalId) ++ getExpertBallotsForProposal(proposalId)
 
-  def getDecryptionSharesR1 = c1SharesR1
-  def getKeyRecoverySharesR1 = keyRecoverySharesR1
-  def getDecryptionSharesR2 = c1SharesR2
-  def getKeyRecoverySharesR2 = keyRecoverySharesR2
-  def getDelegations = delegations
-  def getTally = tallyResult
+  def getDecryptionSharesR1: Map[Int, Seq[C1Share]] = c1SharesR1
+  def getKeyRecoverySharesR1: mutable.Map[Int, Seq[OpenedShare]] = keyRecoverySharesR1
+  def getDecryptionSharesR2: Map[Int, Seq[C1Share]] = c1SharesR2
+  def getKeyRecoverySharesR2: mutable.Map[Int, Seq[OpenedShare]] = keyRecoverySharesR2
+  def getDelegations: Option[Map[Int, Seq[Element]]] = delegations
+  def getTally: Map[Int, Tally.Result] = tallyResult
 
   def getDecryptionSharesR1ForProposal(proposalId: Int): Seq[C1Share] =
     c1SharesR1.flatMap(share => share._2.collect { case b if b.proposalId == proposalId => b }).toSeq

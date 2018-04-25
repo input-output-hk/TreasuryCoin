@@ -7,16 +7,16 @@ import examples.hybrid.transaction.committee.RecoveryShareTransaction.{OpenedSha
 import org.scalatest.FunSuite
 import scorex.core.transaction.state.PrivateKey25519
 import scorex.crypto.signatures.{PrivateKey, PublicKey}
-import treasury.crypto.core.HybridPlaintext
+import treasury.crypto.core.{Cryptosystem, HybridPlaintext, PrivKey, PubKey}
 import treasury.crypto.keygen.datastructures.round4.OpenedShare
 
 class RecoveryShareTransactionTest extends FunSuite {
 
-  val cs = TreasuryManager.cs
-  val (privKey, pubKey) = cs.createKeyPair
+  val cs: Cryptosystem = TreasuryManager.cs
+  val (privKey: PrivKey, pubKey: PubKey) = cs.createKeyPair
 
-  val plaintext = HybridPlaintext(pubKey, Array(1.toByte, 2.toByte))
-  val openedShares = Array(
+  val plaintext: HybridPlaintext = HybridPlaintext(pubKey, Array(1.toByte, 2.toByte))
+  val openedShares: Array[OpenedShareWithId] = Array(
     OpenedShareWithId(1, OpenedShare(0, plaintext)),
     OpenedShareWithId(33, OpenedShare(0, plaintext))
   )
