@@ -522,7 +522,7 @@ case class TreasuryState(epochNum: Int) extends ScorexLogging {
     *  If, for inctance, an expert didn't vote because of failed Distributed Key Generation,
     *  then he should not be punished */
     val absentExperts =
-      if (sharedPublicKey.isDefined)
+      if (sharedPublicKey.isDefined && getProposals.nonEmpty)
         getExpertsInfo.indices.filter(i => !getExpertsBallots.contains(i)).map(i => getExpertsInfo(i))
       else Seq()
 
