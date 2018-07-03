@@ -3,6 +3,8 @@ Treasury coin
 Treasury coin is an experimental implementation of the perspective treasury system
 described in [A Treasury System for Cryptocurrencies: Enabling Better Collaborative Intelligence](https://eprint.iacr.org/2018/435.pdf)
 
+A presentation with a demo of how to launch a testnet is available at [TreasuryCoin presentation](https://www.youtube.com/watch?v=OIaOe52A4A8)
+
 Scorex
 -------------------
 This repository is a fork of the Scorex platform upon which the treausury system was
@@ -64,6 +66,7 @@ Documentation
 
 [Scorex tutorial](https://github.com/ScorexFoundation/ScorexTutorial)
 [Treasury paper](https://eprint.iacr.org/2018/435.pdf)
+[TreasuryCoin presentation](https://www.youtube.com/watch?v=OIaOe52A4A8)
 
 
 License
