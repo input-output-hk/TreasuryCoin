@@ -58,8 +58,8 @@ The following features are implemented:
 
 Current status
 -------------
-The system was successfully tested with local testnet of up to 15 nodes. But still it
-can't be considered as production ready.
+Current implementation is a proof of concept. It is not for production usage.
+The system was successfully tested with local testnet of up to 15 nodes.
 
 Documentation
 -------------
